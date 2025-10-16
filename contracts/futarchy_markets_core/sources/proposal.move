@@ -42,6 +42,8 @@ const EInvalidConditionalCoinCount: u64 = 15;
 const EConditionalCoinAlreadySet: u64 = 16;
 const ENotLiquidityProvider: u64 = 17;
 const EDAOCannotClaimRewards: u64 = 18; // DAO cannot claim subsidy rewards (circular)
+const ESubsidyEscrowAlreadySet: u64 = 19;
+const ENoSubsidyEscrow: u64 = 20;
 
 // === Constants ===
 
@@ -121,7 +123,6 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     // Conditional coin capabilities (stored dynamically per outcome)
     conditional_treasury_caps: Bag,  // Stores TreasuryCap<ConditionalCoinType> per outcome
     conditional_metadata: Bag,        // Stores CoinMetadata<ConditionalCoinType> per outcome
-    conditional_type_names: vector<TypeName>,  // Track conditional types for external integrators (2N entries: [asset0, stable0, asset1, stable1, ...])
 
     // Proposal content
     title: String,
@@ -432,7 +433,6 @@ public fun initialize_market<AssetType, StableType>(
         market_state_id: option::some(market_state_id),
         conditional_treasury_caps: bag::new(ctx),
         conditional_metadata: bag::new(ctx),
-        conditional_type_names: vector::empty(),  // Will be filled when caps are registered
         title,
         details: initial_outcome_details,
         metadata,
@@ -568,7 +568,6 @@ public fun new_premarket<AssetType, StableType>(
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
         conditional_metadata: bag::new(ctx),
-        conditional_type_names: vector::empty(),
         title,
         details: outcome_details,
         metadata,
@@ -1674,6 +1673,18 @@ public fun make_cancel_witness<AssetType, StableType>(
     let addr = object::uid_to_address(&proposal.id);
     let mut spec_opt = take_intent_spec_for_outcome(proposal, outcome_index);
     if (option::is_some(&spec_opt)) {
+        // Reset action count for this outcome now that the spec has been removed
+        let action_count_slot =
+            vector::borrow_mut(&mut proposal.outcome_data.actions_per_outcome, outcome_index);
+        *action_count_slot = 0;
+        let mode_slot = vector::borrow_mut(&mut proposal.policy_modes, outcome_index);
+        *mode_slot = 0;
+        let council_slot =
+            vector::borrow_mut(&mut proposal.required_council_ids, outcome_index);
+        *council_slot = option::none();
+        let proof_slot =
+            vector::borrow_mut(&mut proposal.council_approval_proofs, outcome_index);
+        *proof_slot = option::none();
         // Spec exists, create witness
         option::destroy_some(spec_opt);
         option::some(CancelWitness {
@@ -1842,7 +1853,6 @@ public fun new_for_testing<AssetType, StableType>(
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
         conditional_metadata: bag::new(ctx),
-        conditional_type_names: vector::empty(),
         title,
         details: outcome_details,
         metadata,
@@ -2121,7 +2131,6 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
         market_state_id: _,
         conditional_treasury_caps,
         conditional_metadata,
-        conditional_type_names: _,
         title: _,
         details: _,
         metadata: _,
@@ -2188,7 +2197,7 @@ public fun store_subsidy_escrow<AssetType, StableType>(
     escrow: SubsidyEscrow,
 ) {
     // Ensure we don't already have a subsidy escrow
-    assert!(proposal.subsidy_escrow.is_none(), 0); // TODO: Add proper error code
+    assert!(proposal.subsidy_escrow.is_none(), ESubsidyEscrowAlreadySet);
     option::fill(&mut proposal.subsidy_escrow, escrow);
 }
 
@@ -2196,7 +2205,7 @@ public fun store_subsidy_escrow<AssetType, StableType>(
 public fun borrow_subsidy_escrow_mut<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
 ): &mut SubsidyEscrow {
-    assert!(proposal.subsidy_escrow.is_some(), 0); // TODO: Add proper error code
+    assert!(proposal.subsidy_escrow.is_some(), ENoSubsidyEscrow);
     proposal.subsidy_escrow.borrow_mut()
 }
 
@@ -2204,7 +2213,7 @@ public fun borrow_subsidy_escrow_mut<AssetType, StableType>(
 public fun extract_subsidy_escrow<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
 ): SubsidyEscrow {
-    assert!(proposal.subsidy_escrow.is_some(), 0); // TODO: Add proper error code
+    assert!(proposal.subsidy_escrow.is_some(), ENoSubsidyEscrow);
     proposal.subsidy_escrow.extract()
 }
 

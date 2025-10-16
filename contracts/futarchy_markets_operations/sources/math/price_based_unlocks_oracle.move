@@ -128,7 +128,7 @@ public fun get_geometric_governance_twap<AssetType, StableType>(
 
 /// Get highest lending TWAP (30-minute arithmetic) from conditional pools
 /// Used when spot has <50% liquidity during proposals
-fun get_highest_conditional_lending_twap(pools: &vector<LiquidityPool>, clock: &Clock): u128 {
+fun get_highest_conditional_lending_twap(pools: &vector<LiquidityPool>, _clock: &Clock): u128 {
     assert!(!pools.is_empty(), ENoOracles);
 
     let mut highest_twap = 0u128;
@@ -137,7 +137,6 @@ fun get_highest_conditional_lending_twap(pools: &vector<LiquidityPool>, clock: &
     while (i < pools.length()) {
         let pool = pools.borrow(i);
         let pool_simple_twap = conditional_amm::get_simple_twap(pool);
-        // ✅ Using get_twap() - lending_twap not yet implemented
         let twap = pass_through_PCW_TWAP_oracle::get_twap(pool_simple_twap);
         if (twap > highest_twap) {
             highest_twap = twap;

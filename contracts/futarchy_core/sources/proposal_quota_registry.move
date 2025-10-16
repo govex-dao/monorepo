@@ -2,6 +2,7 @@
 /// Tracks recurring proposal quotas (N proposals per period at reduced fee)
 module futarchy_core::proposal_quota_registry;
 
+use std::string::String;
 use sui::clock::Clock;
 use sui::event;
 use sui::table::{Self, Table};
@@ -57,6 +58,14 @@ public struct QuotaUsed has copy, drop {
     user: address,
     remaining: u64,
     timestamp: u64,
+}
+
+public struct QuotaRefunded has copy, drop {
+    dao_id: ID,
+    user: address,
+    remaining: u64,
+    timestamp: u64,
+    reason: String,
 }
 
 // === Public Functions ===
@@ -206,6 +215,58 @@ public fun use_quota(
             user,
             remaining: info.quota_amount - info.used_in_period,
             timestamp: now,
+        });
+    };
+}
+
+/// Refund one quota slot (called when proposal using quota is evicted)
+/// Only decrements if user has used quota in current period
+public fun refund_quota(
+    registry: &mut ProposalQuotaRegistry,
+    dao_id: ID,
+    user: address,
+    clock: &Clock,
+) {
+    use std::string;
+
+    // Verify DAO ownership
+    assert!(registry.dao_id == dao_id, EWrongDao);
+
+    if (!registry.quotas.contains(user)) {
+        return
+    };
+
+    let info = registry.quotas.borrow_mut(user);
+    let now = clock.timestamp_ms();
+
+    // Reset period if expired (aligned to boundaries)
+    let periods_elapsed = (now - info.period_start_ms) / info.quota_period_ms;
+    if (periods_elapsed > 0) {
+        info.period_start_ms = info.period_start_ms + (periods_elapsed * info.quota_period_ms);
+        info.used_in_period = 0;
+
+        // Emit event for period reset (no refund needed)
+        event::emit(QuotaRefunded {
+            dao_id: registry.dao_id,
+            user,
+            remaining: info.quota_amount, // Full quota available in new period
+            timestamp: now,
+            reason: string::utf8(b"period_expired"),
+        });
+        return
+    };
+
+    // Decrement usage if any quota was used
+    if (info.used_in_period > 0) {
+        info.used_in_period = info.used_in_period - 1;
+
+        // Emit refund event
+        event::emit(QuotaRefunded {
+            dao_id: registry.dao_id,
+            user,
+            remaining: info.quota_amount - info.used_in_period,
+            timestamp: now,
+            reason: string::utf8(b"proposal_evicted"),
         });
     };
 }

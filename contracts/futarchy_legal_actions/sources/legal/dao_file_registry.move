@@ -83,6 +83,7 @@ const EConcurrentEditConflict: u64 = 27;
 const ERemovalRequiredForTemporaryChunk: u64 = 28;
 const EWalrusBlobExpiryTooSoon: u64 = 30;
 const EInvalidChunkType: u64 = 31; // Chunk type must be 0 (permanent), 1 (sunset), 2 (sunrise), or 3 (temporary)
+const EDocumentNotEmpty: u64 = 32; // Cannot delete a document that still has chunks
 
 // === Type Keys for Dynamic Fields ===
 
@@ -232,6 +233,13 @@ public struct RegistryCreated has copy, drop {
 }
 
 public struct DocumentCreated has copy, drop {
+    dao_id: ID,
+    doc_id: ID,
+    name: String,
+    timestamp_ms: u64,
+}
+
+public struct DocumentDeleted has copy, drop {
     dao_id: ID,
     doc_id: ID,
     name: String,
@@ -1834,6 +1842,84 @@ public fun get_document_by_name(registry: &DaoFileRegistry, name: String): Optio
     } else {
         option::none()
     }
+}
+
+/// Delete a document from the registry (requires all chunks to be removed first)
+public fun delete_document(
+    registry: &mut DaoFileRegistry,
+    doc_id: ID,
+    clock: &Clock,
+) {
+    assert!(!registry.immutable, ERegistryImmutable);
+    assert!(bag::contains(&registry.documents, doc_id), EDocumentNotFound);
+
+    // Borrow to validate state before removal
+    let doc_index = {
+        let doc_ref = bag::borrow<File>(&registry.documents, doc_id);
+        assert!(doc_ref.chunk_count == 0, EDocumentNotEmpty);
+        assert!(option::is_none(&doc_ref.head_chunk), EDocumentNotEmpty);
+        assert!(option::is_none(&doc_ref.tail_chunk), EDocumentNotEmpty);
+        doc_ref.index
+    };
+    assert!(registry.next_index > 0, EDocumentNotFound);
+    let last_index = registry.next_index - 1;
+
+    // Remove the document object from the bag
+    let File {
+        id: doc_uid,
+        dao_id: doc_dao_id,
+        name: doc_name,
+        index: _,
+        creation_time: _,
+        chunks,
+        chunk_count: _,
+        head_chunk: _,
+        tail_chunk: _,
+        allow_insert: _,
+        allow_remove: _,
+        immutable: _,
+        edit_sequence: _,
+    } = bag::remove(&mut registry.documents, doc_id);
+    assert!(doc_dao_id == registry.dao_id, EDocumentNotFound);
+
+    // Destroy empty chunk table (must be empty due to checks above)
+    table::destroy_empty(chunks);
+    object::delete(doc_uid);
+
+    // Remove from name lookup
+    let _ = table::remove(&mut registry.docs_by_name, copy doc_name);
+
+    // Update index lookups and doc_names vector
+    if (doc_index == last_index) {
+        // Removing the last document - simple pop
+        let _ = table::remove(&mut registry.docs_by_index, doc_index);
+        let _ = vector::pop_back(&mut registry.doc_names);
+    } else {
+        // Swap the last document into the removed slot
+        let last_doc_id = *table::borrow(&registry.docs_by_index, last_index);
+        let last_doc_name = vector::pop_back(&mut registry.doc_names);
+
+        // Update index table
+        let _ = table::remove(&mut registry.docs_by_index, doc_index);
+        let _ = table::remove(&mut registry.docs_by_index, last_index);
+        table::add(&mut registry.docs_by_index, doc_index, last_doc_id);
+
+        // Update the moved document's index
+        let moved_doc = bag::borrow_mut<File>(&mut registry.documents, last_doc_id);
+        moved_doc.index = doc_index;
+
+        // Update the name vector slot
+        *vector::borrow_mut(&mut registry.doc_names, doc_index) = copy last_doc_name;
+    };
+
+    registry.next_index = last_index;
+
+    event::emit(DocumentDeleted {
+        dao_id: doc_dao_id,
+        doc_id,
+        name: doc_name,
+        timestamp_ms: clock.timestamp_ms(),
+    });
 }
 
 /// Check if chunk is immutable at current time

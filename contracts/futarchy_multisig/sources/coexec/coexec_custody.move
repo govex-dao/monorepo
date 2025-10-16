@@ -8,7 +8,7 @@ use futarchy_core::version;
 use futarchy_multisig::coexec_common;
 use futarchy_multisig::weighted_multisig::{Self, WeightedMultisig, Approvals};
 use futarchy_vault::custody_actions;
-use std::string::String;
+use std::hash;
 use sui::clock::Clock;
 use sui::object::{Self, ID};
 use sui::transfer::Receiving;
@@ -23,7 +23,8 @@ const EWithdrawnObjectIdMismatch: u64 = 7;
 /// Generic 2-of-2 custody accept:
 /// - DAO executable must contain ApproveCustodyAction<R>
 /// - Council executable must contain AcceptIntoCustodyAction<R> and a Receiving<R>
-/// - Enforces policy_key on DAO ("Custody:*" or domain-specific like "UpgradeCap:Custodian")
+/// - Enforces type policy BorrowAction<R> (or object policy if specific object has one)
+/// - Uses OBJECT > TYPE hierarchy: checks object-level policy first, falls back to type-level
 /// Stores the object under council custody with a standard key.
 public fun execute_accept_with_council<
     FutarchyOutcome: store + drop + copy,
@@ -35,7 +36,6 @@ public fun execute_accept_with_council<
     mut futarchy_exec: Executable<FutarchyOutcome>,
     mut council_exec: Executable<Approvals>,
     receipt: Receiving<R>,
-    policy_key: String,
     intent_witness: W,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -78,13 +78,37 @@ public fun execute_accept_with_council<
         &accept,
     );
 
-    // Policy/expiry checks
-    coexec_common::enforce_custodian_policy(dao, council, policy_key);
-    coexec_common::validate_dao_id(dao_id_expected, object::id(dao));
-    coexec_common::validate_expiry(clock, expires_at);
-
+    // Validate IDs match
     assert!(obj_id_expected == obj_id_council, EObjectIdMismatch);
     assert!(*res_key_ref == *res_key_council_ref, EResourceKeyMismatch);
+
+    // === CRITICAL: Data Integrity Check ===
+    // Validate that the complete action data from both sides matches exactly.
+    // This prevents a malicious council from injecting modified parameters that
+    // the DAO did not approve. The DAO and Council must agree on the ENTIRE action,
+    // not just the object ID and resource key.
+    let dao_digest = hash::sha3_256(*dao_action_data);
+    let council_digest = hash::sha3_256(*council_action_data);
+    coexec_common::validate_digest(&dao_digest, &council_digest);
+
+    // Enforce custodian policy using OBJECT > TYPE hierarchy
+    // Check if object-level policy exists (regardless of mode)
+    let registry = futarchy_multisig::policy_registry::borrow_registry(dao, version::current());
+
+    if (futarchy_multisig::policy_registry::has_object_policy(registry, obj_id_expected)) {
+        // OBJECT-level policy exists - use it exclusively (highest priority)
+        // This works correctly even if object policy is MODE_DAO_ONLY (0):
+        // - has_object_policy() returns true (policy exists)
+        // - enforce_custodian_policy_for_object() will check mode and abort if council not allowed
+        coexec_common::enforce_custodian_policy_for_object(dao, council, obj_id_expected);
+    } else {
+        // No object policy - fall back to TYPE-level policy for ApproveCustodyAction<R>
+        coexec_common::enforce_custodian_policy_for_type<R>(dao, council);
+    };
+
+    // Validate DAO ID and expiry
+    coexec_common::validate_dao_id(dao_id_expected, object::id(dao));
+    coexec_common::validate_expiry(clock, expires_at);
 
     // Withdraw the object (must match the withdraw action witness used when building the intent)
     let obj = owned::do_withdraw_object(&mut council_exec, council, receipt, intent_witness);

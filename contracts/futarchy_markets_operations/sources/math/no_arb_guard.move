@@ -45,7 +45,8 @@ public fun compute_noarb_band<AssetType, StableType>(
     let n = pools.length();
     assert!(n > 0, ENoPoolsProvided);
 
-    let bps = constants::basis_points(); // 10000
+    // Use actual basis points scale (10,000 = 100%) for fee calculations
+    let bps = constants::total_fee_bps(); // 10,000 (correct BPS scale)
     let f_s = unified_spot_pool::get_fee_bps(spot_pool); // spot fee in bps
     let one_minus_fs = bps - f_s; // (1 - f_s)*bps
 

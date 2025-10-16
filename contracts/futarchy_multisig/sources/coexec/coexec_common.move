@@ -1,7 +1,7 @@
 /// Common utilities and patterns for 2-of-2 co-execution between DAO and Security Council
 module futarchy_multisig::coexec_common;
 
-use std::string::String;
+use std::option;
 use std::type_name;
 use sui::{
     clock::Clock,
@@ -18,6 +18,7 @@ use futarchy_multisig::{
     policy_registry,
     weighted_multisig::WeightedMultisig,
 };
+use futarchy_vault::custody_actions::{ApproveCustodyAction, AcceptIntoCustodyAction};
 
 // === Common Error Codes ===
 const ENoPolicy: u64 = 1;
@@ -33,33 +34,104 @@ const ENoActionsInIntent: u64 = 10;
 
 // === Policy Validation ===
 
-/// Verify that a DAO has a specific custodian policy set to the given council
-/// Returns true if policy exists and points to the council, false otherwise
-public fun verify_custodian_policy(
+/// Verify that a DAO has a TYPE-level custodian policy for a capability type
+/// Returns true if transferring Cap to custody requires this council's approval
+///
+/// Uses parameterized custody action types: ApproveCustodyAction<Cap>
+public fun verify_custodian_policy_for_type<Cap>(
     dao: &Account<FutarchyConfig>,
     council: &Account<WeightedMultisig>,
-    policy_key: String,
 ): bool {
-    let _reg = policy_registry::borrow_registry(dao, version::current());
-    let _council_id = object::id(council);
-    let _ = policy_key;
-    // TODO: Implement has_policy and get_policy functions
-    // For now, return false (no policy match)
-    false
+    let registry = policy_registry::borrow_registry(dao, version::current());
+    let council_id = object::id(council);
+
+    // Get TypeName for ApproveCustodyAction<Cap> (parameterized custody action)
+    let action_type = type_name::get<ApproveCustodyAction<Cap>>();
+
+    // Check if custody transfer of this Cap type requires council approval
+    if (!policy_registry::type_needs_council(registry, action_type)) {
+        return false
+    };
+
+    // Check if the required council matches the given council
+    let policy_council = policy_registry::get_type_council(registry, action_type);
+    option::is_some(&policy_council) && *option::borrow(&policy_council) == council_id
 }
 
-/// Assert that a DAO has a specific custodian policy set to the given council
-/// Aborts with ENoPolicy if policy doesn't exist or EWrongCouncil if it points elsewhere
-public fun enforce_custodian_policy(
+/// Verify that a DAO has an OBJECT-level custodian policy for a specific capability
+/// Returns true if borrowing this specific object requires this council's approval
+/// Takes precedence over type-level policies (OBJECT > TYPE hierarchy)
+public fun verify_custodian_policy_for_object(
     dao: &Account<FutarchyConfig>,
     council: &Account<WeightedMultisig>,
-    policy_key: String,
+    object_id: ID,
+): bool {
+    let registry = policy_registry::borrow_registry(dao, version::current());
+    let council_id = object::id(council);
+
+    // Check if this specific object requires council approval
+    if (!policy_registry::object_needs_council(registry, object_id)) {
+        return false
+    };
+
+    // Check if the required council matches the given council
+    let policy_council = policy_registry::get_object_council(registry, object_id);
+    option::is_some(&policy_council) && *option::borrow(&policy_council) == council_id
+}
+
+/// Enforce TYPE-level custodian policy for a capability type
+/// Aborts with ENoPolicy if no type policy exists, or EWrongCouncil if it points to a different council
+///
+/// Use this when you know the Cap type but not the specific object ID
+public fun enforce_custodian_policy_for_type<Cap>(
+    dao: &Account<FutarchyConfig>,
+    council: &Account<WeightedMultisig>,
 ) {
-    let _reg = policy_registry::borrow_registry(dao, version::current());
-    let _council_id = object::id(council);
-    let _ = policy_key;
-    // TODO: Implement has_policy, get_policy and policy_account_id functions
-    // For now, skip policy enforcement
+    let registry = policy_registry::borrow_registry(dao, version::current());
+    let council_id = object::id(council);
+
+    // Get TypeName for ApproveCustodyAction<Cap> (parameterized custody action)
+    let action_type = type_name::get<ApproveCustodyAction<Cap>>();
+
+    // Check if custody transfer of this Cap type requires council approval
+    assert!(
+        policy_registry::type_needs_council(registry, action_type),
+        ENoPolicy
+    );
+
+    // Check if the required council matches the given council
+    let policy_council = policy_registry::get_type_council(registry, action_type);
+    assert!(
+        option::is_some(&policy_council) && *option::borrow(&policy_council) == council_id,
+        EWrongCouncil
+    );
+}
+
+/// Enforce OBJECT-level custodian policy for a specific capability
+/// Aborts with ENoPolicy if no object policy exists, or EWrongCouncil if it points to a different council
+///
+/// Use this when you have the specific object ID (more secure than type-level)
+/// Takes precedence over type-level policies (OBJECT > TYPE hierarchy)
+public fun enforce_custodian_policy_for_object(
+    dao: &Account<FutarchyConfig>,
+    council: &Account<WeightedMultisig>,
+    object_id: ID,
+) {
+    let registry = policy_registry::borrow_registry(dao, version::current());
+    let council_id = object::id(council);
+
+    // Check if this specific object requires council approval
+    assert!(
+        policy_registry::object_needs_council(registry, object_id),
+        ENoPolicy
+    );
+
+    // Check if the required council matches the given council
+    let policy_council = policy_registry::get_object_council(registry, object_id);
+    assert!(
+        option::is_some(&policy_council) && *option::borrow(&policy_council) == council_id,
+        EWrongCouncil
+    );
 }
 
 // === Common Validation Helpers ===
@@ -175,15 +247,13 @@ public fun peek_action_type_at<Outcome: store>(
 
 // === Common Co-Execution Pattern ===
 
-/// Standard validation flow for co-execution:
-/// 1. Enforce policy
-/// 2. Extract and validate actions
-/// 3. Check DAO ID, expiry, and digest
+/// Standard validation flow for co-execution with TYPE-level policy:
+/// 1. Enforce policy for capability type
+/// 2. Validate DAO ID, expiry, and digest
 /// This encapsulates the common pattern used across all co-exec modules
-public fun validate_coexec_standard(
+public fun validate_coexec_with_type_policy<Cap>(
     dao: &Account<FutarchyConfig>,
     council: &Account<WeightedMultisig>,
-    policy_key: String,
     dao_id_from_action: ID,
     expires_at: u64,
     expected_digest: &vector<u8>,
@@ -191,8 +261,31 @@ public fun validate_coexec_standard(
     clock: &Clock,
 ) {
     // Enforce the policy
-    enforce_custodian_policy(dao, council, policy_key);
-    
+    enforce_custodian_policy_for_type<Cap>(dao, council);
+
+    // Validate all standard requirements
+    validate_dao_id(dao_id_from_action, object::id(dao));
+    validate_expiry(clock, expires_at);
+    validate_digest(expected_digest, actual_digest);
+}
+
+/// Standard validation flow for co-execution with OBJECT-level policy:
+/// 1. Enforce policy for specific object
+/// 2. Validate DAO ID, expiry, and digest
+/// More secure than type-level - use when you have the object ID
+public fun validate_coexec_with_object_policy(
+    dao: &Account<FutarchyConfig>,
+    council: &Account<WeightedMultisig>,
+    object_id: ID,
+    dao_id_from_action: ID,
+    expires_at: u64,
+    expected_digest: &vector<u8>,
+    actual_digest: &vector<u8>,
+    clock: &Clock,
+) {
+    // Enforce the policy
+    enforce_custodian_policy_for_object(dao, council, object_id);
+
     // Validate all standard requirements
     validate_dao_id(dao_id_from_action, object::id(dao));
     validate_expiry(clock, expires_at);

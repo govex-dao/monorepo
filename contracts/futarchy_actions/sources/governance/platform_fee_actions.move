@@ -100,9 +100,7 @@ public fun do_collect_platform_fee<Outcome: store, IW: drop>(
     let dao_id = object::id(account);
 
     // DEPRECATED: Monthly fee collection replaced with arb-loop-based fee system
-    // This function needs to be updated to use the new fee system
-    // For now, just return the payment coin as remaining
-    // TODO: Implement new arb-loop-based fee collection
+    // This function is deprecated and returns payment coin unchanged
     let remaining = payment_coin;
 
     // Increment action index

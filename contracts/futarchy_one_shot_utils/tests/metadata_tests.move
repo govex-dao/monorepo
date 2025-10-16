@@ -303,15 +303,10 @@ fun test_all_common_metadata_keys() {
 
 #[test]
 fun test_validate_metadata_vectors_valid() {
-    let mut scenario = test_scenario::begin(@0x1);
-    let ctx = test_scenario::ctx(&mut scenario);
-
     let keys = vector[string::utf8(b"name")];
     let values = vector[string::utf8(b"value")];
 
-    metadata::validate_metadata_vectors(&keys, &values, ctx);
-
-    test_scenario::end(scenario);
+    metadata::validate_metadata_vectors(&keys, &values);
 }
 
 // === Error Case Tests ===

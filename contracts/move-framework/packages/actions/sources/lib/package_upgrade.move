@@ -453,6 +453,7 @@ public fun do_restrict<Config, Outcome: store, IW: drop>(
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
+    // Defense-in-depth: explicitly validate known policy values
     if (policy == package::additive_policy()) {
         let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
         cap_mut.only_additive_upgrades();
@@ -460,6 +461,9 @@ public fun do_restrict<Config, Outcome: store, IW: drop>(
         let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
         cap_mut.only_dep_upgrades();
     } else {
+        // Only make immutable for the explicit immutable policy (255)
+        // Any other policy value should abort rather than defaulting to immutable
+        assert!(policy == 255, EUnsupportedActionVersion); // Reuse error code for invalid policy
         let cap: UpgradeCap = account.remove_managed_asset(UpgradeCapKey(name), version_witness);
         package::make_immutable(cap);
     };

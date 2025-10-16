@@ -1,0 +1,1135 @@
+/// Common validation logic for conditional token coin metadata and treasury caps
+/// Used by both coin_registry and proposal modules to enforce invariants
+module futarchy_one_shot_utils::coin_validation;
+
+use std::ascii;
+use std::string;
+use sui::coin::{TreasuryCap, CoinMetadata};
+
+// === Errors ===
+const ESupplyNotZero: u64 = 0;
+const EMetadataMismatch: u64 = 1;
+const ETreasuryCapMismatch: u64 = 2;
+const ENameNotEmpty: u64 = 3;
+const EDescriptionNotEmpty: u64 = 4;
+const ESymbolNotEmpty: u64 = 5;
+const EIconUrlNotEmpty: u64 = 6;
+
+// === Public Validation Functions ===
+
+/// Validates that a coin's total supply is zero
+public fun assert_zero_supply<T>(treasury_cap: &TreasuryCap<T>) {
+    assert!(treasury_cap.total_supply() == 0, ESupplyNotZero);
+}
+
+/// Validates that metadata and treasury cap match the same coin type
+public fun assert_caps_match<T>(treasury_cap: &TreasuryCap<T>, metadata: &CoinMetadata<T>) {
+    // Type safety ensures they match at compile time
+    // This function exists for explicit validation calls
+    let _ = treasury_cap;
+    let _ = metadata;
+}
+
+/// Validates that coin name is empty (will be set by proposal)
+public fun assert_empty_name<T>(metadata: &CoinMetadata<T>) {
+    let name = metadata.get_name();
+    let name_bytes = string::bytes(&name);
+    // Name must be empty - proposal will set it
+    assert!(name_bytes.is_empty(), ENameNotEmpty);
+}
+
+/// Validates that metadata fields are empty/minimal
+public fun assert_empty_metadata<T>(metadata: &CoinMetadata<T>) {
+    // Description should be empty
+    let description = metadata.get_description();
+    assert!(string::bytes(&description).is_empty(), EDescriptionNotEmpty);
+
+    // Symbol should be empty
+    let symbol = metadata.get_symbol();
+    assert!(ascii::as_bytes(&symbol).is_empty(), ESymbolNotEmpty);
+
+    // Icon URL should be empty
+    let icon_url = metadata.get_icon_url();
+    assert!(icon_url.is_none(), EIconUrlNotEmpty);
+}
+
+/// Complete validation - checks all requirements
+public fun validate_conditional_coin<T>(treasury_cap: &TreasuryCap<T>, metadata: &CoinMetadata<T>) {
+    assert_zero_supply(treasury_cap);
+    assert_caps_match(treasury_cap, metadata);
+    assert_empty_name(metadata);
+    assert_empty_metadata(metadata);
+}
+
+// === View Functions ===
+
+/// Check if supply is zero without aborting
+public fun is_supply_zero<T>(treasury_cap: &TreasuryCap<T>): bool {
+    treasury_cap.total_supply() == 0
+}
+
+/// Check if name is empty without aborting
+public fun is_name_empty<T>(metadata: &CoinMetadata<T>): bool {
+    let name = metadata.get_name();
+    let name_bytes = string::bytes(&name);
+    name_bytes.is_empty()
+}
+
+/// Check if metadata is empty without aborting
+public fun is_metadata_empty<T>(metadata: &CoinMetadata<T>): bool {
+    let description = metadata.get_description();
+    let symbol = metadata.get_symbol();
+    let icon_url = metadata.get_icon_url();
+
+    string::bytes(&description).is_empty() &&
+    ascii::as_bytes(&symbol).is_empty() &&
+    icon_url.is_none()
+}
+module futarchy_one_shot_utils::vectors;
+
+use std::string::String;
+use sui::coin::{Self, Coin};
+use sui::vec_set;
+
+// === Introduction ===
+// Vector Methods and processing
+
+// === Public Functions ===
+// Combined check that a vector contains only unique elements and that all the elements are less then a certain length
+public fun check_valid_outcomes(outcome: vector<String>, max_length: u64): bool {
+    let length = outcome.length();
+    if (length == 0) return false;
+
+    // Create a vec_set to track unique strings
+    let mut seen = vec_set::empty<String>();
+
+    let mut i = 0;
+    while (i < length) {
+        let current_string_ref = &outcome[i];
+        // Check length constraint
+        let string_length = current_string_ref.length();
+        if (string_length == 0 || string_length > max_length) {
+            return false
+        };
+        if (seen.contains(current_string_ref)) {
+            return false
+        };
+
+        // Add to our set of seen strings
+        seen.insert(*current_string_ref);
+        i = i + 1;
+    };
+
+    true
+}
+
+/// Validates a single outcome message - checks length bounds
+public fun validate_outcome_message(message: &String, max_length: u64): bool {
+    let length = message.length();
+    length > 0 && length <= max_length
+}
+
+/// Validates outcome detail - checks length bounds
+public fun validate_outcome_detail(detail: &String, max_length: u64): bool {
+    let length = detail.length();
+    length > 0 && length <= max_length
+}
+
+/// Checks if a message already exists in the outcome messages
+public fun is_duplicate_message(outcome_messages: &vector<String>, new_message: &String): bool {
+    let mut i = 0;
+    let len = outcome_messages.length();
+    while (i < len) {
+        if (outcome_messages[i] == *new_message) {
+            return true
+        };
+        i = i + 1;
+    };
+    false
+}
+
+/// Merges a vector of coins into a single coin
+public fun merge_coins<T>(mut coins: vector<Coin<T>>, ctx: &mut TxContext): Coin<T> {
+    assert!(!coins.is_empty(), 0);
+
+    let mut merged = coins.pop_back();
+    while (!coins.is_empty()) {
+        coin::join(&mut merged, coins.pop_back());
+    };
+    coins.destroy_empty();
+
+    merged
+}
+/// Registry of pre-created "blank" coin types that can be used for conditional tokens
+/// Solves the problem that coin types can't be created dynamically in Sui
+/// Allows proposal creators to acquire coin pairs without requiring two transactions
+module futarchy_one_shot_utils::coin_registry;
+
+use futarchy_one_shot_utils::coin_validation;
+use sui::clock::Clock;
+use sui::coin::{TreasuryCap, CoinMetadata, Coin};
+use sui::dynamic_field;
+use sui::event;
+use sui::sui::SUI;
+
+// === Errors ===
+const ENoCoinSetsAvailable: u64 = 0;
+const EInsufficientFee: u64 = 1;
+const ERegistryNotEmpty: u64 = 2;
+const ERegistryFull: u64 = 3;
+
+// === Constants ===
+const MAX_COIN_SETS: u64 = 100_000;
+
+// === Structs ===
+
+/// A single coin set ready for use as conditional tokens
+/// Contains both TreasuryCap and CoinMetadata for one coin type
+public struct CoinSet<phantom T> has store {
+    treasury_cap: TreasuryCap<T>,
+    metadata: CoinMetadata<T>,
+    owner: address, // Who deposited this set and gets paid
+    fee: u64, // Fee in SUI to acquire this set
+}
+
+/// Global registry storing available coin sets
+/// Permissionless - anyone can add coin sets
+/// Uses dynamic fields to store different CoinSet<T> types
+public struct CoinRegistry has key {
+    id: UID,
+    // CoinSets stored as dynamic fields with cap_id as key
+    // Dynamic fields allow storing different CoinSet<T> types
+    total_sets: u64,
+}
+
+// === Events ===
+
+public struct CoinSetDeposited has copy, drop {
+    registry_id: ID,
+    cap_id: ID,
+    owner: address,
+    fee: u64,
+    timestamp: u64,
+}
+
+public struct CoinSetTaken has copy, drop {
+    registry_id: ID,
+    cap_id: ID,
+    taker: address,
+    fee_paid: u64,
+    owner_paid: address,
+    timestamp: u64,
+}
+
+// === Admin Functions ===
+
+/// Create a new coin registry (admin/one-time setup)
+public fun create_registry(ctx: &mut TxContext): CoinRegistry {
+    CoinRegistry {
+        id: object::new(ctx),
+        total_sets: 0,
+    }
+}
+
+/// Share the registry to make it publicly accessible
+public entry fun share_registry(registry: CoinRegistry) {
+    transfer::share_object(registry);
+}
+
+/// Destroy an empty registry
+public fun destroy_empty_registry(registry: CoinRegistry) {
+    let CoinRegistry { id, total_sets } = registry;
+    assert!(total_sets == 0, ERegistryNotEmpty);
+    id.delete();
+}
+
+// === Deposit Functions ===
+
+/// Deposit a coin set into the registry
+/// Validates that the coin meets all requirements for conditional tokens
+public fun deposit_coin_set<T>(
+    registry: &mut CoinRegistry,
+    treasury_cap: TreasuryCap<T>,
+    metadata: CoinMetadata<T>,
+    fee: u64,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    // Check registry not full
+    assert!(registry.total_sets < MAX_COIN_SETS, ERegistryFull);
+
+    // Validate coin meets requirements
+    coin_validation::validate_conditional_coin(&treasury_cap, &metadata);
+
+    let cap_id = object::id(&treasury_cap);
+    let owner = ctx.sender();
+
+    // Create coin set
+    let coin_set = CoinSet {
+        treasury_cap,
+        metadata,
+        owner,
+        fee,
+    };
+
+    // Store in registry as dynamic field
+    dynamic_field::add(&mut registry.id, cap_id, coin_set);
+    registry.total_sets = registry.total_sets + 1;
+
+    // Emit event
+    event::emit(CoinSetDeposited {
+        registry_id: object::id(registry),
+        cap_id,
+        owner,
+        fee,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Deposit a coin set via entry function (transfers ownership)
+public entry fun deposit_coin_set_entry<T>(
+    registry: &mut CoinRegistry,
+    treasury_cap: TreasuryCap<T>,
+    metadata: CoinMetadata<T>,
+    fee: u64,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    deposit_coin_set(registry, treasury_cap, metadata, fee, clock, ctx);
+}
+
+// === Take Functions ===
+
+/// Take a coin set from registry and transfer caps to sender
+/// Returns the remaining payment coin for chaining multiple takes in a PTB
+/// Call this N times in a PTB for N outcomes
+public fun take_coin_set<T>(
+    registry: &mut CoinRegistry,
+    cap_id: ID,
+    mut fee_payment: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<SUI> {
+    // Check exists
+    assert!(
+        dynamic_field::exists_with_type<ID, CoinSet<T>>(&registry.id, cap_id),
+        ENoCoinSetsAvailable,
+    );
+
+    // Remove from registry
+    let coin_set: CoinSet<T> = dynamic_field::remove(&mut registry.id, cap_id);
+
+    // Validate fee
+    assert!(fee_payment.value() >= coin_set.fee, EInsufficientFee);
+
+    // Split exact payment
+    let payment = fee_payment.split(coin_set.fee, ctx);
+
+    // Pay owner
+    transfer::public_transfer(payment, coin_set.owner);
+
+    // Update total count
+    registry.total_sets = registry.total_sets - 1;
+
+    // Emit event
+    event::emit(CoinSetTaken {
+        registry_id: object::id(registry),
+        cap_id,
+        taker: ctx.sender(),
+        fee_paid: coin_set.fee,
+        owner_paid: coin_set.owner,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Return caps to sender (they become owned objects)
+    let CoinSet { treasury_cap, metadata, owner: _, fee: _ } = coin_set;
+    transfer::public_transfer(treasury_cap, ctx.sender());
+    transfer::public_transfer(metadata, ctx.sender());
+
+    // Return remaining payment for next take
+    fee_payment
+}
+
+// === View Functions ===
+
+/// Get total number of coin sets in registry
+public fun total_sets(registry: &CoinRegistry): u64 {
+    registry.total_sets
+}
+
+/// Check if a specific coin set is available
+public fun has_coin_set(registry: &CoinRegistry, cap_id: ID): bool {
+    dynamic_field::exists_(&registry.id, cap_id)
+}
+
+/// Get fee for a specific coin set
+public fun get_fee<T>(registry: &CoinRegistry, cap_id: ID): u64 {
+    let coin_set: &CoinSet<T> = dynamic_field::borrow(&registry.id, cap_id);
+    coin_set.fee
+}
+
+/// Get owner of a specific coin set
+public fun get_owner<T>(registry: &CoinRegistry, cap_id: ID): address {
+    let coin_set: &CoinSet<T> = dynamic_field::borrow(&registry.id, cap_id);
+    coin_set.owner
+}
+
+// === Helper Functions for Proposals ===
+
+/// Validate coin set in registry without removing it
+public fun validate_coin_set_in_registry(registry: &CoinRegistry, cap_id: ID): bool {
+    dynamic_field::exists_(&registry.id, cap_id)
+}
+module futarchy_one_shot_utils::strategy;
+
+// === Constants for Strategy Types ===
+const STRATEGY_AND: u8 = 0;
+const STRATEGY_OR: u8 = 1;
+const STRATEGY_EITHER: u8 = 2; // XOR
+const STRATEGY_THRESHOLD: u8 = 3;
+
+/// Strategy for combining multiple approval conditions
+/// Uses constants instead of magic numbers for clarity
+public struct Strategy has copy, drop, store {
+    kind: u8,
+    m: u64, // For threshold: minimum approvals required
+    n: u64, // For threshold: total number of conditions
+}
+
+public fun and(): Strategy {
+    Strategy { kind: STRATEGY_AND, m: 0, n: 0 }
+}
+
+public fun or(): Strategy {
+    Strategy { kind: STRATEGY_OR, m: 0, n: 0 }
+}
+
+public fun either(): Strategy {
+    Strategy { kind: STRATEGY_EITHER, m: 0, n: 0 }
+}
+
+public fun threshold(m: u64, n: u64): Strategy {
+    Strategy { kind: STRATEGY_THRESHOLD, m, n }
+}
+
+/// Combine boolean gates. Extend by adding more sources as needed.
+public fun can_execute(ok_a: bool, ok_b: bool, s: Strategy): bool {
+    if (s.kind == STRATEGY_AND) {
+        // Both conditions must be true
+        ok_a && ok_b
+    } else if (s.kind == STRATEGY_OR) {
+        // At least one condition must be true
+        ok_a || ok_b
+    } else if (s.kind == STRATEGY_EITHER) {
+        // Exactly one condition must be true (XOR)
+        (ok_a && !ok_b) || (!ok_a && ok_b)
+    } else if (s.kind == STRATEGY_THRESHOLD) {
+        // M-of-N threshold over 2 booleans
+        let satisfied_count = (if (ok_a) 1 else 0) + (if (ok_b) 1 else 0);
+        satisfied_count >= s.m && s.n >= s.m
+    } else {
+        // Unknown strategy type - fail safe by requiring all conditions
+        false
+    }
+}
+/// Generic binary heap operations for vectors
+/// Extracted from conditional market price leader board
+module futarchy_one_shot_utils::binary_heap;
+
+use std::vector;
+
+// === Max Heap Operations for vector<u64> ===
+
+/// Get parent index in heap
+public fun parent(i: u64): u64 {
+    if (i == 0) 0 else (i - 1) / 2
+}
+
+/// Get left child index in heap
+public fun left(i: u64): u64 {
+    2 * i + 1
+}
+
+/// Get right child index in heap
+public fun right(i: u64): u64 {
+    2 * i + 2
+}
+
+/// Maintain max heap property by moving element down
+public fun heapify_down(v: &mut vector<u64>, mut i: u64, size: u64) {
+    loop {
+        let l = left(i);
+        let r = right(i);
+        let mut largest = i;
+
+        if (l < size && *vector::borrow(v, l) > *vector::borrow(v, largest)) {
+            largest = l;
+        };
+        if (r < size && *vector::borrow(v, r) > *vector::borrow(v, largest)) {
+            largest = r;
+        };
+        if (largest == i) break;
+        vector::swap(v, i, largest);
+        i = largest;
+    }
+}
+
+/// Build a max heap from an unordered vector
+public fun build_max_heap(v: &mut vector<u64>) {
+    let sz = vector::length(v);
+    if (sz <= 1) return;
+
+    let mut i = (sz - 1) / 2;
+    loop {
+        heapify_down(v, i, sz);
+        if (i == 0) break;
+        i = i - 1;
+    };
+}
+
+/// Peek at the maximum element (root) without removing
+public fun heap_peek(v: &vector<u64>): u64 {
+    assert!(!vector::is_empty(v), 0);
+    *vector::borrow(v, 0)
+}
+
+/// Remove and return the maximum element
+public fun heap_pop(v: &mut vector<u64>): u64 {
+    let size = vector::length(v);
+    assert!(size > 0, 0);
+
+    let top = *vector::borrow(v, 0);
+    let last_idx = size - 1;
+
+    if (last_idx != 0) {
+        vector::swap(v, 0, last_idx);
+    };
+    let _ = vector::pop_back(v);
+
+    if (last_idx > 1) {
+        heapify_down(v, 0, last_idx);
+    };
+
+    top
+}
+
+/// Insert element and maintain heap property
+public fun heap_push(v: &mut vector<u64>, value: u64) {
+    vector::push_back(v, value);
+    let mut i = vector::length(v) - 1;
+
+    // Bubble up
+    while (i > 0) {
+        let p = parent(i);
+        if (*vector::borrow(v, p) >= *vector::borrow(v, i)) break;
+        vector::swap(v, i, p);
+        i = p;
+    }
+}
+/// Centralized constants for the Futarchy protocol
+/// This module contains all magic numbers and configuration constants
+/// to ensure consistency across the codebase
+module futarchy_one_shot_utils::constants;
+
+// === AMM Fee Constants ===
+
+/// Maximum fee in basis points (100%) - for calculations only
+public fun max_fee_bps(): u64 { 10000 }
+
+/// Maximum AMM fee in basis points (5%) - hard cap for all AMM fees
+public fun max_amm_fee_bps(): u64 { 500 }
+
+/// LP fee share in basis points for CONDITIONAL AMMs (80% of fees go to LPs)
+public fun conditional_lp_fee_share_bps(): u64 { 8000 }
+
+/// Protocol fee share in basis points for CONDITIONAL AMMs (20% of fees go to protocol)
+public fun conditional_protocol_fee_share_bps(): u64 { 2000 }
+
+/// LP fee share in basis points for SPOT AMM (90% of fees go to LPs)
+public fun spot_lp_fee_share_bps(): u64 { 9000 }
+
+/// Protocol fee share in basis points for SPOT AMM (10% of fees go to protocol)
+public fun spot_protocol_fee_share_bps(): u64 { 1000 }
+
+/// Total fee basis points denominator (100%)
+public fun total_fee_bps(): u64 { 10000 }
+
+/// Default AMM total fee in basis points (0.3%)
+public fun default_amm_total_fee_bps(): u64 { 30 }
+
+// === Price Precision Constants ===
+
+/// Price scale for AMM calculations (10^12)
+/// Used for high-precision reserve ratio calculations
+public fun price_scale(): u128 { 1_000_000_000_000 }
+
+/// Basis points precision for price calculations (10^12)
+/// We use high precision to prevent rounding to 0
+public fun basis_points(): u64 { 1_000_000_000_000 }
+
+/// Price multiplier scale (10^9)
+/// Used for relative price calculations (e.g., 2_000_000_000 = 2.0x)
+/// Matches AMM spot price precision
+public fun price_multiplier_scale(): u64 { 1_000_000_000 }
+
+/// Parts per million denominator for percentage calculations
+public fun ppm_denominator(): u64 { 1_000_000 }
+
+// === Time Constants ===
+
+/// TWAP price cap window in milliseconds (60 seconds)
+public fun twap_price_cap_window(): u64 { 60_000 }
+
+/// One week in milliseconds
+public fun one_week_ms(): u64 { 604_800_000 }
+
+/// Seal reveal grace period (7 days in milliseconds)
+/// Time after launchpad deadline to decrypt Seal-encrypted max raise
+public fun seal_reveal_grace_period_ms(): u64 { 604_800_000 }
+
+/// Default permit expiry time (5 minutes)
+public fun default_permit_expiry_ms(): u64 { 5 * 60_000 }
+
+// === Governance Constants ===
+
+/// Maximum concurrent proposals allowed in the queue
+public fun max_concurrent_proposals(): u64 { 100 }
+
+/// Maximum queue size for proposals
+public fun max_queue_size(): u64 { 100 }
+
+/// Grace period for proposal eviction
+public fun proposal_grace_period_ms(): u64 { 24 * 60 * 60_000 } // 24 hours
+
+/// Protocol-level maximum outcomes per proposal
+/// Updated to 50 with O(N) linear filter optimization (was 5 with O(N²) pruning)
+public fun protocol_max_outcomes(): u64 { 50 }
+
+/// Protocol-level maximum actions per proposal (across all outcomes)
+public fun protocol_max_actions(): u64 { 50 }
+
+/// Protocol-level maximum actions per single outcome
+public fun protocol_max_actions_per_outcome(): u64 { 20 }
+
+/// Default maximum outcomes per proposal for DAOs
+public fun default_max_outcomes(): u64 { 2 }
+
+/// Default maximum actions per proposal for DAOs (across all outcomes)
+public fun default_max_actions_per_proposal(): u64 { 10 }
+
+/// Default maximum actions per outcome for DAOs
+public fun default_max_actions_per_outcome(): u64 { 5 }
+
+/// Minimum number of outcomes for any proposal
+public fun min_outcomes(): u64 { 2 }
+
+/// Minimum review period in milliseconds
+public fun min_review_period_ms(): u64 { 1000 } // 1 second for testing
+
+/// Minimum trading period in milliseconds
+public fun min_trading_period_ms(): u64 { 1000 } // 1 second for testing
+
+/// Minimum grace period for eviction in milliseconds
+public fun min_eviction_grace_period_ms(): u64 { 300000 } // 5 minutes
+
+/// Minimum proposal intent expiry in milliseconds
+public fun min_proposal_intent_expiry_ms(): u64 { 3600000 } // 1 hour
+
+/// Default optimistic challenge fee (1 billion MIST = 1 token)
+public fun default_optimistic_challenge_fee(): u64 { 1_000_000_000 }
+
+/// Default optimistic challenge period in milliseconds (10 days)
+public fun default_optimistic_challenge_period_ms(): u64 { 864_000_000 }
+
+/// Default eviction grace period in milliseconds (2 hours)
+public fun default_eviction_grace_period_ms(): u64 { 7_200_000 }
+
+/// Default proposal intent expiry in milliseconds (30 days)
+public fun default_proposal_intent_expiry_ms(): u64 { 2_592_000_000 }
+
+/// Default proposal recreation window in milliseconds (24 hours)
+public fun default_proposal_recreation_window_ms(): u64 { 86_400_000 }
+
+/// Default max proposal chain depth
+public fun default_max_proposal_chain_depth(): u64 { 3 }
+
+/// Default fee escalation basis points (5%)
+public fun default_fee_escalation_bps(): u64 { 500 }
+
+// === Cleanup Constants ===
+
+/// Maximum intents that can be cleaned in one call
+public fun max_cleanup_per_call(): u64 { 20 }
+
+/// Maximum pending withdrawals per payment stream
+public fun max_pending_withdrawals(): u64 { 10 }
+
+// === Market Constants ===
+
+/// Number of outcomes for binary markets
+public fun binary_outcomes(): u64 { 2 }
+
+/// Token type constants
+public fun token_type_asset(): u8 { 0 }
+
+public fun token_type_stable(): u8 { 1 }
+
+public fun token_type_lp(): u8 { 2 }
+
+// === Liquidity Constants ===
+
+/// Minimum percentage of liquidity that can move to conditional markets (base 100)
+/// Enforces at least 1% stays in spot pool for trading during proposals
+public fun min_conditional_liquidity_percent(): u64 { 1 }
+
+/// Maximum percentage of liquidity that can move to conditional markets (base 100)
+/// Enforces at least 1% stays in spot pool for trading during proposals
+public fun max_conditional_liquidity_percent(): u64 { 99 }
+
+/// Default percentage of liquidity that moves to conditional markets (base 100)
+/// 80% provides good balance between price discovery and spot liquidity
+public fun default_conditional_liquidity_percent(): u64 { 80 }
+
+// === Document Registry Constants ===
+
+/// Maximum chunks per document (limited by per-tx dynamic field access)
+public fun max_chunks_per_document(): u64 { 1000 }
+
+/// Maximum documents per DAO (soft limit for reasonable DAOs)
+public fun max_documents_per_dao(): u64 { 1000 }
+
+/// Maximum traversal limit for document queries (pagination)
+public fun max_traversal_limit(): u64 { 1000 }
+
+// === Treasury & Payment Constants ===
+//
+// UPGRADABLE LIMITS PATTERN:
+// These constants are referenced by move-framework modules (vault, vesting, stream_utils)
+// but defined here for centralized upgradability.
+//
+// To change these limits system-wide:
+// 1. Update the values below
+// 2. Deploy new version of futarchy_one_shot_utils
+// 3. Redeploy dependent packages (they'll pick up new limits)
+//
+// This enables DAOs to adjust limits via package upgrade proposals
+// without modifying the core framework code.
+
+/// Maximum beneficiaries per stream/vesting
+/// Used by vault streams and vesting to limit multi-beneficiary coordination
+/// Current: 100 (reasonable for most DAO coordination scenarios)
+/// To increase: Update here and redeploy. Consider gas costs for large beneficiary lists.
+public fun max_beneficiaries(): u64 { 100 }
+
+// === Launchpad Constants ===
+
+/// The duration for every launchpad raise (4 days in milliseconds)
+public fun launchpad_duration_ms(): u64 { 345_600_000 }
+
+/// Claim period after successful raise before creator can sweep dust (14 days)
+public fun launchpad_claim_period_ms(): u64 { 1_209_600_000 }
+
+/// Minimum SUI fee per contribution (0.1 SUI) to prevent spam and fund settlement cranking
+public fun launchpad_crank_fee_per_contribution(): u64 { 100_000_000 }
+
+/// Reward per cap processed during settlement cranking (0.05 SUI)
+public fun launchpad_reward_per_cap_processed(): u64 { 50_000_000 }
+
+/// Maximum number of unique cap values to prevent unbounded heap
+/// Limits settlement gas costs (100 caps × 0.05 SUI = 5 SUI max)
+public fun launchpad_max_unique_caps(): u64 { 100 }
+
+/// Maximum number of init actions during DAO creation
+public fun launchpad_max_init_actions(): u64 { 20 }
+
+/// Estimated max gas per init action
+public fun launchpad_max_gas_per_action(): u64 { 1_000_000 }
+
+// === Validation Functions ===
+
+/// Check if a fee is valid (not exceeding maximum)
+public fun is_valid_fee(fee_bps: u64): bool {
+    fee_bps <= max_fee_bps()
+}
+
+/// Check if a cap percentage is valid (not exceeding 100%)
+public fun is_valid_cap_ppm(cap_ppm: u64): bool {
+    cap_ppm <= ppm_denominator()
+}
+module futarchy_one_shot_utils::math;
+
+use std::u128;
+use std::u64;
+
+// === Introduction ===
+// Integer type conversion and integer methods
+
+// === Errors ===
+const EOverflow: u64 = 0;
+const EDivideByZero: u64 = 1;
+const EValueExceedsU64: u64 = 2;
+
+// === Public Functions ===
+// Multiplies two u64 values and divides by a third, checking for overflow
+// Returns (a * b) / c
+//
+// SAFETY: The product of two u64 values can be at most (2^64 - 1)^2 = 2^128 - 2^65 + 1,
+// which is less than 2^128 and therefore always fits in a u128. This property ensures
+// that the intermediate multiplication a_128 * b_128 will never overflow.
+// The division by c then reduces the result, and we verify it fits in u64 before casting.
+public fun mul_div_to_64(a: u64, b: u64, c: u64): u64 {
+    assert!(c != 0, EDivideByZero);
+
+    // Cast to u128 to prevent overflow during multiplication
+    // SAFE: Product of two u64s always fits in u128 (see safety note above)
+    let a_128 = (a as u128);
+    let b_128 = (b as u128);
+    let c_128 = (c as u128);
+
+    // Perform the multiplication and division
+    let result = (a_128 * b_128) / c_128;
+
+    // Ensure the result fits back into u64
+    assert!(result <= (u64::max_value!() as u128), EOverflow);
+    (result as u64)
+}
+
+public fun mul_div_to_128(a: u64, b: u64, c: u64): u128 {
+    assert!(c != 0, EDivideByZero);
+    // Use u256 for intermediate calculation to avoid overflow
+    let a_256 = (a as u256);
+    let b_256 = (b as u256);
+    let c_256 = (c as u256);
+    let result_256 = (a_256 * b_256) / c_256;
+    // Ensure result fits in u128
+    assert!(result_256 <= (u128::max_value!() as u256), EOverflow);
+    (result_256 as u128)
+}
+
+public fun mul_div_mixed(a: u128, b: u64, c: u128): u128 {
+    assert!(c != 0, EDivideByZero);
+    let a_256 = (a as u256);
+    let b_256 = (b as u256);
+    let c_256 = (c as u256);
+    let result = (a_256 * b_256) / c_256;
+    assert!(result <= (u128::max_value!() as u256), EOverflow);
+    (result as u128)
+}
+
+// Safely multiplies two u64 values and divides by a third, rounding up
+// Returns ceil((a * b) / c)
+//
+// SAFETY: Same as mul_div_to_64 - the product of two u64s always fits in u128.
+// The rounding up operation adds at most (c-1) to the numerator before division.
+public fun mul_div_up(a: u64, b: u64, c: u64): u64 {
+    assert!(c != 0, EDivideByZero);
+
+    // Cast to u128 to prevent overflow during multiplication
+    // SAFE: Product of two u64s always fits in u128
+    let a_128 = (a as u128);
+    let b_128 = (b as u128);
+    let c_128 = (c as u128);
+
+    // Calculate the numerator (product of a and b)
+    let numerator = a_128 * b_128;
+
+    // Perform division with rounding up
+    let result = if (numerator == 0) {
+        0
+    } else {
+        // Add (c-1) to round up: ceil(n/c) = floor((n + c - 1) / c)
+        let sum = numerator + c_128 - 1;
+        assert!(sum >= numerator, EOverflow); // Verify no overflow in addition
+        sum / c_128
+    };
+
+    // Ensure the result fits back into u64
+    assert!(result <= (u64::max_value!() as u128), EOverflow);
+    (result as u64)
+}
+
+// Saturating addition that won't overflow
+public fun saturating_add(a: u128, b: u128): u128 {
+    if (u128::max_value!() - a < b) {
+        u128::max_value!()
+    } else {
+        a + b
+    }
+}
+
+// Saturating subtraction that won't underflow
+public fun saturating_sub(a: u128, b: u128): u128 {
+    if (a < b) {
+        0
+    } else {
+        a - b
+    }
+}
+
+public fun safe_u128_to_u64(value: u128): u64 {
+    assert!(value <= (u64::max_value!() as u128), EValueExceedsU64);
+    (value as u64)
+}
+
+// Returns the smaller of two u64 values
+public fun min(a: u64, b: u64): u64 {
+    if (a < b) { a } else { b }
+}
+
+// Returns the larger of two u64 values
+public fun max(a: u64, b: u64): u64 {
+    if (a > b) { a } else { b }
+}
+
+// Integer square root using Newton's method
+// Returns the largest integer x such that x * x <= n
+public fun sqrt(n: u64): u64 {
+    if (n == 0) return 0;
+    if (n < 4) return 1;
+
+    // Initial guess: half of n
+    let mut x = n / 2;
+    let mut last_x = x;
+
+    loop {
+        // Newton's iteration: x = (x + n/x) / 2
+        x = (x + n / x) / 2;
+
+        // Check convergence
+        if (x >= last_x) {
+            return last_x;
+        };
+        last_x = x;
+    }
+}
+
+// Integer square root for u128 values
+public fun sqrt_u128(n: u128): u128 {
+    if (n == 0) return 0;
+    if (n < 4) return 1;
+
+    // Initial guess
+    let mut x = n / 2;
+    let mut last_x = x;
+
+    loop {
+        // Newton's iteration
+        x = (x + n / x) / 2;
+
+        // Check convergence
+        if (x >= last_x) {
+            return last_x;
+        };
+        last_x = x;
+    }
+}
+
+// Absolute difference between two u64 values
+public fun abs_diff(a: u64, b: u64): u64 {
+    if (a > b) { a - b } else { b - a }
+}
+
+// Check if a value is within a percentage tolerance
+// Returns true if |a - b| <= (tolerance_bps * max(a,b)) / 10000
+public fun within_tolerance(a: u64, b: u64, tolerance_bps: u64): bool {
+    let diff = abs_diff(a, b);
+    let max_val = max(a, b);
+    let tolerance = mul_div_to_64(max_val, tolerance_bps, 10000);
+    diff <= tolerance
+}
+module futarchy_one_shot_utils::metadata;
+
+use std::string::String;
+use sui::bag::{Self, Bag};
+use sui::table::{Self, Table};
+
+// === Errors ===
+const EInvalidMetadataLength: u64 = 0; // Keys and values vectors must have same length
+const EEmptyKey: u64 = 1; // Metadata key cannot be empty
+const EKeyTooLong: u64 = 2; // Metadata key exceeds maximum length
+const EValueTooLong: u64 = 3; // Metadata value exceeds maximum length
+const EDuplicateKey: u64 = 4; // Duplicate key in metadata
+
+// === Constants ===
+const MAX_KEY_LENGTH: u64 = 64; // Maximum length for metadata keys
+const MAX_VALUE_LENGTH: u64 = 256; // Maximum length for metadata values
+const MAX_ENTRIES: u64 = 50; // Maximum number of metadata entries
+
+// === Public Functions ===
+
+/// Create a new metadata table from parallel vectors of keys and values
+/// This is useful for entry functions that can't accept Table parameters
+public fun new_from_vectors(
+    keys: vector<String>,
+    values: vector<String>,
+    ctx: &mut TxContext,
+): Table<String, String> {
+    let keys_len = keys.length();
+    let values_len = values.length();
+
+    // Validate input
+    assert!(keys_len == values_len, EInvalidMetadataLength);
+    assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
+
+    let mut metadata = table::new<String, String>(ctx);
+    let mut i = 0;
+
+    while (i < keys_len) {
+        let key = &keys[i];
+        let value = &values[i];
+
+        // Validate key and value
+        assert!(key.length() > 0, EEmptyKey);
+        assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
+        assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
+
+        // Check for duplicates
+        assert!(!table::contains(&metadata, *key), EDuplicateKey);
+
+        table::add(&mut metadata, *key, *value);
+        i = i + 1;
+    };
+
+    metadata
+}
+
+/// Add a single key-value pair to an existing metadata table
+public fun add_entry(metadata: &mut Table<String, String>, key: String, value: String) {
+    // Validate
+    assert!(key.length() > 0, EEmptyKey);
+    assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
+    assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
+    assert!(table::length(metadata) < MAX_ENTRIES, EInvalidMetadataLength);
+
+    if (table::contains(metadata, key)) {
+        // Update existing entry
+        table::remove(metadata, key);
+        table::add(metadata, key, value);
+    } else {
+        // Add new entry
+        table::add(metadata, key, value);
+    }
+}
+
+/// Update an existing entry in the metadata table
+public fun update_entry(metadata: &mut Table<String, String>, key: String, value: String) {
+    assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
+
+    // Update existing entry
+    if (table::contains(metadata, key)) {
+        let val_ref = table::borrow_mut(metadata, key);
+        *val_ref = value;
+    } else {
+        // Add new entry if it doesn't exist
+        add_entry(metadata, key, value);
+    }
+}
+
+/// Remove an entry from the metadata table
+public fun remove_entry(metadata: &mut Table<String, String>, key: String): String {
+    table::remove(metadata, key)
+}
+
+/// Check if a key exists in the metadata
+public fun contains_key(metadata: &Table<String, String>, key: &String): bool {
+    table::contains(metadata, *key)
+}
+
+/// Get a value from the metadata table
+public fun get_value(metadata: &Table<String, String>, key: &String): &String {
+    table::borrow(metadata, *key)
+}
+
+/// Get the number of entries in the metadata table
+public fun length(metadata: &Table<String, String>): u64 {
+    table::length(metadata)
+}
+
+/// Validate metadata without creating a table (useful for pre-validation)
+public fun validate_metadata_vectors(
+    keys: &vector<String>,
+    values: &vector<String>,
+    ctx: &mut TxContext,
+) {
+    let keys_len = keys.length();
+    let values_len = values.length();
+
+    assert!(keys_len == values_len, EInvalidMetadataLength);
+    assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
+
+    let mut i = 0;
+    let mut seen_keys = bag::new(ctx);
+
+    while (i < keys_len) {
+        let key = &keys[i];
+        let value = &values[i];
+
+        // Validate key and value
+        assert!(key.length() > 0, EEmptyKey);
+        assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
+        assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
+
+        // Check for duplicates
+        assert!(!bag::contains(&seen_keys, *key), EDuplicateKey);
+        bag::add(&mut seen_keys, *key, true);
+
+        i = i + 1;
+    };
+
+    // Clean up: remove all items before destroying
+    i = 0;
+    while (i < keys_len) {
+        let _: bool = bag::remove(&mut seen_keys, keys[i]);
+        i = i + 1;
+    };
+
+    bag::destroy_empty(seen_keys);
+}
+
+// === Common Metadata Keys ===
+// These constants define standard metadata keys used across the protocol
+
+/// Website URL for the DAO or proposal
+public fun key_website(): String { b"website".to_string() }
+
+/// Twitter/X handle
+public fun key_twitter(): String { b"twitter".to_string() }
+
+/// Discord server invite link
+public fun key_discord(): String { b"discord".to_string() }
+
+/// GitHub organization or repository
+public fun key_github(): String { b"github".to_string() }
+
+/// Telegram group link
+public fun key_telegram(): String { b"telegram".to_string() }
+
+/// Documentation URL
+public fun key_docs(): String { b"docs".to_string() }
+
+/// Whitepaper or litepaper URL
+public fun key_whitepaper(): String { b"whitepaper".to_string() }
+
+/// Token contract address (for existing tokens)
+public fun key_token_address(): String { b"token_address".to_string() }
+
+/// Total token supply
+public fun key_token_supply(): String { b"token_supply".to_string() }
+
+/// Token distribution details
+public fun key_token_distribution(): String { b"token_distribution".to_string() }
+
+/// Team information
+public fun key_team(): String { b"team".to_string() }
+
+/// Roadmap URL or description
+public fun key_roadmap(): String { b"roadmap".to_string() }
+
+/// Legal entity information
+public fun key_legal_entity(): String { b"legal_entity".to_string() }
+
+/// Terms of service URL
+public fun key_terms(): String { b"terms".to_string() }
+
+/// Privacy policy URL
+public fun key_privacy(): String { b"privacy".to_string() }

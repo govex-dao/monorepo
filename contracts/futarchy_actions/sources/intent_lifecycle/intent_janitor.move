@@ -8,8 +8,7 @@ use account_protocol::intents::{Self, Expired};
 use futarchy_actions::config_actions;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::version;
-use futarchy_markets_core::;
-use std::string::String;
+use std::string::{Self as string, String};
 use sui::clock::Clock;
 use sui::event;
 use sui::table::{Self, Table};
@@ -258,32 +257,17 @@ fun try_delete_expired_futarchy_intent(
         return false
     };
 
-    // Try to delete as FutarchyOutcome type
-    // This will fail if the intent has a different outcome type
-    let can_delete = {
-        // Check if the intent is expired
-        // Note: This requires knowing the outcome type at compile time
-        // For now, we'll assume a standard outcome type
-        true // TODO: Implement proper outcome type checking
-    };
-
-    if (can_delete) {
-        // TODO: This requires the correct outcome type
-        // For now, skip deletion
-        // let expired = account::delete_expired_intent<FutarchyConfig, StandardOutcome>(
-        //     account,
-        //     key,
-        //     clock
-        // );
-        // destroy_expired(expired);
-
-        // Remove from index
-        remove_from_index(account, key, ctx);
-
-        true
-    } else {
-        false
-    }
+    let key_for_index = string::clone(&key);
+    let expired = account::delete_expired_intent<FutarchyConfig, FutarchyOutcome>(
+        account,
+        key,
+        clock,
+    );
+    destroy_expired(expired);
+    
+    remove_from_index(account, key_for_index, ctx);
+    
+    true
 }
 
 /// Destroy an expired intent after removing all actions

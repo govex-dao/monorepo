@@ -130,6 +130,9 @@ public fun do_withdraw_object<Config, Outcome: store, T: key + store, IW: drop>(
     let mut reader = bcs::new(*action_data);
     let object_id = object::id_from_address(bcs::peel_address(&mut reader));
 
+    // Validate all bytes consumed (prevent trailing data attacks)
+    account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
+
     assert!(receiving.receiving_object_id() == object_id, EWrongObject);
 
     // Receive the object and increment action index
@@ -202,6 +205,9 @@ public fun do_withdraw_coin<Config, Outcome: store, CoinType, IW: drop>(
     let mut reader = bcs::new(*action_data);
     let coin_type = std::string::utf8(bcs::peel_vec_u8(&mut reader));
     let coin_amount = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed (prevent trailing data attacks)
+    account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
 
     // Receive the coin
     let coin = account::receive(account, receiving);

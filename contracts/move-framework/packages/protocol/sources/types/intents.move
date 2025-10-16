@@ -533,8 +533,13 @@ public(package) fun destroy_intent<Outcome: store + drop>(
         i = i + 1;
     };
 
-    // Create a dummy ID for now - in production you might want to use a hash of the key
-    let intent_id = object::id_from_address(@0x0);
+    // ✅ FIXED: Generate unique ID from intent key for proper tracking and debugging
+    // - Hash key to get exactly 32 bytes (id_from_bytes requires 32 bytes)
+    // - Enables proper intent tracking in logs and events
+    // - Old approach: Hardcoded @0x0 made all intents indistinguishable
+    use sui::hash;
+    let key_hash = hash::keccak256(&key.into_bytes());
+    let intent_id = object::id_from_bytes(key_hash);
 
     Expired { account, action_specs, executed_actions, intent_id }
 }

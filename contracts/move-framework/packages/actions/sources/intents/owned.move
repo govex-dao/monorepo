@@ -235,6 +235,8 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
                 total_amount,
                 iw,
             );
+            // Note: This template uses simplified vesting parameters
+            // For custom rate limiting, call vesting::new_vesting() directly
             vesting::new_vesting<_, _, CoinType, _>(
                 intent,
                 account,
@@ -242,13 +244,13 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
                 amounts,
                 start_timestamp,
                 end_timestamp,
-                option::none(),
-                1,
-                total_amount,
-                0,
-                false,
-                false,
-                option::none(),
+                option::none(),      // cliff_time: none
+                1,                   // max_beneficiaries: 1 (single beneficiary per vesting)
+                0,                   // max_per_withdrawal: 0 (no limit - template simplification)
+                0,                   // min_interval_ms: 0 (no interval - template simplification)
+                false,               // is_transferable: false
+                false,               // is_cancelable: false
+                option::none(),      // metadata: none
                 iw,
             );
         },

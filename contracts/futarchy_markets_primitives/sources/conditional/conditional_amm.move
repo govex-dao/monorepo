@@ -146,7 +146,7 @@ public fun new_pool(
     check_price_under_max(initial_price);
 
     // Initialize futarchy oracle (for determining winner)
-    let oracle = oracle::new_oracle(
+    let oracle = futarchy_twap_oracle::new_oracle(
         initial_price,
         twap_start_delay,
         twap_step_max,
@@ -250,7 +250,7 @@ public fun swap_asset_to_stable(
     let old_stable = pool.stable_reserve;
 
     let timestamp = clock.timestamp_ms();
-    let old_price = math::mul_div_to_128(old_stable, constants::basis_points(), old_asset);
+    let old_price = math::mul_div_to_128(old_stable, constants::price_precision_scale(), old_asset);
     // Oracle observation is recorded using the reserves *before* the swap.
     // This ensures that the TWAP accurately reflects the price at the beginning of the swap.
     write_observation(
@@ -354,7 +354,7 @@ public fun swap_stable_to_asset(
     let old_stable = pool.stable_reserve;
 
     let timestamp = clock.timestamp_ms();
-    let old_price = math::mul_div_to_128(old_stable, constants::basis_points(), old_asset);
+    let old_price = math::mul_div_to_128(old_stable, constants::price_precision_scale(), old_asset);
     // Oracle observation is recorded using the reserves *before* the swap.
     // This ensures that the TWAP accurately reflects the price at the beginning of the swap.
     write_observation(
@@ -810,7 +810,7 @@ public fun get_current_price(pool: &LiquidityPool): u128 {
 
     let price = math::mul_div_to_128(
         pool.stable_reserve,
-        constants::basis_points(),
+        constants::price_precision_scale(),
         pool.asset_reserve,
     );
 
@@ -858,7 +858,7 @@ public fun get_k(pool: &LiquidityPool): u128 {
 }
 
 public fun check_price_under_max(price: u128) {
-    let max_price = (0xFFFFFFFFFFFFFFFFu64 as u128) * (constants::basis_points() as u128);
+    let max_price = (0xFFFFFFFFFFFFFFFFu64 as u128) * (constants::price_precision_scale() as u128);
     assert!(price <= max_price, EPriceTooHigh)
 }
 
@@ -998,7 +998,7 @@ public fun create_test_pool(
 ): LiquidityPool {
     let initial_price = math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve);
 
-    let mut oracle_obj = oracle::new_oracle(
+    let mut oracle_obj = futarchy_twap_oracle::new_oracle(
         initial_price,
         0, // Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
         1_000,
@@ -1049,7 +1049,7 @@ public fun create_pool_for_testing(
         1_000_000_000
     };
 
-    let oracle_obj = oracle::new_oracle(
+    let oracle_obj = futarchy_twap_oracle::new_oracle(
         initial_price,
         0, // twap_start_delay - Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
         100, // twap_step_max (ppm)

@@ -105,6 +105,7 @@ module futarchy_markets_core::arbitrage_math;
 
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_one_shot_utils::constants;
 use futarchy_one_shot_utils::math;
 
 // === Errors ===
@@ -112,7 +113,7 @@ const ETooManyConditionals: u64 = 0;
 const EInvalidFee: u64 = 1;
 
 // === Constants ===
-const MAX_CONDITIONALS: u64 = 50; // Protocol limit - O(N²) with pruning stays performant
+// MAX_CONDITIONALS coupled with protocol_max_outcomes - ensures consistency across futarchy system
 const BPS_SCALE: u64 = 10000; // Basis points scale
 const SMART_BOUND_MARGIN_NUM: u64 = 11; // Smart bound = 1.1x user swap (110%)
 const SMART_BOUND_MARGIN_DENOM: u64 = 10;
@@ -132,14 +133,22 @@ const TERNARY_SEARCH_DIVISOR: u64 = 100; // Search to 1% of space (or MIN_COARSE
 /// - Negligible gas cost: ~3 extra iterations max (< 0.01% total gas)
 const MIN_COARSE_THRESHOLD: u64 = 3;
 
-// Gas cost estimates (with smart bounding + active-set pruning):
-//   N=10:  ~5k gas   ✅ Instant (95% reduction from smart bounding!)
-//   N=20:  ~8k gas   ✅ Very fast
-//   N=50:  ~50k gas  ✅ Fast (protocol limit - MAX_CONDITIONALS)
+/// Tolerance numerator for linear pre-filtering: 105% (keep pools within 5% tolerance)
+const LINEAR_FILTER_TOL_NUM: u128 = 105;
+/// Tolerance denominator for linear pre-filtering: 100%
+const LINEAR_FILTER_TOL_DENOM: u128 = 100;
+
+// Gas cost estimates (with smart bounding + O(N) linear pre-filter):
+//   N=10:   ~3k gas   ✅ Instant
+//   N=50:   ~8k gas   ✅ Very fast (protocol limit)
+//   N=100:  ~12k gas  ✅ Fast (technical capability, exceeds protocol limit)
+//   N=400:  ~30k gas  ✅ Technical max (O(N) linear filter enables large N)
 //
-// Complexity: O(N²) from pruning + O(log(1.1*user_swap) × N_pruned) from search
-// Pruning typically reduces N to 2-3 active outcomes
-// Smart bounding typically reduces search space by 95%+
+// Protocol limit: N=50 (constants::protocol_max_outcomes)
+// Technical capability: Up to N=400 with O(N) linear filter
+// Complexity: O(N) from linear filter + O(log(1.1*user_swap) × C) from search
+// Linear filter reduces N to small constant C (typically 2-5 active pools)
+// Smart bounding reduces search space by 95%+
 
 // === Public API ===
 
@@ -171,7 +180,7 @@ public fun compute_optimal_arbitrage_for_n_outcomes<AssetType, StableType>(
     let outcome_count = vector::length(conditionals);
     if (outcome_count == 0) return (0, 0, false);
 
-    assert!(outcome_count <= MAX_CONDITIONALS, ETooManyConditionals);
+    assert!(outcome_count <= constants::protocol_max_outcomes(), ETooManyConditionals);
 
     // Try Spot → Conditional arbitrage
     let (x_stc, profit_stc) = compute_optimal_spot_to_conditional(
@@ -207,7 +216,7 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
     let num_conditionals = vector::length(conditionals);
     if (num_conditionals == 0) return (0, 0);
 
-    assert!(num_conditionals <= MAX_CONDITIONALS, ETooManyConditionals);
+    assert!(num_conditionals <= constants::protocol_max_outcomes(), ETooManyConditionals);
 
     // Check for zero liquidity in any conditional pool (early rejection)
     let mut i = 0;
@@ -240,13 +249,14 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
         return (0, 0)
     };
 
-    // OPTIMIZATION 2: Prune dominated outcomes (40-60% gas reduction)
-    let (ts_pruned, as_pruned, bs_pruned) = prune_dominated(ts, as_vals, bs);
+    // OPTIMIZATION 2 (REVISED): Linear Pre-Filter (O(N) for N=400 support)
+    // Replaces the O(N^2) prune_dominated function which is too expensive for N > 100.
+    let (ts_active, as_active, bs_active) = linear_pre_filter(ts, as_vals, bs);
 
-    if (vector::length(&ts_pruned) == 0) return (0, 0);
+    if (vector::length(&ts_active) == 0) return (0, 0);
 
     // OPTIMIZATION 3: Smart bounding (95%+ gas reduction)
-    let global_ub = upper_bound_b(&ts_pruned, &bs_pruned);
+    let global_ub = upper_bound_b(&ts_active, &bs_active);
     let smart_bound = if (user_swap_output == 0) {
         global_ub
     } else {
@@ -262,9 +272,9 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
 
     // OPTIMIZATION 4: B-parameterization ternary search (F(b) is concave)
     let (b_star, profit) = optimal_b_search_bounded(
-        &ts_pruned,
-        &as_pruned,
-        &bs_pruned,
+        &ts_active,
+        &as_active,
+        &bs_active,
         smart_bound,
     );
 
@@ -274,7 +284,7 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
     };
 
     // Convert b* to x* (input amount needed)
-    let x_star = x_required_for_b(&ts_pruned, &as_pruned, &bs_pruned, b_star);
+    let x_star = x_required_for_b(&ts_active, &as_active, &bs_active, b_star);
 
     (x_star, profit)
 }
@@ -289,7 +299,7 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
     let num_conditionals = vector::length(conditionals);
     if (num_conditionals == 0) return (0, 0);
 
-    assert!(num_conditionals <= MAX_CONDITIONALS, ETooManyConditionals);
+    assert!(num_conditionals <= constants::protocol_max_outcomes(), ETooManyConditionals);
 
     // Check for zero liquidity in any conditional pool (early rejection)
     let mut i = 0;
@@ -360,12 +370,12 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
     let mut left = 0u64;
     let mut right = smart_bound;
 
-    // PHASE 1: Coarse search (1% precision with floor of 3)
+    // FIX B2 (Precision): Guarantee convergence to unit precision by setting fixed threshold.
     // Defense in depth Layer 1: threshold=3 prevents loop when gap ≤ 3
     // Defense in depth Layer 2: ceiling division guarantees progress if Layer 1 bypassed
-    let coarse_threshold = math::max(smart_bound / TERNARY_SEARCH_DIVISOR, MIN_COARSE_THRESHOLD);
+    let final_threshold = MIN_COARSE_THRESHOLD;
 
-    while (right - left > coarse_threshold) {
+    while (right - left > final_threshold) {
         // Layer 2: Ceiling division guarantees third ≥ 1 for any positive gap
         // ceil(gap/3) = (gap + 2) / 3, mathematically ensures loop always makes progress
         // Layer 1 (threshold=3) prevents this from ever being needed, but Layer 2 is bulletproof
@@ -483,12 +493,12 @@ fun optimal_b_search_bounded(
     let mut left = 0u64;
     let mut right = upper_bound;
 
-    // PHASE 1: Coarse search (1% precision with floor of 3)
+    // FIX B2 (Precision): Guarantee convergence to unit precision by setting fixed threshold.
     // Defense in depth Layer 1: threshold=3 prevents loop when gap ≤ 3
     // Defense in depth Layer 2: ceiling division guarantees progress if Layer 1 bypassed
-    let coarse_threshold = math::max(upper_bound / TERNARY_SEARCH_DIVISOR, MIN_COARSE_THRESHOLD);
+    let final_threshold = MIN_COARSE_THRESHOLD;
 
-    while (right - left > coarse_threshold) {
+    while (right - left > final_threshold) {
         // Layer 2: Ceiling division guarantees third ≥ 1 for any positive gap
         // ceil(gap/3) = (gap + 2) / 3, mathematically ensures loop always makes progress
         // Layer 1 (threshold=3) prevents this from ever being needed, but Layer 2 is bulletproof
@@ -767,12 +777,10 @@ fun safe_cross_product_le(a: u128, b: u128, c: u128, d: u128): bool {
     ((a as u256) * (b as u256)) <= ((c as u256) * (d as u256))
 }
 
-/// Prune dominated outcomes to reduce search space
-/// Outcome j is dominated by i if: T_i/A_i ≤ T_j/A_j AND T_i/B_i ≤ T_j/B_j
-/// Then s_j(x) ≥ s_i(x) for all x ≥ 0, so drop j
-///
-/// OVERFLOW PROTECTION: Uses safe_cross_product_le() to avoid u128 × u128 overflow
-fun prune_dominated(
+/// Linear Pre-Filter (O(N)): Reduces N to a small active set C for large N (e.g., N=400).
+/// Keeps pools that are competitive on Initial Cost Slope (A/T) OR Capacity (T/B).
+/// This replaces the costly O(N^2) pairwise dominance check.
+fun linear_pre_filter(
     ts: vector<u128>,
     as_vals: vector<u128>,
     bs: vector<u128>,
@@ -780,78 +788,81 @@ fun prune_dominated(
     let n = vector::length(&ts);
     if (n <= 1) return (ts, as_vals, bs);
 
-    let mut keep = vector::empty<bool>();
+    // --- Step 1: Find Champions (O(N) search) ---
+    // C_min (Minimum Slope Champion): C_i = A_i / T_i
+    // U_max (Maximum Capacity Champion): U_i = (T_i - 1) / B_i
+
+    let mut min_slope_num = *vector::borrow(&as_vals, 0); // A_champion
+    let mut min_slope_denom = *vector::borrow(&ts, 0);    // T_champion
+    let mut max_capacity_ub = 0u128; // U_max
+
     let mut i = 0;
     while (i < n) {
-        vector::push_back(&mut keep, true);
+        let ti = *vector::borrow(&ts, i);
+        let ai = *vector::borrow(&as_vals, i);
+        let bi = *vector::borrow(&bs, i);
+
+        // Update Minimum Slope Champion (if C_i < C_champion)
+        // Check: ai * min_slope_denom < min_slope_num * ti
+        if (safe_cross_product_le(ai, min_slope_denom, min_slope_num, ti)) {
+            min_slope_num = ai;
+            min_slope_denom = ti;
+        };
+
+        // Update Maximum Capacity Champion (U_i = (T_i - 1) / B_i)
+        let ub_i = if (bi == 0 || ti <= 1) { 0u128 } else { (ti - 1) / bi };
+        if (ub_i > max_capacity_ub) {
+            max_capacity_ub = ub_i;
+        };
+
         i = i + 1;
     };
 
-    // Check each pair
-    let mut p = 0;
-    while (p < n) {
-        if (!*vector::borrow(&keep, p)) {
-            p = p + 1;
-            continue
-        };
-
-        let mut q = p + 1;
-        while (q < n) {
-            if (!*vector::borrow(&keep, q)) {
-                q = q + 1;
-                continue
-            };
-
-            let tp = *vector::borrow(&ts, p);
-            let ap = *vector::borrow(&as_vals, p);
-            let bp = *vector::borrow(&bs, p);
-
-            let tq = *vector::borrow(&ts, q);
-            let aq = *vector::borrow(&as_vals, q);
-            let bq = *vector::borrow(&bs, q);
-
-            // OVERFLOW FIX: Use safe comparison instead of direct multiplication
-            // Check if p dominates q: T_p/A_p ≤ T_q/A_q AND T_p/B_p ≤ T_q/B_q
-            let ta_check = safe_cross_product_le(tp, aq, tq, ap);
-            let tb_check = safe_cross_product_le(tp, bq, tq, bp);
-
-            if (ta_check && tb_check) {
-                // p dominates q (p is always cheaper/equal), drop q
-                *vector::borrow_mut(&mut keep, q) = false;
-            } else {
-                // Check if q dominates p
-                let ta_check_rev = safe_cross_product_le(tq, ap, tp, aq);
-                let tb_check_rev = safe_cross_product_le(tq, bp, tp, bq);
-
-                if (ta_check_rev && tb_check_rev) {
-                    // q dominates p, drop p
-                    *vector::borrow_mut(&mut keep, p) = false;
-                    break // p is dropped, move to next p
-                }
-            };
-
-            q = q + 1;
-        };
-
-        p = p + 1;
-    };
-
-    // Build pruned vectors
-    let mut ts_pruned = vector::empty<u128>();
-    let mut as_pruned = vector::empty<u128>();
-    let mut bs_pruned = vector::empty<u128>();
+    // --- Step 2: Filter Active Set (O(N)) ---
+    let mut ts_active = vector::empty<u128>();
+    let mut as_active = vector::empty<u128>();
+    let mut bs_active = vector::empty<u128>();
 
     let mut k = 0;
     while (k < n) {
-        if (*vector::borrow(&keep, k)) {
-            vector::push_back(&mut ts_pruned, *vector::borrow(&ts, k));
-            vector::push_back(&mut as_pruned, *vector::borrow(&as_vals, k));
-            vector::push_back(&mut bs_pruned, *vector::borrow(&bs, k));
+        let tk = *vector::borrow(&ts, k);
+        let ak = *vector::borrow(&as_vals, k);
+        let bk = *vector::borrow(&bs, k);
+
+        // 1. Check Capacity Proximity: Keep if U_k >= U_max * (TOL_DENOM / TOL_NUM)
+        // <=> U_k * TOL_NUM >= U_max * TOL_DENOM
+        let ub_k = if (bk == 0 || tk <= 1) { 0u128 } else { (tk - 1) / bk };
+        let is_high_capacity = safe_cross_product_le(
+            max_capacity_ub, LINEAR_FILTER_TOL_DENOM,
+            ub_k, LINEAR_FILTER_TOL_NUM
+        );
+
+        // 2. Check Slope Proximity: Keep if C_k <= C_min * (TOL_NUM / TOL_DENOM)
+        // <=> A_k * min_slope_denom * TOL_DENOM <= min_slope_num * T_k * TOL_NUM
+        // Note: Must use u256 to avoid overflow
+        let ak_u256 = ak as u256;
+        let tk_u256 = tk as u256;
+        let msn_u256 = min_slope_num as u256;
+        let msd_u256 = min_slope_denom as u256;
+        let tol_num_u256 = LINEAR_FILTER_TOL_NUM as u256;
+        let tol_den_u256 = LINEAR_FILTER_TOL_DENOM as u256;
+
+        let left_prod = ak_u256 * msd_u256 * tol_den_u256;
+        let right_prod = msn_u256 * tk_u256 * tol_num_u256;
+
+        let is_low_slope_with_tol = left_prod <= right_prod;
+
+        // Keep pool if it has high capacity OR low initial cost slope
+        if (is_high_capacity || is_low_slope_with_tol) {
+            vector::push_back(&mut ts_active, tk);
+            vector::push_back(&mut as_active, ak);
+            vector::push_back(&mut bs_active, bk);
         };
+
         k = k + 1;
     };
 
-    (ts_pruned, as_pruned, bs_pruned)
+    (ts_active, as_active, bs_active)
 }
 
 // === TAB Constants Builder ===

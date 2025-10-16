@@ -1,5 +1,25 @@
-/// PTB-based execution pattern for Futarchy proposals
-/// Replaces the monolithic dispatcher with direct PTB calls to action modules
+/// DEPRECATED: PTB-based execution pattern for Futarchy proposals
+///
+/// ⚠️ THIS MODULE IS DEPRECATED AND NON-FUNCTIONAL ⚠️
+///
+/// This module is broken and should not be used. The execution pattern it implements
+/// is incompatible with the current system architecture:
+///
+/// Problems:
+/// 1. Expects old intent key system, but proposals now store IntentSpec directly
+/// 2. Execution tracking stubs (is_executed, mark_executed, intent_key) have been removed
+/// 3. account::create_executable() requires an intent key that doesn't exist in modern proposals
+///
+/// Modern Execution Pattern:
+/// Proposals now use governance_intents::execute_proposal_intent() which:
+/// - Reads IntentSpec directly from proposal
+/// - Converts IntentSpec to Intent and Executable in one step
+/// - Doesn't need separate intent key storage
+/// - Tracks execution via off-chain indexers (not on-chain state)
+///
+/// See futarchy_governance_actions::governance_intents.move for the correct pattern.
+///
+/// This module is kept for reference only. Do not use it for new development.
 module futarchy_dao::ptb_executor;
 
 use account_protocol::account::{Self, Account};

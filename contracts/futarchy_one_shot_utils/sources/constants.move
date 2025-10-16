@@ -35,9 +35,12 @@ public fun default_amm_total_fee_bps(): u64 { 30 }
 /// Used for high-precision reserve ratio calculations
 public fun price_scale(): u128 { 1_000_000_000_000 }
 
-/// Basis points precision for price calculations (10^12)
-/// We use high precision to prevent rounding to 0
-public fun basis_points(): u64 { 1_000_000_000_000 }
+/// Price precision scale for calculations (10^12)
+/// Used for high-precision price calculations to prevent rounding to 0.
+/// NOTE: This is NOT basis points (which is 10,000 for 100%).
+/// This is a price multiplier scale similar to price_multiplier_scale() but with higher precision.
+/// Use max_fee_bps() or total_fee_bps() for actual basis points calculations.
+public fun price_precision_scale(): u64 { 1_000_000_000_000 }
 
 /// Price multiplier scale (10^9)
 /// Used for relative price calculations (e.g., 2_000_000_000 = 2.0x)
@@ -74,7 +77,8 @@ public fun max_queue_size(): u64 { 100 }
 public fun proposal_grace_period_ms(): u64 { 24 * 60 * 60_000 } // 24 hours
 
 /// Protocol-level maximum outcomes per proposal
-public fun protocol_max_outcomes(): u64 { 5 }
+/// Updated to 50 with O(N) linear filter optimization (was 5 with O(N²) pruning)
+public fun protocol_max_outcomes(): u64 { 50 }
 
 /// Protocol-level maximum actions per proposal (across all outcomes)
 public fun protocol_max_actions(): u64 { 50 }

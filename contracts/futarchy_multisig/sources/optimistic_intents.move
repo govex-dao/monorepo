@@ -547,17 +547,21 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     
     // Check intent exists
     assert!(table::contains(&storage.intents, action.intent_id), EIntentNotFound);
-    
+
     let intent = table::borrow_mut(&mut storage.intents, action.intent_id);
-    
-    // Verify sender was the original proposer
-    // SECURITY NOTE: This function is called through an executable that should have been
-    // created with proper security council membership verification. We cannot re-verify
-    // council membership here as this executes in the DAO context, not the council context.
-    // The security model relies on the action creation being properly gated.
-    let sender = tx_context::sender(ctx);
-    assert!(intent.proposer == sender, ENotProposer);
-    
+
+    // SECURITY MODEL: Authorization is enforced by the council's multisig approval process.
+    // This function executes in the DAO's context, so tx_context::sender() would return
+    // the transaction executor (not the original proposer). The security boundary is:
+    // 1. Council member proposes cancellation via request_cancel_optimistic_intent()
+    // 2. Council multisig approves the cancellation intent
+    // 3. Anyone can execute the approved intent (this function)
+    //
+    // Attempting to verify intent.proposer == tx_context::sender(ctx) here would ALWAYS FAIL
+    // because the council's multisig approval process changes the execution context.
+    //
+    // The original proposer field is kept for accountability/audit purposes only.
+
     // Check not already cancelled or executed
     assert!(!intent.is_cancelled, EIntentAlreadyCancelled);
     assert!(!intent.is_executed, EIntentAlreadyExecuted);

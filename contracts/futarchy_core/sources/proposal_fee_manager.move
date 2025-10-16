@@ -166,15 +166,17 @@ public fun take_activator_reward(
 }
 
 /// Called by the DAO when a proposal is evicted from the queue
-/// Distributes the slashed fee according to the SlashDistribution configuration
-/// Returns coins for slasher and DAO treasury
+/// Splits the fee according to SlashDistribution config:
+/// - slasher_reward_bps% to slasher
+/// - remainder to proposal creator as refund
+/// Returns (slasher_reward, creator_refund)
 public fun slash_proposal_fee_with_distribution(
     manager: &mut ProposalFeeManager,
     proposal_id: ID,
     slash_config: &SlashDistribution,
     ctx: &mut TxContext,
 ): (Coin<SUI>, Coin<SUI>) {
-    // Returns (slasher_reward, dao_treasury)
+    // Returns (slasher_reward, proposal_creator_refund)
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
 
     let mut fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
@@ -185,29 +187,9 @@ public fun slash_proposal_fee_with_distribution(
         return (coin::zero(ctx), coin::zero(ctx))
     };
 
-    // Calculate distributions using getter functions with proper rounding
-    // Use multiply-then-divide to minimize rounding errors
+    // Get slasher reward percentage from DAO config
     let slasher_bps = futarchy_config::slasher_reward_bps(slash_config) as u64;
-    let dao_bps = futarchy_config::dao_treasury_bps(slash_config) as u64;
-    let protocol_bps = futarchy_config::protocol_bps(slash_config) as u64;
-    let burn_bps = futarchy_config::burn_bps(slash_config) as u64;
-
-    // Calculate amounts with better precision
     let slasher_amount = (total_amount * slasher_bps) / 10000;
-    let dao_amount = (total_amount * dao_bps) / 10000;
-    let protocol_amount = (total_amount * protocol_bps) / 10000;
-
-    // For burn amount, ensure we account for all remaining funds
-    // This prevents dust from being left over due to rounding
-    let distributed_so_far = slasher_amount + dao_amount + protocol_amount;
-    let burn_amount = if (total_amount > distributed_so_far) {
-        total_amount - distributed_so_far // All remaining goes to burn
-    } else {
-        0 // Safety check, shouldn't happen with valid bps
-    };
-
-    // No need for separate remainder handling now
-    let final_protocol_amount = protocol_amount;
 
     // Create slasher reward coin
     let slasher_reward = if (slasher_amount > 0) {
@@ -216,37 +198,10 @@ public fun slash_proposal_fee_with_distribution(
         coin::zero(ctx)
     };
 
-    // Create DAO treasury coin
-    let dao_coin = if (dao_amount > 0) {
-        coin::from_balance(fee_balance.split(dao_amount), ctx)
-    } else {
-        coin::zero(ctx)
-    };
+    // Remaining goes to proposal creator as refund
+    let creator_refund = coin::from_balance(fee_balance, ctx);
 
-    // Add protocol's share to revenue
-    if (final_protocol_amount > 0) {
-        manager.protocol_revenue.join(fee_balance.split(final_protocol_amount));
-    };
-
-    // Handle burn amount - SUI cannot be directly burned, so we add to a burn vault
-    // This effectively removes them from circulation by locking them permanently
-    if (burn_amount > 0) {
-        let burn_balance = fee_balance.split(burn_amount);
-        // Add to protocol revenue as "burned" funds that are permanently locked
-        // In production, consider a separate burn_vault field for transparency
-        // For now, we'll add to protocol revenue with the understanding these are burned
-        manager.protocol_revenue.join(burn_balance);
-        // TODO: Consider adding a separate burn_vault: Balance<SUI> field to track burned amounts
-    };
-
-    // Destroy any remaining dust
-    if (fee_balance.value() > 0) {
-        manager.protocol_revenue.join(fee_balance);
-    } else {
-        fee_balance.destroy_zero();
-    };
-
-    (slasher_reward, dao_coin)
+    (slasher_reward, creator_refund)
 }
 
 /// Gets the current protocol revenue

@@ -163,6 +163,7 @@ public struct ProposalQueue<phantom StableCoin> has key, store {
 public struct EvictionInfo has copy, drop, store {
     proposal_id: ID,
     proposer: address,
+    used_quota: bool,
 }
 
 // === Heap Operations (Private) ===
@@ -518,12 +519,14 @@ public fun insert<StableCoin>(
         let evicted_fee = evicted.fee;
         let evicted_timestamp = evicted.timestamp;
         let evicted_priority_value = evicted.priority_score.computed_value;
+        let evicted_used_quota = evicted.used_quota;
 
         // Handle eviction
         eviction_info =
             option::some(EvictionInfo {
                 proposal_id: evicted_proposal_id,
                 proposer: evicted_proposer,
+                used_quota: evicted_used_quota,
             });
 
         // Emit eviction event with both priority scores for transparency
@@ -849,6 +852,8 @@ public fun get_used_quota<StableCoin>(proposal: &QueuedProposal<StableCoin>): bo
 public fun eviction_proposal_id(info: &EvictionInfo): ID { info.proposal_id }
 
 public fun eviction_proposer(info: &EvictionInfo): address { info.proposer }
+
+public fun eviction_used_quota(info: &EvictionInfo): bool { info.used_quota }
 
 // Getter functions for ProposalData
 public fun get_title(data: &ProposalData): &String { &data.title }

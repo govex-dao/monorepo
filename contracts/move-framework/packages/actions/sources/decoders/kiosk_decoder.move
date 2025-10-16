@@ -51,7 +51,8 @@ public fun decode_take_action(
     // Deserialize the fields directly - DO NOT reconstruct the Action struct
     let mut bcs_data = bcs::new(action_data);
     let name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let nft_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let nft_id_address = bcs::peel_address(&mut bcs_data);
+    let nft_id = object::id_from_address(nft_id_address);
     let recipient = bcs::peel_address(&mut bcs_data);
 
     // Security: ensure all bytes are consumed to prevent trailing data attacks
@@ -94,7 +95,8 @@ public fun decode_list_action(
     // Deserialize the fields directly - DO NOT reconstruct the Action struct
     let mut bcs_data = bcs::new(action_data);
     let name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let nft_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let nft_id_address = bcs::peel_address(&mut bcs_data);
+    let nft_id = object::id_from_address(nft_id_address);
     let price = bcs::peel_u64(&mut bcs_data);
 
     // Security: ensure all bytes are consumed to prevent trailing data attacks

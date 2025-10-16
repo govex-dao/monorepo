@@ -1,0 +1,5129 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Updated to use type_name::with_defining_ids for better type safety
+/// - No other structural changes, user module works with type-based intents
+///
+/// NOTE: The reorder_accounts function uses the original simple approach
+/// as duplicates are already prevented during add_account operations
+
+/// Users have a non-transferable User account object used to track Accounts in which they are a member.
+/// Each account type can define a way to send on-chain invites to Users.
+/// Invited users can accept or refuse the invite, to add the Account id to their User account or not.
+/// Alternatively, Account interfaces can define rules allowing users to join an Account without invite.
+/// This avoid the need for an indexer as all data can be easily found on-chain.
+
+module account_protocol::user;
+
+use account_protocol::account::{Self, Account};
+use std::string::String;
+use std::type_name;
+use sui::table::{Self, Table};
+use sui::vec_map::{Self, VecMap};
+
+// === Imports ===
+
+// === Errors ===
+
+const ENotEmpty: u64 = 0;
+const EAlreadyHasUser: u64 = 1;
+const EAccountNotFound: u64 = 2;
+const EAccountTypeDoesntExist: u64 = 3;
+const EWrongUserId: u64 = 4;
+const EAccountAlreadyRegistered: u64 = 5;
+const EWrongNumberOfAccounts: u64 = 6;
+const ENoAccountsToReorder: u64 = 7;
+
+// === Struct ===
+
+/// Shared object enforcing one account maximum per user
+public struct Registry has key {
+    id: UID,
+    // address to User ID mapping
+    users: Table<address, ID>,
+}
+
+/// Non-transferable user account for tracking Accounts
+public struct User has key {
+    id: UID,
+    // account type to list of accounts that the user has joined
+    accounts: VecMap<String, vector<address>>,
+}
+
+/// Invite object issued by an Account to a user
+public struct Invite has key {
+    id: UID,
+    // Account that issued the invite
+    account_addr: address,
+    // Account type
+    account_type: String,
+}
+
+// === Public functions ===
+
+fun init(ctx: &mut TxContext) {
+    transfer::share_object(Registry {
+        id: object::new(ctx),
+        users: table::new(ctx),
+    });
+}
+
+/// Creates a soulbound User account (1 per address)
+public fun new(ctx: &mut TxContext): User {
+    User {
+        id: object::new(ctx),
+        accounts: vec_map::empty(),
+    }
+}
+
+/// Can transfer the User object only if the other address has no User object yet
+public fun transfer(registry: &mut Registry, user: User, recipient: address, ctx: &mut TxContext) {
+    assert!(!registry.users.contains(recipient), EAlreadyHasUser);
+    // if the sender is not in the registry, then the User has been just created
+    if (registry.users.contains(ctx.sender())) {
+        let id = registry.users.remove(ctx.sender());
+        assert!(id == object::id(&user), EWrongUserId); // should never throw
+    };
+
+    registry.users.add(recipient, object::id(&user));
+    transfer::transfer(user, recipient);
+}
+
+/// Must remove all Accounts before, for consistency
+public fun destroy(registry: &mut Registry, user: User, ctx: &mut TxContext) {
+    let User { id, accounts, .. } = user;
+    assert!(accounts.is_empty(), ENotEmpty);
+
+    id.delete();
+    registry.users.remove(ctx.sender());
+}
+
+/// Invited user can register the Account in his User account
+public fun accept_invite(user: &mut User, invite: Invite) {
+    let Invite { id, account_addr, account_type } = invite;
+    id.delete();
+
+    if (user.accounts.contains(&account_type)) {
+        assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
+        user.accounts.get_mut(&account_type).push_back(account_addr);
+    } else {
+        user.accounts.insert(account_type, vector<address>[account_addr]);
+    }
+}
+
+/// Deletes the invite object
+public fun refuse_invite(invite: Invite) {
+    let Invite { id, .. } = invite;
+    id.delete();
+}
+
+public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
+    assert!(user.accounts.contains(&account_type), ENoAccountsToReorder);
+
+    let accounts = user.accounts.get_mut(&account_type);
+    // there can never be duplicates in the first place (add_account asserts this)
+    // we only need to check there is the same number of accounts and that all accounts are present
+    assert!(accounts.length() == addrs.length(), EWrongNumberOfAccounts);
+    assert!(accounts.all!(|acc| addrs.contains(acc)), EAccountNotFound);
+
+    *accounts = addrs;
+}
+// === Config-only functions ===
+
+public fun add_account<Config, CW: drop>(
+    user: &mut User,
+    account: &Account<Config>,
+    config_witness: CW,
+) {
+    account::assert_is_config_module(account, config_witness);
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
+
+    if (user.accounts.contains(&account_type)) {
+        assert!(!user.accounts[&account_type].contains(&account.addr()), EAccountAlreadyRegistered);
+        user.accounts.get_mut(&account_type).push_back(account.addr());
+    } else {
+        user.accounts.insert(account_type, vector<address>[account.addr()]);
+    }
+}
+
+public fun remove_account<Config, CW: drop>(
+    user: &mut User,
+    account: &Account<Config>,
+    config_witness: CW,
+) {
+    account::assert_is_config_module(account, config_witness);
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
+
+    assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
+    let (exists, idx) = user.accounts[&account_type].index_of(&account.addr());
+
+    assert!(exists, EAccountNotFound);
+    user.accounts.get_mut(&account_type).swap_remove(idx);
+
+    if (user.accounts[&account_type].is_empty()) (_, _) = user.accounts.remove(&account_type);
+}
+
+/// Invites can be sent by an Account member (upon Account creation for instance)
+public fun send_invite<Config, CW: drop>(
+    account: &Account<Config>,
+    recipient: address,
+    config_witness: CW,
+    ctx: &mut TxContext,
+) {
+    account::assert_is_config_module(account, config_witness);
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
+
+    transfer::transfer(
+        Invite {
+            id: object::new(ctx),
+            account_addr: account.addr(),
+            account_type,
+        },
+        recipient,
+    );
+}
+
+// === View functions ===
+
+public fun users(registry: &Registry): &Table<address, ID> {
+    &registry.users
+}
+
+public fun ids_for_type<Config>(user: &User): vector<address> {
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
+    user.accounts[&account_type]
+}
+
+public fun all_ids(user: &User): vector<address> {
+    let mut map = user.accounts;
+    let mut ids = vector<address>[];
+
+    while (!map.is_empty()) {
+        let (_, vec) = map.pop();
+        ids.append(vec);
+    };
+
+    ids
+}
+
+//**************************************************************************************************//
+// Tests                                                                                            //
+//**************************************************************************************************//
+
+// === Test Helpers ===
+
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(ctx);
+}
+
+#[test_only]
+public fun registry_for_testing(ctx: &mut TxContext): Registry {
+    Registry {
+        id: object::new(ctx),
+        users: table::new(ctx),
+    }
+}
+
+#[test_only]
+public fun add_account_for_testing<Config>(user: &mut User, account_addr: address) {
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
+    if (user.accounts.contains(&account_type)) {
+        assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
+        user.accounts.get_mut(&account_type).push_back(account_addr);
+    } else {
+        user.accounts.insert(account_type, vector[account_addr]);
+    };
+}
+
+// === Unit Tests ===
+
+#[test_only]
+use sui::test_scenario as ts;
+#[test_only]
+use sui::test_utils as tu;
+
+#[test_only]
+public struct DummyConfig has copy, drop, store {}
+#[test_only]
+public struct DummyConfig2 has copy, drop, store {}
+
+#[test]
+fun test_init() {
+    let mut scenario = ts::begin(@0xCAFE);
+    init(scenario.ctx());
+    scenario.next_tx(@0xCAFE);
+
+    let registry = scenario.take_shared<Registry>();
+    assert!(registry.users.is_empty());
+    ts::return_shared(registry);
+
+    scenario.end();
+}
+
+#[test]
+fun test_transfer_user_recipient() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut registry = registry_for_testing(scenario.ctx());
+    let user = new(scenario.ctx());
+
+    transfer(&mut registry, user, @0xA11CE, scenario.ctx());
+    scenario.next_tx(@0xA11CE);
+
+    let user = scenario.take_from_sender<User>();
+    let user_id = object::id(&user);
+
+    assert!(registry.users.contains(@0xA11CE));
+    assert!(registry.users.borrow(@0xA11CE) == user_id);
+
+    tu::destroy(user);
+    tu::destroy(registry);
+    scenario.end();
+}
+
+#[test]
+fun test_destroy_user() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut registry = registry_for_testing(scenario.ctx());
+    let user = new(scenario.ctx());
+
+    transfer(&mut registry, user, @0xA11CE, scenario.ctx());
+    scenario.next_tx(@0xA11CE);
+
+    let user = scenario.take_from_sender<User>();
+    destroy(&mut registry, user, scenario.ctx());
+
+    assert!(!registry.users.contains(@0xA11CE));
+    tu::destroy(registry);
+    scenario.end();
+}
+
+#[test]
+fun test_accept_invite() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = new(scenario.ctx());
+
+    let invite = Invite {
+        id: object::new(scenario.ctx()),
+        account_addr: @0xACC,
+        account_type: b"0x0::config::Config".to_string(),
+    };
+
+    accept_invite(&mut user, invite);
+    assert!(user.accounts.contains(&b"0x0::config::Config".to_string()));
+    assert!(user.accounts[&b"0x0::config::Config".to_string()].contains(&@0xACC));
+
+    tu::destroy(user);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = EAccountAlreadyRegistered)]
+fun test_accept_invite_already_registered() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = new(scenario.ctx());
+
+    let invite = Invite {
+        id: object::new(scenario.ctx()),
+        account_addr: @0xACC,
+        account_type: type_name::with_defining_ids<DummyConfig>().into_string().to_string(),
+    };
+
+    user.add_account_for_testing<DummyConfig>(@0xACC);
+    assert!(
+        user
+            .accounts
+            .contains(&type_name::with_defining_ids<DummyConfig>().into_string().to_string()),
+    );
+    assert!(
+        user
+            .accounts[&type_name::with_defining_ids<DummyConfig>().into_string().to_string()]
+            .contains(&@0xACC),
+    );
+
+    accept_invite(&mut user, invite);
+
+    tu::destroy(user);
+    scenario.end();
+}
+
+#[test]
+fun test_refuse_invite() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let user = new(scenario.ctx());
+
+    let invite = Invite {
+        id: object::new(scenario.ctx()),
+        account_addr: @0xACC,
+        account_type: b"0x0::config::Config".to_string(),
+    };
+
+    refuse_invite(invite);
+    assert!(!user.accounts.contains(&b"0x0::config::Config".to_string()));
+
+    tu::destroy(user);
+    scenario.end();
+}
+
+#[test]
+fun test_reorder_accounts() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = new(scenario.ctx());
+
+    user.add_account_for_testing<DummyConfig>(@0x1);
+    user.add_account_for_testing<DummyConfig>(@0x2);
+    user.add_account_for_testing<DummyConfig>(@0x3);
+    let key = type_name::with_defining_ids<DummyConfig>().into_string().to_string();
+    assert!(user.accounts.get(&key) == vector[@0x1, @0x2, @0x3]);
+
+    user.reorder_accounts<DummyConfig>(vector[@0x2, @0x3, @0x1]);
+    assert!(user.accounts.get(&key) == vector[@0x2, @0x3, @0x1]);
+
+    tu::destroy(user);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = EAlreadyHasUser)]
+fun test_error_transfer_to_existing_user() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut registry = registry_for_testing(scenario.ctx());
+
+    registry.transfer(new(scenario.ctx()), @0xCAFE, scenario.ctx());
+    registry.transfer(new(scenario.ctx()), @0xCAFE, scenario.ctx());
+
+    tu::destroy(registry);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = EWrongUserId)]
+fun test_error_transfer_wrong_user_object() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut registry = registry_for_testing(scenario.ctx());
+
+    registry.transfer(new(scenario.ctx()), @0xCAFE, scenario.ctx());
+    // OWNER transfers wrong user object to ALICE
+    registry.transfer(new(scenario.ctx()), @0xA11CE, scenario.ctx());
+
+    tu::destroy(registry);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = ENotEmpty)]
+fun test_error_destroy_non_empty_user() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut registry = registry_for_testing(scenario.ctx());
+    let mut user = new(scenario.ctx());
+
+    user.add_account_for_testing<DummyConfig>(@0xACC);
+    destroy(&mut registry, user, scenario.ctx());
+
+    tu::destroy(registry);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = EAccountAlreadyRegistered)]
+fun test_error_add_already_existing_account() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = new(scenario.ctx());
+
+    user.add_account_for_testing<DummyConfig>(@0xACC);
+    user.add_account_for_testing<DummyConfig>(@0xACC);
+
+    tu::destroy(user);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = ENoAccountsToReorder)]
+fun test_reorder_accounts_empty() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = new(scenario.ctx());
+
+    user.reorder_accounts<DummyConfig>(vector[]);
+
+    tu::destroy(user);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = EWrongNumberOfAccounts)]
+fun test_reorder_accounts_different_length() {
+    let mut scenario = ts::begin(@0xCAFE);
+
+    let mut user = new(scenario.ctx());
+    user.add_account_for_testing<DummyConfig>(@0xACC);
+    user.add_account_for_testing<DummyConfig>(@0xACC2);
+
+    user.reorder_accounts<DummyConfig>(vector[@0xACC]);
+
+    tu::destroy(user);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = EAccountNotFound)]
+fun test_reorder_accounts_wrong_account() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = new(scenario.ctx());
+
+    user.add_account_for_testing<DummyConfig>(@0x1);
+    user.add_account_for_testing<DummyConfig>(@0x2);
+
+    user.reorder_accounts<DummyConfig>(vector[@0x1, @0x3]);
+
+    tu::destroy(user);
+    scenario.end();
+}
+// ============================================================================
+// FORK MODIFICATION NOTICE - BCS Validation Security Module
+// ============================================================================
+// NEW FILE added to the fork for BCS deserialization security.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Added validate_all_bytes_consumed() function
+// - Prevents trailing data attacks in action deserialization
+// - Required by all decoder modules for security
+//
+// PURPOSE:
+// - Ensures all BCS bytes are consumed when deserializing actions
+// - Prevents attacks where extra data is appended to action payloads
+// - Critical for security of the typed Intent system
+//
+// SECURITY CONSIDERATIONS:
+// Without this validation, attackers could append extra bytes to actions that
+// would be ignored during deserialization but could potentially affect
+// execution if the bytes were passed to other functions.
+//
+// USAGE:
+// Called after deserializing any action from BCS to ensure no trailing data.
+// Example: After bcs::peel_vec_u8(&mut reader), call validate_all_bytes_consumed(reader)
+// ============================================================================
+/// BCS validation helpers to ensure complete consumption of serialized data
+module account_protocol::bcs_validation;
+
+use sui::bcs::BCS;
+
+// === Imports ===
+
+// === Errors ===
+
+const ETrailingActionData: u64 = 0;
+
+// === Public Functions ===
+
+/// Validates that all bytes in the BCS reader have been consumed
+/// This prevents attacks where extra data is appended to actions
+public fun validate_all_bytes_consumed(reader: BCS) {
+    // Check if there are any remaining bytes
+    let remaining = reader.into_remainder_bytes();
+    assert!(remaining.is_empty(), ETrailingActionData);
+}
+// ============================================================================
+// Action Type Validation Helper Module
+// ============================================================================
+// This module provides a centralized type validation helper for action handlers.
+// It ensures type safety by verifying that action specs match expected types
+// before deserialization, preventing type confusion vulnerabilities.
+//
+// SECURITY: This is a critical security module that prevents wrong actions
+// from being executed by wrong handlers.
+// ============================================================================
+
+module account_protocol::action_validation;
+
+// === Imports ===
+
+use std::type_name::{Self, TypeName};
+use account_protocol::intents::{Self, ActionSpec};
+
+// === Errors ===
+
+const EWrongActionType: u64 = 0;
+
+// === Public Functions ===
+
+/// Assert that an ActionSpec has the expected action type.
+/// This MUST be called before deserializing action data in any do_* function.
+///
+/// # Type Parameters
+/// * `T` - The expected action type (must have `drop`)
+///
+/// # Arguments
+/// * `spec` - The ActionSpec to validate
+///
+/// # Aborts
+/// * `EWrongActionType` - If the action type doesn't match the expected type
+///
+/// # Example
+/// ```move
+/// public fun do_spend<...>(...) {
+///     let spec = specs.borrow(executable.action_idx());
+///     action_validation::assert_action_type<VaultSpend>(spec);
+///     // Now safe to deserialize
+///     let action_data = intents::action_spec_data(spec);
+/// }
+/// ```
+public fun assert_action_type<T: drop>(spec: &ActionSpec) {
+    let expected_type = type_name::with_defining_ids<T>();
+    assert!(
+        intents::action_spec_type(spec) == expected_type,
+        EWrongActionType
+    );
+}
+
+/// Assert that an ActionSpec has the expected action type with custom error.
+/// Useful when modules want to use their own error codes.
+///
+/// # Type Parameters
+/// * `T` - The expected action type (must have `drop`)
+///
+/// # Arguments
+/// * `spec` - The ActionSpec to validate
+/// * `error_code` - Custom error code to use if validation fails
+///
+/// # Aborts
+/// * Custom error code if the action type doesn't match
+public fun assert_action_type_with_error<T: drop>(
+    spec: &ActionSpec,
+    error_code: u64
+) {
+    let expected_type = type_name::with_defining_ids<T>();
+    assert!(
+        intents::action_spec_type(spec) == expected_type,
+        error_code
+    );
+}
+
+/// Check if an ActionSpec matches the expected type without aborting.
+/// Returns true if types match, false otherwise.
+///
+/// # Type Parameters
+/// * `T` - The expected action type (must have `drop`)
+///
+/// # Arguments
+/// * `spec` - The ActionSpec to check
+///
+/// # Returns
+/// * `bool` - true if action type matches, false otherwise
+public fun is_action_type<T: drop>(spec: &ActionSpec): bool {
+    let expected_type = type_name::with_defining_ids<T>();
+    intents::action_spec_type(spec) == expected_type
+}
+
+/// Get the TypeName for a given action type.
+/// Useful for modules that need to work with TypeNames directly.
+///
+/// # Type Parameters
+/// * `T` - The action type (must have `drop`)
+///
+/// # Returns
+/// * `TypeName` - The TypeName of the action type
+public fun get_action_type_name<T: drop>(): TypeName {
+    type_name::with_defining_ids<T>()
+}
+
+// === Test Functions ===
+
+#[test_only]
+public struct TestAction has drop {}
+
+#[test_only]
+fun create_test_action_spec<T>(): ActionSpec {
+    use account_protocol::intents;
+    intents::new_action_spec<T>(vector::empty(), 1)
+}
+
+#[test_only]
+public struct WrongAction has drop {}
+
+#[test]
+fun test_assert_action_type_success() {
+    let spec = create_test_action_spec<TestAction>();
+    assert_action_type<TestAction>(&spec);
+    // Should not abort
+}
+
+#[test]
+#[expected_failure(abort_code = EWrongActionType)]
+fun test_assert_action_type_failure() {
+    let spec = create_test_action_spec<TestAction>();
+    assert_action_type<WrongAction>(&spec);
+    // Should abort with EWrongActionType
+}
+
+#[test]
+fun test_is_action_type() {
+    let spec = create_test_action_spec<TestAction>();
+    assert!(is_action_type<TestAction>(&spec));
+    assert!(!is_action_type<WrongAction>(&spec));
+}
+
+#[test]
+#[expected_failure(abort_code = 999)]
+fun test_assert_action_type_with_custom_error() {
+    let spec = create_test_action_spec<TestAction>();
+    assert_action_type_with_error<WrongAction>(&spec, 999);
+    // Should abort with custom error 999
+}// ============================================================================
+// FORK MODIFICATION NOTICE - Account with Hot Potato Execution
+// ============================================================================
+// Core module managing Account<Config> with intent-based action execution.
+//
+// CHANGES IN THIS FORK:
+// - REMOVED: lock_object() function - no longer needed
+// - REMOVED: unlock_object() function - no longer needed
+// - ADDED: cancel_intent() function - allows config-authorized intent cancellation
+// - REMOVED ExecutionContext - PTBs handle object flow naturally
+// - Type safety through compile-time checks
+// - Removed ~100 lines of object locking code
+//
+// RATIONALE:
+// In DAO governance, multiple proposals competing for the same resources is
+// natural and desirable. The blockchain's ownership model already provides
+// necessary conflict resolution. Removal prevents the critical footgun where
+// objects could become permanently locked if cleanup wasn't performed correctly.
+// ============================================================================
+
+/// This is the core module managing the account Account<Config>.
+/// It provides the apis to create, approve and execute intents with actions.
+///
+/// The flow is as follows:
+///   1. An intent is created by stacking actions into it.
+///      Actions are pushed from first to last, they must be executed then destroyed in the same order.
+///   2. When the intent is resolved (threshold reached, quorum reached, etc), it can be executed.
+///      This returns an Executable hot potato constructed from certain fields of the validated Intent.
+///      It is directly passed into action functions to enforce account approval for an action to be executed.
+///   3. The module that created the intent must destroy all of the actions and the Executable after execution
+///      by passing the same witness that was used for instantiation.
+///      This prevents the actions or the intent to be stored instead of executed.
+///
+/// Dependencies can create and manage dynamic fields for an account.
+/// They should use custom types as keys to enable access only via the accessors defined.
+///
+/// Functions related to authentication, intent resolution, state of intents and config for an account type
+/// must be called from the module that defines the config of the account.
+/// They necessitate a config_witness to ensure the caller is a dependency of the account.
+///
+/// The rest of the functions manipulating the common state of accounts are only called within this package.
+
+module account_protocol::account;
+
+use account_extensions::extensions;
+use account_protocol::deps::{Self, Deps};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::{Self, Intents, Intent, Expired, Params};
+use account_protocol::metadata::{Self, Metadata};
+use account_protocol::version;
+use account_protocol::version_witness::{Self, VersionWitness};
+use std::option::Option;
+use std::string::String;
+use std::type_name::{Self, TypeName};
+use sui::clock::Clock;
+use sui::dynamic_field as df;
+use sui::dynamic_object_field as dof;
+use sui::event;
+use sui::package;
+use sui::transfer::Receiving;
+use sui::vec_set::{Self, VecSet};
+
+// === Imports ===
+
+// === Errors ===
+
+const ECantBeRemovedYet: u64 = 1;
+const EHasntExpired: u64 = 2;
+const ECantBeExecutedYet: u64 = 3;
+const EWrongAccount: u64 = 4;
+const ENotCalledFromConfigModule: u64 = 5;
+const EActionsRemaining: u64 = 6;
+const EManagedDataAlreadyExists: u64 = 7;
+const EManagedDataDoesntExist: u64 = 8;
+const EManagedAssetAlreadyExists: u64 = 9;
+const EManagedAssetDoesntExist: u64 = 10;
+const EDepositsDisabled: u64 = 11;
+const EObjectCountUnderflow: u64 = 12;
+const EWhitelistTooLarge: u64 = 13;
+const EObjectLimitReached: u64 = 14;
+const EMaxObjectsReached: u64 = 14;
+
+// === Structs ===
+
+public struct ACCOUNT has drop {}
+
+/// Shared multisig Account object.
+public struct Account<Config> has key, store {
+    id: UID,
+    // arbitrary data that can be proposed and added by members
+    // first field is a human readable name to differentiate the multisig accounts
+    metadata: Metadata,
+    // ids and versions of the packages this account is using
+    // idx 0: account_protocol, idx 1: account_actions optionally
+    deps: Deps,
+    // open intents, key should be a unique descriptive name
+    intents: Intents,
+    // config can be anything (e.g. Multisig, coin-based DAO, etc.)
+    config: Config,
+}
+
+/// Object tracking state stored as dynamic field
+/// Separate struct to allow extensions to interact without circular deps
+public struct ObjectTracker has copy, drop, store {}
+
+public struct ObjectTrackerState has copy, store {
+    // Current object count (excluding coins)
+    object_count: u128,
+    // Whether permissionless deposits are enabled
+    deposits_open: bool,
+    // Maximum objects before auto-disabling deposits
+    max_objects: u128,
+    // Whitelisted types that bypass restrictions (O(1) lookups with VecSet)
+    // Store canonical string representation for serializability
+    whitelisted_types: VecSet<String>,
+}
+
+// === Events ===
+
+/// Protected type ensuring provenance, authenticate an address to an account.
+public struct Auth {
+    // address of the account that created the auth
+    account_addr: address,
+}
+
+// === Upgradeable Configuration Functions ===
+// These are functions (not constants) so they can be changed in package upgrades
+
+/// Maximum whitelist size - can be changed in future upgrades
+public fun max_whitelist_size(): u64 {
+    50 // Reasonable limit - can increase in upgrades if needed
+}
+
+/// Default max objects - can be changed in future upgrades
+public fun default_max_objects(): u128 {
+    10000 // Adjust this in future upgrades if needed
+}
+
+//**************************************************************************************************//
+// Public functions                                                                                //
+//**************************************************************************************************//
+
+fun init(otw: ACCOUNT, ctx: &mut TxContext) {
+    package::claim_and_keep(otw, ctx); // to create Display objects in the future
+}
+
+/// Initialize object tracking for an account (called during account creation)
+public(package) fun init_object_tracker<Config>(account: &mut Account<Config>, max_objects: u128) {
+    if (!df::exists_(&account.id, ObjectTracker {})) {
+        df::add(
+            &mut account.id,
+            ObjectTracker {},
+            ObjectTrackerState {
+                object_count: 0,
+                deposits_open: true,
+                max_objects: if (max_objects > 0) max_objects else default_max_objects(),
+                whitelisted_types: vec_set::empty(),
+            },
+        );
+    }
+}
+
+/// Get or create object tracker state
+public(package) fun ensure_object_tracker<Config>(
+    account: &mut Account<Config>,
+): &mut ObjectTrackerState {
+    if (!df::exists_(&account.id, ObjectTracker {})) {
+        init_object_tracker(account, default_max_objects());
+    };
+    df::borrow_mut(&mut account.id, ObjectTracker {})
+}
+
+/// Apply deposit configuration changes
+public(package) fun apply_deposit_config<Config>(
+    account: &mut Account<Config>,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+) {
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = enable;
+
+    if (new_max.is_some()) {
+        tracker.max_objects = *new_max.borrow();
+    };
+
+    if (reset_counter) {
+        tracker.object_count = 0;
+    };
+}
+
+/// Apply whitelist changes
+public(package) fun apply_whitelist_changes<Config>(
+    account: &mut Account<Config>,
+    add_types: &vector<String>,
+    remove_types: &vector<String>,
+) {
+    let tracker = ensure_object_tracker(account);
+
+    // Remove types first
+    let mut i = 0;
+    while (i < remove_types.length()) {
+        let type_str = &remove_types[i];
+        vec_set::remove(&mut tracker.whitelisted_types, type_str);
+        i = i + 1;
+    };
+
+    // Add new types with size check
+    i = 0;
+    while (i < add_types.length()) {
+        let type_str = add_types[i];
+        if (!vec_set::contains(&tracker.whitelisted_types, &type_str)) {
+            assert!(
+                vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
+                EWhitelistTooLarge,
+            );
+            vec_set::insert(&mut tracker.whitelisted_types, type_str);
+        };
+        i = i + 1;
+    };
+
+    // Whitelist updated
+}
+
+/// Verifies all actions have been processed and destroys the executable.
+/// Called to complete the intent execution.
+public fun confirm_execution<Config, Outcome: drop + store>(
+    account: &mut Account<Config>,
+    executable: Executable<Outcome>,
+) {
+    let actions_length = executable.intent().action_specs().length();
+    assert!(executable.action_idx() == actions_length, EActionsRemaining);
+
+    let intent = executable.destroy();
+    intent.assert_is_account(account.addr());
+
+    account.intents.add_intent(intent);
+}
+
+/// Destroys an intent if it has no remaining execution.
+/// Expired needs to be emptied by deleting each action in the bag within their own module.
+public fun destroy_empty_intent<Config, Outcome: store + drop>(
+    account: &mut Account<Config>,
+    key: String,
+): Expired {
+    assert!(account.intents.get<Outcome>(key).execution_times().is_empty(), ECantBeRemovedYet);
+    account.intents.destroy_intent<Outcome>(key)
+}
+
+/// Destroys an intent if it has expired.
+/// Expired needs to be emptied by deleting each action in the bag within their own module.
+public fun delete_expired_intent<Config, Outcome: store + drop>(
+    account: &mut Account<Config>,
+    key: String,
+    clock: &Clock,
+): Expired {
+    assert!(
+        clock.timestamp_ms() >= account.intents.get<Outcome>(key).expiration_time(),
+        EHasntExpired,
+    );
+    account.intents.destroy_intent<Outcome>(key)
+}
+
+/// Asserts that the function is called from the module defining the config of the account.
+public(package) fun assert_is_config_module<Config, CW: drop>(
+    _account: &Account<Config>,
+    _config_witness: CW,
+) {
+    let account_type = type_name::with_defining_ids<Config>();
+    let witness_type = type_name::with_defining_ids<CW>();
+    assert!(
+        account_type.address_string() == witness_type.address_string() &&
+        account_type.module_string() == witness_type.module_string(),
+        ENotCalledFromConfigModule,
+    );
+}
+
+/// Cancel an active intent and return its Expired bag for GC draining.
+///
+/// Security:
+/// - `config_witness` gates **authority**: only the Config module may cancel.
+/// - `deps_witness` gates **compatibility**: caller must be compiled against the
+///   same `account_protocol` package identity/version the Account expects.
+///   This prevents mismatched callers from older/newer packages.
+public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
+    account: &mut Account<Config>,
+    key: String,
+    deps_witness: VersionWitness,
+    config_witness: CW,
+): Expired {
+    // Ensure the protocol dependency matches what this account expects
+    account.deps().check(deps_witness);
+    // Only the config module may cancel
+    assert_is_config_module(account, config_witness);
+    // Convert to Expired - deleters will handle unlocking during drain
+    account.intents.destroy_intent<Outcome>(key)
+}
+
+/// Helper function to transfer an object to the account with tracking.
+/// Excludes Coin types and whitelisted types from restrictions.
+public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, ctx: &TxContext) {
+    let type_name = type_name::with_defining_ids<T>();
+    let is_coin = is_coin_type(type_name);
+
+    // Check if type is whitelisted
+    let is_whitelisted = {
+        let tracker = ensure_object_tracker(account);
+        let ascii_str = type_name::into_string(type_name);
+        let type_str = ascii_str.to_string();
+        vec_set::contains(&tracker.whitelisted_types, &type_str)
+    };
+
+    // Only apply restrictions to non-coin, non-whitelisted types
+    if (!is_coin && !is_whitelisted) {
+        // Get tracker state for checking
+        let (deposits_open, sender_is_self) = {
+            let tracker = ensure_object_tracker(account);
+            (tracker.deposits_open, ctx.sender() == account.addr())
+        };
+
+        // Check if deposits are allowed
+        if (!deposits_open) {
+            // Allow self-deposits even when closed
+            assert!(sender_is_self, EDepositsDisabled);
+        };
+
+        // Now update tracker state
+        let tracker = ensure_object_tracker(account);
+
+        // Increment counter only for restricted types
+        tracker.object_count = tracker.object_count + 1;
+
+        // Auto-disable if hitting threshold
+        if (tracker.object_count >= tracker.max_objects) {
+            tracker.deposits_open = false;
+            // Auto-disabled deposits at threshold
+        };
+    };
+
+    transfer::public_transfer(obj, account.addr());
+}
+
+/// Unpacks and verifies the Auth matches the account.
+public fun verify<Config>(account: &Account<Config>, auth: Auth) {
+    let Auth { account_addr } = auth;
+
+    assert!(account.addr() == account_addr, EWrongAccount);
+}
+
+//**************************************************************************************************//
+// Deps-only functions                                                                              //
+//**************************************************************************************************//
+
+/// The following functions are used to compose intents in external modules and packages.
+///
+/// The proper instantiation and execution of an intent is ensured by an intent witness.
+/// This is a drop only type defined in the intent module preventing other modules to misuse the intent.
+///
+/// Additionally, these functions require a version witness which is a protected type for the protocol.
+/// It is checked against the dependencies of the account to ensure the package being called is authorized.
+/// VersionWitness is a wrapper around a type defined in the version of the package being called.
+/// It behaves like a witness but it is usable in the entire package instead of in a single module.
+
+/// Creates a new intent. Can only be called from a dependency of the account.
+public fun create_intent<Config, Outcome: store, IW: drop>(
+    account: &Account<Config>,
+    params: Params,
+    outcome: Outcome, // resolution settings
+    managed_name: String, // managed struct/object name for the role
+    version_witness: VersionWitness, // proof of the package address that creates the intent
+    intent_witness: IW, // intent witness
+    ctx: &mut TxContext,
+): Intent<Outcome> {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+
+    params.new_intent(
+        outcome,
+        managed_name,
+        account.addr(),
+        intent_witness,
+        ctx,
+    )
+}
+
+/// Adds an intent to the account. Can only be called from a dependency of the account.
+public fun insert_intent<Config, Outcome: store, IW: drop>(
+    account: &mut Account<Config>,
+    intent: Intent<Outcome>,
+    version_witness: VersionWitness,
+    intent_witness: IW,
+) {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    // ensures the right account is passed
+    intent.assert_is_account(account.addr());
+    // ensures the intent is created by the same package that creates the action
+    intent.assert_is_witness(intent_witness);
+
+    account.intents.add_intent(intent);
+}
+
+/// Managed data and assets:
+/// Data structs and Assets objects attached as dynamic fields to the account object.
+/// They are separated to improve objects discoverability on frontends and indexers.
+/// Keys must be custom types defined in the same module where the function is implemented.
+
+/// Adds a managed data struct to the account.
+public fun add_managed_data<Config, Key: copy + drop + store, Data: store>(
+    account: &mut Account<Config>,
+    key: Key,
+    data: Data,
+    version_witness: VersionWitness,
+) {
+    assert!(!has_managed_data(account, key), EManagedDataAlreadyExists);
+    account.deps().check(version_witness);
+    df::add(&mut account.id, key, data);
+}
+
+/// Checks if a managed data struct exists in the account.
+public fun has_managed_data<Config, Key: copy + drop + store>(
+    account: &Account<Config>,
+    key: Key,
+): bool {
+    df::exists_(&account.id, key)
+}
+
+/// Borrows a managed data struct from the account.
+public fun borrow_managed_data<Config, Key: copy + drop + store, Data: store>(
+    account: &Account<Config>,
+    key: Key,
+    version_witness: VersionWitness,
+): &Data {
+    assert!(has_managed_data(account, key), EManagedDataDoesntExist);
+    account.deps().check(version_witness);
+    df::borrow(&account.id, key)
+}
+
+/// Borrows a managed data struct mutably from the account.
+public fun borrow_managed_data_mut<Config, Key: copy + drop + store, Data: store>(
+    account: &mut Account<Config>,
+    key: Key,
+    version_witness: VersionWitness,
+): &mut Data {
+    assert!(has_managed_data(account, key), EManagedDataDoesntExist);
+    account.deps().check(version_witness);
+    df::borrow_mut(&mut account.id, key)
+}
+
+/// Removes a managed data struct from the account.
+public fun remove_managed_data<Config, Key: copy + drop + store, A: store>(
+    account: &mut Account<Config>,
+    key: Key,
+    version_witness: VersionWitness,
+): A {
+    assert!(has_managed_data(account, key), EManagedDataDoesntExist);
+    account.deps().check(version_witness);
+    df::remove(&mut account.id, key)
+}
+
+/// Adds a managed object to the account.
+public fun add_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
+    account: &mut Account<Config>,
+    key: Key,
+    asset: Asset,
+    version_witness: VersionWitness,
+) {
+    assert!(!has_managed_asset(account, key), EManagedAssetAlreadyExists);
+    account.deps().check(version_witness);
+    dof::add(&mut account.id, key, asset);
+}
+
+/// Checks if a managed object exists in the account.
+public fun has_managed_asset<Config, Key: copy + drop + store>(
+    account: &Account<Config>,
+    key: Key,
+): bool {
+    dof::exists_(&account.id, key)
+}
+
+/// Borrows a managed object from the account.
+public fun borrow_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
+    account: &Account<Config>,
+    key: Key,
+    version_witness: VersionWitness,
+): &Asset {
+    assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
+    account.deps().check(version_witness);
+    dof::borrow(&account.id, key)
+}
+
+/// Borrows a managed object mutably from the account.
+public fun borrow_managed_asset_mut<Config, Key: copy + drop + store, Asset: key + store>(
+    account: &mut Account<Config>,
+    key: Key,
+    version_witness: VersionWitness,
+): &mut Asset {
+    assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
+    account.deps().check(version_witness);
+    dof::borrow_mut(&mut account.id, key)
+}
+
+/// Removes a managed object from the account.
+public fun remove_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
+    account: &mut Account<Config>,
+    key: Key,
+    version_witness: VersionWitness,
+): Asset {
+    assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
+    account.deps().check(version_witness);
+    dof::remove(&mut account.id, key)
+}
+
+//**************************************************************************************************//
+// Config-only functions                                                                            //
+//**************************************************************************************************//
+
+/// The following functions are used to define account and intent behavior for a specific account type/config.
+///
+/// They must be implemented in the module that defines the config of the account, which must be a dependency of the account.
+/// We provide higher level macros to facilitate the implementation of these functions.
+
+/// Creates a new account with default dependencies. Can only be called from the config module.
+public fun new<Config, CW: drop>(
+    config: Config,
+    deps: Deps,
+    version_witness: VersionWitness,
+    config_witness: CW,
+    ctx: &mut TxContext,
+): Account<Config> {
+    let account = Account<Config> {
+        id: object::new(ctx),
+        metadata: metadata::empty(),
+        deps,
+        intents: intents::empty(ctx),
+        config,
+    };
+
+    account.deps().check(version_witness);
+    assert_is_config_module(&account, config_witness);
+
+    account
+}
+
+/// Returns an Auth object that can be used to call gated functions. Can only be called from the config module.
+public fun new_auth<Config, CW: drop>(
+    account: &Account<Config>,
+    version_witness: VersionWitness,
+    config_witness: CW,
+): Auth {
+    account.deps().check(version_witness);
+    assert_is_config_module(account, config_witness);
+
+    Auth { account_addr: account.addr() }
+}
+
+/// Returns a tuple of the outcome that must be validated and the executable. Can only be called from the config module.
+public fun create_executable<Config, Outcome: store + copy, CW: drop>(
+    account: &mut Account<Config>,
+    key: String,
+    clock: &Clock,
+    version_witness: VersionWitness,
+    config_witness: CW,
+    ctx: &mut TxContext, // Kept for API compatibility
+): (Outcome, Executable<Outcome>) {
+    account.deps().check(version_witness);
+    assert_is_config_module(account, config_witness);
+
+    let mut intent = account.intents.remove_intent<Outcome>(key);
+    let time = intent.pop_front_execution_time();
+    assert!(clock.timestamp_ms() >= time, ECantBeExecutedYet);
+
+    (
+        *intent.outcome(),
+        executable::new(intent, ctx), // ctx no longer used but kept for API compatibility
+    )
+}
+
+/// Returns a mutable reference to the intents of the account. Can only be called from the config module.
+public fun intents_mut<Config, CW: drop>(
+    account: &mut Account<Config>,
+    version_witness: VersionWitness,
+    config_witness: CW,
+): &mut Intents {
+    account.deps().check(version_witness);
+    assert_is_config_module(account, config_witness);
+
+    &mut account.intents
+}
+
+/// Returns a mutable reference to the config of the account. Can only be called from the config module.
+public fun config_mut<Config, CW: drop>(
+    account: &mut Account<Config>,
+    version_witness: VersionWitness,
+    config_witness: CW,
+): &mut Config {
+    account.deps().check(version_witness);
+    assert_is_config_module(account, config_witness);
+
+    &mut account.config
+}
+
+//**************************************************************************************************//
+// View functions                                                                                   //
+//**************************************************************************************************//
+
+/// Returns the address of the account.
+public fun addr<Config>(account: &Account<Config>): address {
+    account.id.uid_to_inner().id_to_address()
+}
+
+/// Returns the metadata of the account.
+public fun metadata<Config>(account: &Account<Config>): &Metadata {
+    &account.metadata
+}
+
+/// Returns the dependencies of the account.
+public fun deps<Config>(account: &Account<Config>): &Deps {
+    &account.deps
+}
+
+/// Returns the intents of the account.
+public fun intents<Config>(account: &Account<Config>): &Intents {
+    &account.intents
+}
+
+/// Returns the config of the account.
+public fun config<Config>(account: &Account<Config>): &Config {
+    &account.config
+}
+
+/// Returns object tracking stats (count, deposits_open, max)
+public fun object_stats<Config>(account: &Account<Config>): (u128, bool, u128) {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        (tracker.object_count, tracker.deposits_open, tracker.max_objects)
+    } else {
+        (0, true, default_max_objects())
+    }
+}
+
+/// Check if account is accepting object deposits
+public fun is_accepting_objects<Config>(account: &Account<Config>): bool {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        tracker.deposits_open && tracker.object_count < tracker.max_objects
+    } else {
+        true // Default open if not initialized
+    }
+}
+
+/// Configure object deposit settings (requires Auth)
+public fun configure_object_deposits<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+) {
+    account.verify(auth);
+
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = enable;
+
+    if (new_max.is_some()) {
+        tracker.max_objects = *new_max.borrow();
+    };
+
+    if (reset_counter) {
+        tracker.object_count = 0;
+    };
+}
+
+/// Manage whitelist for object types (requires Auth)
+public fun manage_type_whitelist<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    add_types: vector<String>,
+    remove_types: vector<String>,
+) {
+    account.verify(auth);
+
+    let tracker = ensure_object_tracker(account);
+
+    // Remove types first (in case of duplicates in add/remove)
+    let mut i = 0;
+    while (i < remove_types.length()) {
+        let type_str = &remove_types[i];
+        vec_set::remove(&mut tracker.whitelisted_types, type_str);
+        i = i + 1;
+    };
+
+    // Add new types (check size limit)
+    i = 0;
+    while (i < add_types.length()) {
+        let type_str = add_types[i];
+        if (!vec_set::contains(&tracker.whitelisted_types, &type_str)) {
+            // Check size limit before adding
+            assert!(
+                vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
+                EWhitelistTooLarge,
+            );
+            vec_set::insert(&mut tracker.whitelisted_types, type_str);
+        };
+        i = i + 1;
+    };
+    // Whitelist updated
+}
+
+/// Get whitelisted types for inspection/debugging
+public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<String> {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        vec_set::into_keys(tracker.whitelisted_types) // Convert VecSet to vector
+    } else {
+        vector::empty()
+    }
+}
+
+/// Check if a specific type is whitelisted
+public fun is_type_whitelisted<Config, T>(account: &Account<Config>): bool {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        // Convert TypeName to String for the lookup
+        let type_name = type_name::with_defining_ids<T>();
+        let ascii_str = type_name::into_string(type_name);
+        let type_str = ascii_str.to_string();
+        vec_set::contains(&tracker.whitelisted_types, &type_str)
+    } else {
+        false
+    }
+}
+
+/// Helper to check if a TypeName represents a Coin type
+fun is_coin_type(type_name: TypeName): bool {
+    // Check if the type is a Coin type by checking if it starts with
+    // the Coin module prefix from the Sui framework
+    let type_addr = type_name::address_string(&type_name);
+
+    // Check if this is from the Sui framework and the module is "coin"
+    if (
+        type_addr == b"0000000000000000000000000000000000000000000000000000000000000002".to_ascii_string()
+    ) {
+        let module_name = type_name::module_string(&type_name);
+        module_name == b"coin".to_ascii_string()
+    } else {
+        false
+    }
+}
+
+//**************************************************************************************************//
+// Package functions                                                                                //
+//**************************************************************************************************//
+
+/// Returns a mutable reference to the metadata of the account.
+public(package) fun metadata_mut<Config>(
+    account: &mut Account<Config>,
+    version_witness: VersionWitness,
+): &mut Metadata {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    &mut account.metadata
+}
+
+/// Returns a mutable reference to the dependencies of the account.
+public(package) fun deps_mut<Config>(
+    account: &mut Account<Config>,
+    version_witness: VersionWitness,
+): &mut Deps {
+    // ensures the package address is a dependency for this account
+    account.deps().check(version_witness);
+    &mut account.deps
+}
+
+/// Receives an object from an account with tracking, only used in owned action lib module.
+public(package) fun receive<Config, T: key + store>(
+    account: &mut Account<Config>,
+    receiving: Receiving<T>,
+): T {
+    let type_name = type_name::with_defining_ids<T>();
+    let is_coin = is_coin_type(type_name);
+
+    let tracker = ensure_object_tracker(account);
+    let ascii_str = type_name::into_string(type_name);
+    let type_str = ascii_str.to_string();
+    let is_whitelisted = vec_set::contains(&tracker.whitelisted_types, &type_str);
+
+    // Only count non-coin, non-whitelisted types
+    if (!is_coin && !is_whitelisted) {
+        tracker.object_count = tracker.object_count + 1;
+
+        // Auto-disable if hitting threshold
+        if (tracker.object_count >= tracker.max_objects) {
+            tracker.deposits_open = false;
+        };
+    };
+
+    transfer::public_receive(&mut account.id, receiving)
+}
+
+/// Track when an object leaves the account (withdrawal/burn/transfer)
+public(package) fun track_object_removal<Config>(account: &mut Account<Config>, _object_id: ID) {
+    let tracker = ensure_object_tracker(account);
+    assert!(tracker.object_count > 0, EObjectCountUnderflow);
+    tracker.object_count = tracker.object_count - 1;
+
+    // Re-enable deposits if we're back under 50% of threshold
+    if (tracker.object_count < tracker.max_objects / 2) {
+        tracker.deposits_open = true;
+    };
+}
+
+// REMOVED: lock_object and unlock_object - no locking in new design
+// Conflicts between intents are natural in DAO governance
+
+//**************************************************************************************************//
+// Tests                                                                                            //
+//**************************************************************************************************//
+
+// === Test Helpers ===
+
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(ACCOUNT {}, ctx);
+}
+
+#[test_only]
+public struct Witness has drop {}
+
+#[test_only]
+public fun not_config_witness(): Witness {
+    Witness {}
+}
+
+// === Unit Tests ===
+
+#[test_only]
+use sui::test_utils::{assert_eq, destroy};
+#[test_only]
+public struct TestConfig has copy, drop, store {}
+#[test_only]
+public struct TestWitness() has drop;
+
+#[test_only]
+public struct TestWitness2() has drop;
+
+#[test_only]
+public struct WrongWitness() has drop;
+#[test_only]
+public struct TestKey has copy, drop, store {}
+#[test_only]
+public struct TestData has copy, drop, store {
+    value: u64,
+}
+#[test_only]
+public struct TestAsset has key, store {
+    id: UID,
+}
+
+#[test]
+fun test_addr() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let account_addr = addr(&account);
+
+    assert_eq(account_addr, object::id(&account).to_address());
+    destroy(account);
+}
+
+#[test]
+fun test_verify_auth() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let auth = Auth { account_addr: account.addr() };
+
+    // Should not abort
+    verify(&account, auth);
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EWrongAccount)]
+fun test_verify_auth_wrong_account() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let auth = Auth { account_addr: @0xBAD };
+
+    verify(&account, auth);
+    destroy(account);
+}
+
+#[test]
+fun test_managed_data_flow() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+    let data = TestData { value: 42 };
+
+    // Test add
+    add_managed_data(&mut account, key, data, version::current());
+    assert!(has_managed_data(&account, key));
+
+    // Test borrow
+    let borrowed_data = borrow_managed_data(&account, key, version::current());
+    assert_eq(*borrowed_data, data);
+
+    // Test borrow_mut
+    let borrowed_mut_data = borrow_managed_data_mut(&mut account, key, version::current());
+    assert_eq(*borrowed_mut_data, data);
+
+    // Test remove
+    let removed_data = remove_managed_data(&mut account, key, version::current());
+    assert_eq(removed_data, data);
+    assert!(!has_managed_data(&account, key));
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedDataAlreadyExists)]
+fun test_add_managed_data_already_exists() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+    let data1 = TestData { value: 42 };
+    let data2 = TestData { value: 100 };
+
+    add_managed_data(&mut account, key, data1, version::current());
+    add_managed_data(&mut account, key, data2, version::current());
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedDataDoesntExist)]
+fun test_borrow_managed_data_doesnt_exist() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    borrow_managed_data<_, TestKey, TestData>(&account, key, version::current());
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedDataDoesntExist)]
+fun test_borrow_managed_data_mut_doesnt_exist() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    borrow_managed_data_mut<_, TestKey, TestData>(&mut account, key, version::current());
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedDataDoesntExist)]
+fun test_remove_managed_data_doesnt_exist() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    remove_managed_data<_, TestKey, TestData>(&mut account, key, version::current());
+    destroy(account);
+}
+
+#[test]
+fun test_managed_asset_flow() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+    let asset = TestAsset { id: object::new(ctx) };
+    let asset_id = object::id(&asset);
+
+    // Test add
+    add_managed_asset(&mut account, key, asset, version::current());
+    assert!(has_managed_asset(&account, key), 0);
+
+    // Test borrow
+    let borrowed_asset = borrow_managed_asset<_, TestKey, TestAsset>(
+        &account,
+        key,
+        version::current(),
+    );
+    assert_eq(object::id(borrowed_asset), asset_id);
+
+    // Test remove
+    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(
+        &mut account,
+        key,
+        version::current(),
+    );
+    assert_eq(object::id(&removed_asset), asset_id);
+    assert!(!has_managed_asset(&account, key));
+    destroy(account);
+    destroy(removed_asset);
+}
+
+#[test]
+fun test_has_managed_data_false() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    assert!(!has_managed_data(&account, key));
+    destroy(account);
+}
+
+#[test]
+fun test_has_managed_asset_false() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    assert!(!has_managed_asset(&account, key));
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedAssetAlreadyExists)]
+fun test_add_managed_asset_already_exists() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+    let asset1 = TestAsset { id: object::new(ctx) };
+    let asset2 = TestAsset { id: object::new(ctx) };
+
+    add_managed_asset(&mut account, key, asset1, version::current());
+    add_managed_asset(&mut account, key, asset2, version::current());
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedAssetDoesntExist)]
+fun test_borrow_managed_asset_doesnt_exist() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    borrow_managed_asset<_, TestKey, TestAsset>(&account, key, version::current());
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedAssetDoesntExist)]
+fun test_borrow_managed_asset_mut_doesnt_exist() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    borrow_managed_asset_mut<_, TestKey, TestAsset>(&mut account, key, version::current());
+    destroy(account);
+}
+
+#[test, expected_failure(abort_code = EManagedAssetDoesntExist)]
+fun test_remove_managed_asset_doesnt_exist() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let key = TestKey {};
+
+    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(
+        &mut account,
+        key,
+        version::current(),
+    );
+    destroy(removed_asset);
+    destroy(account);
+}
+
+#[test]
+fun test_new_auth() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+    let auth = new_auth(&account, version::current(), TestWitness());
+
+    assert_eq(auth.account_addr, account.addr());
+    destroy(account);
+    destroy(auth);
+}
+
+#[test]
+fun test_metadata_access() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+
+    // Should not abort - just testing access
+    assert_eq(metadata(&account).size(), 0);
+    destroy(account);
+}
+
+#[test]
+fun test_config_access() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+
+    // Should not abort - just testing access
+    config(&account);
+    destroy(account);
+}
+
+#[test]
+fun test_assert_is_config_module_correct_witness() {
+    let ctx = &mut tx_context::dummy();
+    let deps = deps::new_for_testing();
+
+    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
+
+    // Should not abort
+    assert_is_config_module(&account, TestWitness());
+    destroy(account);
+}
+
+// REMOVED: test_assert_config_module_wrong_witness_package_address
+// REMOVED: test_assert_config_module_wrong_witness_module
+// Both tests used TestWitness2 which is in the same module as TestConfig, so they can't test cross-module validation
+// Would need to define TestWitness2 in a separate module to properly test this
+
+// === Test Helper Functions ===
+
+#[test_only]
+public fun new_for_testing(ctx: &mut TxContext): Account<TestConfig> {
+    let deps = deps::new_for_testing();
+    new(TestConfig {}, deps, version::current(), TestWitness(), ctx)
+}
+
+#[test_only]
+public fun destroy_for_testing<Config>(account: Account<Config>) {
+    destroy(account);
+}
+
+#[test_only]
+public fun get_object_tracker<Config>(account: &Account<Config>): Option<ObjectTrackerState> {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        option::some(*tracker)
+    } else {
+        option::none()
+    }
+}
+
+#[test_only]
+public fun track_object_addition<Config>(account: &mut Account<Config>, id: ID) {
+    let tracker = ensure_object_tracker(account);
+    tracker.object_count = tracker.object_count + 1;
+    if (tracker.object_count >= tracker.max_objects) {
+        tracker.deposits_open = false;
+    };
+}
+
+#[test_only]
+public fun set_max_objects_for_testing<Config>(account: &mut Account<Config>, max: u128) {
+    let tracker = ensure_object_tracker(account);
+    tracker.max_objects = max;
+}
+
+// === Share Functions ===
+
+/// Share an account - can only be called by this module
+/// Used during DAO/account initialization after setup is complete
+///
+/// ## FORK NOTE
+/// **Added**: `share_account()` function for atomic DAO initialization
+/// **Reason**: Sui requires that `share_object()` be called from the module that defines
+/// the type. This function enables the hot potato pattern: factory creates unshared Account,
+/// PTB performs initialization actions, then factory calls this to share Account publicly.
+/// **Pattern**: Part of create_unshared → init → share_account flow
+/// **Safety**: Public visibility is safe - only works on unshared Accounts owned by caller
+public fun share_account<Config: store>(account: Account<Config>) {
+    transfer::share_object(account);
+}
+
+#[test_only]
+public fun enable_deposits_for_testing<Config>(account: &mut Account<Config>) {
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = true;
+}
+
+#[test_only]
+public fun close_deposits_for_testing<Config>(account: &mut Account<Config>) {
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = false;
+}
+
+#[test_only]
+public fun check_can_receive_object<Config, T>(account: &Account<Config>) {
+    let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+    let type_name = type_name::with_defining_ids<T>();
+    let ascii_str = type_name::into_string(type_name);
+    let type_str = ascii_str.to_string();
+
+    assert!(
+        tracker.deposits_open || tracker.whitelisted_types.contains(&type_str),
+        EDepositsDisabled,
+    );
+
+    // For test purposes, we'll treat all objects the same
+    // In production, coins don't count against limits but for tests this is fine
+    if (!tracker.whitelisted_types.contains(&type_str)) {
+        assert!(tracker.object_count < tracker.max_objects, EObjectLimitReached);
+    };
+}
+/// === FORK MODIFICATIONS ===
+/// VECSET OPTIMIZATION FOR DUPLICATE DETECTION:
+/// - Optimized to handle future growth to 10-20+ dependencies
+/// - Dependencies may include: Cetus CLMM, Scallop, custom DAO packages, etc.
+///
+/// Changes in this fork:
+/// - new(), new_latest_extensions(), new_inner(): Use VecSet for O(N log N)
+///   duplicate detection during construction instead of O(N²) nested loops
+/// - Storage remains vector-based to maintain `copy` + `drop` abilities
+/// - Lookups remain O(N) which is acceptable for N≤20
+///
+/// TYPE-BASED ACTION SYSTEM:
+/// - No direct changes, but deps are used with type-based action routing
+///
+/// Why not VecMap: VecMap's get() method has borrow checker issues - the key
+/// must remain borrowed while the reference is in use, incompatible with our API
+/// Why not Table: Tables don't support `copy` or `drop` abilities which Deps requires
+//
+// Performance impact:
+// - Before: N=20 required 190 comparisons during construction
+// - After: N=20 requires ~86 operations (N log N with VecSet)
+//
+// All fork modifications are licensed under BSL 1.1
+// ============================================================================
+
+/// Dependencies are the packages that an Account object can call.
+/// They are stored in a vector and can be modified through an intent.
+/// AccountProtocol is the only mandatory dependency, found at index 0.
+///
+/// For improved security, we provide a whitelist of allowed packages in Extensions.
+/// If unverified_allowed is false, then only these packages can be added.
+
+module account_protocol::deps;
+
+use account_extensions::extensions::Extensions;
+use account_protocol::version_witness::{Self, VersionWitness};
+use std::string::String;
+use sui::vec_set::{Self, VecSet};
+
+// === Imports ===
+
+// === Errors ===
+
+const EDepNotFound: u64 = 0;
+const EDepAlreadyExists: u64 = 1;
+const ENotDep: u64 = 2;
+const ENotExtension: u64 = 3;
+const EAccountProtocolMissing: u64 = 4;
+const EDepsNotSameLength: u64 = 5;
+const EAccountConfigMissing: u64 = 6;
+
+// === Structs ===
+
+/// Parent struct protecting the deps
+public struct Deps has copy, drop, store {
+    // vector of dependencies
+    inner: vector<Dep>,
+    // can community extensions be added
+    unverified_allowed: bool,
+}
+
+/// Child struct storing the name, package and version of a dependency
+public struct Dep has copy, drop, store {
+    // name of the package
+    name: String,
+    // id of the package
+    addr: address,
+    // version of the package
+    version: u64,
+}
+
+// === Public functions ===
+
+/// Creates a new Deps struct, AccountProtocol must be the first dependency.
+public fun new(
+    extensions: &Extensions,
+    unverified_allowed: bool,
+    names: vector<String>,
+    addresses: vector<address>,
+    mut versions: vector<u64>,
+): Deps {
+    assert!(
+        names.length() == addresses.length() && addresses.length() == versions.length(),
+        EDepsNotSameLength,
+    );
+    assert!(
+        names[0] == b"AccountProtocol".to_string() &&
+        extensions.is_extension(names[0], addresses[0], versions[0]),
+        EAccountProtocolMissing,
+    );
+    // second dependency must be AccountConfig (we don't know the name)
+    assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
+
+    let mut inner = vector<Dep>[];
+    // Use VecSet for O(log N) duplicate detection during construction
+    let mut name_set = vec_set::empty<String>();
+    let mut addr_set = vec_set::empty<address>();
+
+    names.zip_do!(addresses, |name, addr| {
+        let version = versions.remove(0);
+
+        // O(log N) duplicate checking instead of O(N²)
+        assert!(!name_set.contains(&name), EDepAlreadyExists);
+        assert!(!addr_set.contains(&addr), EDepAlreadyExists);
+        name_set.insert(name);
+        addr_set.insert(addr);
+
+        // verify extensions
+        if (!unverified_allowed)
+            assert!(extensions.is_extension(name, addr, version), ENotExtension);
+
+        // add dep
+        inner.push_back(Dep { name, addr, version });
+    });
+
+    Deps { inner, unverified_allowed }
+}
+
+/// Creates a new Deps struct from latest packages for names.
+/// Unverified packages are not allowed after this operation.
+public fun new_latest_extensions(extensions: &Extensions, names: vector<String>): Deps {
+    assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
+
+    let mut inner = vector<Dep>[];
+    // Use VecSet for O(log N) duplicate detection
+    let mut name_set = vec_set::empty<String>();
+    let mut addr_set = vec_set::empty<address>();
+
+    names.do!(|name| {
+        // O(log N) duplicate checking
+        assert!(!name_set.contains(&name), EDepAlreadyExists);
+
+        let (addr, version) = extensions.get_latest_for_name(name);
+
+        assert!(!addr_set.contains(&addr), EDepAlreadyExists);
+        name_set.insert(name);
+        addr_set.insert(addr);
+
+        // add dep
+        inner.push_back(Dep { name, addr, version });
+    });
+
+    Deps { inner, unverified_allowed: false }
+}
+
+public fun new_inner(
+    extensions: &Extensions,
+    deps: &Deps,
+    names: vector<String>,
+    addresses: vector<address>,
+    mut versions: vector<u64>,
+): Deps {
+    assert!(
+        names.length() == addresses.length() && addresses.length() == versions.length(),
+        EDepsNotSameLength,
+    );
+    // AccountProtocol is mandatory and cannot be removed
+    assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
+    // second dependency must be AccountConfig (we don't know the name)
+    assert!(names.length() >= 2, EAccountConfigMissing);
+    assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
+
+    let mut inner = vector<Dep>[];
+    // Use VecSet for O(log N) duplicate detection
+    let mut name_set = vec_set::empty<String>();
+    let mut addr_set = vec_set::empty<address>();
+
+    names.zip_do!(addresses, |name, addr| {
+        let version = versions.remove(0);
+
+        // O(log N) duplicate checking
+        assert!(!name_set.contains(&name), EDepAlreadyExists);
+        assert!(!addr_set.contains(&addr), EDepAlreadyExists);
+        name_set.insert(name);
+        addr_set.insert(addr);
+
+        // verify extensions
+        if (!deps.unverified_allowed)
+            assert!(extensions.is_extension(name, addr, version), ENotExtension);
+
+        // add dep
+        inner.push_back(Dep { name, addr, version });
+    });
+
+    Deps { inner, unverified_allowed: deps.unverified_allowed }
+}
+
+/// Safe because deps_mut is only accessible in this package.
+public fun inner_mut(deps: &mut Deps): &mut vector<Dep> {
+    &mut deps.inner
+}
+
+// === View functions ===
+
+/// Checks if a package is a dependency.
+public fun check(deps: &Deps, version_witness: VersionWitness) {
+    assert!(deps.contains_addr(version_witness.package_addr()), ENotDep);
+}
+
+public fun unverified_allowed(deps: &Deps): bool {
+    deps.unverified_allowed
+}
+
+/// Toggles the unverified_allowed flag.
+public(package) fun toggle_unverified_allowed(deps: &mut Deps) {
+    deps.unverified_allowed = !deps.unverified_allowed;
+}
+
+/// Returns a dependency by name.
+public fun get_by_name(deps: &Deps, name: String): &Dep {
+    let mut i = 0;
+    while (i < deps.inner.length()) {
+        if (deps.inner[i].name == name) {
+            return &deps.inner[i]
+        };
+        i = i + 1;
+    };
+    abort EDepNotFound
+}
+
+/// Returns a dependency by address.
+public fun get_by_addr(deps: &Deps, addr: address): &Dep {
+    let mut i = 0;
+    while (i < deps.inner.length()) {
+        if (deps.inner[i].addr == addr) {
+            return &deps.inner[i]
+        };
+        i = i + 1;
+    };
+    abort EDepNotFound
+}
+
+/// Returns a dependency by index.
+public fun get_by_idx(deps: &Deps, idx: u64): &Dep {
+    &deps.inner[idx]
+}
+
+/// Returns the number of dependencies.
+public fun length(deps: &Deps): u64 {
+    deps.inner.length()
+}
+
+/// Returns the name of a dependency.
+public fun name(dep: &Dep): String {
+    dep.name
+}
+
+/// Returns the address of a dependency.
+public fun addr(dep: &Dep): address {
+    dep.addr
+}
+
+/// Returns the version of a dependency.
+public fun version(dep: &Dep): u64 {
+    dep.version
+}
+
+/// Returns true if the dependency exists by name.
+public fun contains_name(deps: &Deps, name: String): bool {
+    let mut i = 0;
+    while (i < deps.inner.length()) {
+        if (deps.inner[i].name == name) return true;
+        i = i + 1;
+    };
+    false
+}
+
+/// Returns true if the dependency exists by address.
+public fun contains_addr(deps: &Deps, addr: address): bool {
+    let mut i = 0;
+    while (i < deps.inner.length()) {
+        if (deps.inner[i].addr == addr) return true;
+        i = i + 1;
+    };
+    false
+}
+
+// === Test only ===
+
+#[test_only]
+public fun new_for_testing(): Deps {
+    Deps {
+        inner: vector[
+            Dep { name: b"AccountProtocol".to_string(), addr: @account_protocol, version: 1 },
+            Dep { name: b"AccountConfig".to_string(), addr: @0x1, version: 1 },
+            Dep { name: b"AccountActions".to_string(), addr: @0x2, version: 1 },
+        ],
+        unverified_allowed: false,
+    }
+}
+
+#[test_only]
+public fun toggle_unverified_allowed_for_testing(deps: &mut Deps) {
+    deps.unverified_allowed = !deps.unverified_allowed;
+}
+
+// === Tests ===
+
+#[test]
+fun test_new_and_getters() {
+    let extensions = account_extensions::extensions::new_for_testing_with_addrs(
+        @account_protocol,
+        @0x1,
+        @0x2,
+        &mut tx_context::dummy(),
+    );
+
+    let _deps = new(
+        &extensions,
+        false,
+        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()],
+        vector[@account_protocol, @0x1],
+        vector[1, 1],
+    );
+    // assertions
+    let deps = new_for_testing();
+    let witness = version_witness::new_for_testing(@account_protocol);
+    deps.check(witness);
+    // deps getters
+    assert!(deps.length() == 3);
+    assert!(deps.contains_name(b"AccountProtocol".to_string()));
+    assert!(deps.contains_addr(@account_protocol));
+    // dep getters
+    let dep = deps.get_by_name(b"AccountProtocol".to_string());
+    assert!(dep.name() == b"AccountProtocol".to_string());
+    assert!(dep.addr() == @account_protocol);
+    assert!(dep.version() == 1);
+    let dep = deps.get_by_addr(@account_protocol);
+    assert!(dep.name() == b"AccountProtocol".to_string());
+    assert!(dep.addr() == @account_protocol);
+    assert!(dep.version() == 1);
+
+    sui::test_utils::destroy(extensions);
+}
+
+#[test, expected_failure(abort_code = ENotDep)]
+fun test_error_assert_is_dep() {
+    let deps = new_for_testing();
+    let witness = version_witness::new_for_testing(@0xDEAD);
+    deps.check(witness);
+}
+
+#[test, expected_failure(abort_code = EDepNotFound)]
+fun test_error_name_not_found() {
+    let deps = new_for_testing();
+    deps.get_by_name(b"Other".to_string());
+}
+
+#[test, expected_failure(abort_code = EDepNotFound)]
+fun test_error_addr_not_found() {
+    let deps = new_for_testing();
+    deps.get_by_addr(@0xA);
+}
+
+#[test]
+fun test_contains_name() {
+    let deps = new_for_testing();
+    assert!(deps.contains_name(b"AccountProtocol".to_string()));
+    assert!(!deps.contains_name(b"Other".to_string()));
+}
+
+#[test]
+fun test_contains_addr() {
+    let deps = new_for_testing();
+    assert!(deps.contains_addr(@account_protocol));
+    assert!(!deps.contains_addr(@0xA));
+}
+
+#[test]
+fun test_getters_by_idx() {
+    let deps = new_for_testing();
+    let dep = deps.get_by_idx(0);
+    assert!(dep.name() == b"AccountProtocol".to_string());
+    assert!(dep.addr() == @account_protocol);
+    assert!(dep.version() == 1);
+}
+
+#[test]
+fun test_toggle_unverified_allowed() {
+    let mut deps = new_for_testing();
+    assert!(deps.unverified_allowed() == false);
+    deps.toggle_unverified_allowed_for_testing();
+    assert!(deps.unverified_allowed() == true);
+}
+
+#[test]
+fun test_contains_name_empty_deps() {
+    let deps = Deps {
+        inner: vector[],
+        unverified_allowed: false,
+    };
+    assert!(!deps.contains_name(b"AccountProtocol".to_string()));
+}
+
+#[test]
+fun test_contains_addr_empty_deps() {
+    let deps = Deps {
+        inner: vector[],
+        unverified_allowed: false,
+    };
+    assert!(!deps.contains_addr(@account_protocol));
+}
+/// This module defines the VersionWitness type used to track the version of the protocol.
+/// This type is used as a regular witness, but for an entire package instead of a single module.
+
+module account_protocol::version_witness;
+
+use std::type_name;
+use sui::address;
+use sui::hex;
+
+// === Imports ===
+
+// === Structs ===
+
+/// Witness to check the version of a package.
+public struct VersionWitness has copy, drop {
+    // package id where the witness has been created
+    package_addr: address,
+}
+
+/// Creates a new VersionWitness for the package where the Witness is instianted.
+public fun new<PW: drop>(_package_witness: PW): VersionWitness {
+    let package_type = type_name::with_defining_ids<PW>();
+    let package_addr = address::from_bytes(hex::decode(package_type.address_string().into_bytes()));
+
+    VersionWitness { package_addr }
+}
+
+// === Public Functions ===
+
+/// Returns the address of the package where the witness has been created.
+public fun package_addr(witness: &VersionWitness): address {
+    witness.package_addr
+}
+
+//**************************************************************************************************//
+// Tests                                                                                            //
+//**************************************************************************************************//
+
+// === Test Helpers ===
+
+#[test_only]
+public fun new_for_testing(package_addr: address): VersionWitness {
+    VersionWitness { package_addr }
+}
+
+// === Unit Tests ===
+
+#[test_only]
+public struct TestPackageWitness() has drop;
+
+#[test]
+fun test_new_version_witness() {
+    let witness = new(TestPackageWitness());
+    // Should not abort - just testing creation and access
+    assert!(package_addr(&witness) == @account_protocol, 0);
+}
+// ============================================================================
+// FORK MODIFICATION NOTICE - Intents with Serialize-Then-Destroy Pattern
+// ============================================================================
+// Core module managing Intents with type-safe action execution.
+//
+// MAJOR CHANGES IN THIS FORK:
+//
+// 1. REMOVED OBJECT LOCKING:
+//    - No locking - multiple intents can reference same objects
+//    - Conflicts resolved naturally by blockchain (first to execute wins)
+//
+// 2. SERIALIZE-THEN-DESTROY PATTERN:
+//    - add_typed_action() now accepts pre-serialized bytes instead of action structs
+//    - Enables explicit destruction of action structs after serialization
+//    - Maintains BCS compatibility while improving resource safety
+//
+// 3. TYPE-BASED ACTION SYSTEM:
+//    Original: Used action_descriptors with string categories (b"treasury")
+//    New: Uses action_types: vector<TypeName> for compile-time safety
+//    - Removed dependency on action_descriptor module
+//    - Added add_typed_action<Outcome, Action, T, IW>() with compile-time types
+//    - Type names captured using type_name::with_defining_ids<T>() for zero-overhead routing
+//
+// BENEFITS:
+// - Eliminates risk of permanently locked objects from incomplete cleanup
+// - Compile-time type safety for all actions
+// - Better gas efficiency (no string comparisons)
+// - Simplifies codebase by ~100 lines
+// - Better suits DAO governance where competing proposals are natural
+// ============================================================================
+/// This is the core module managing Intents.
+/// It provides the interface to create and execute intents which is used in the `account` module.
+/// In the new design, there is no locking - multiple intents can reference the same objects.
+/// Conflicts are resolved naturally: if coinA is withdrawn by intent1, intent2 will fail when it tries.
+
+module account_protocol::intents;
+
+// === Imports ===
+
+use std::{
+    string::String,
+    type_name::{Self, TypeName},
+    bcs,
+    vector,
+};
+use sui::{
+    bag::{Self, Bag},
+    dynamic_field,
+    clock::Clock,
+    object::{Self, ID},
+};
+
+// === Aliases ===
+
+use fun dynamic_field::add as UID.df_add;
+use fun dynamic_field::borrow as UID.df_borrow;
+use fun dynamic_field::remove as UID.df_remove;
+// Type-based action system - no string descriptors
+
+// === Errors ===
+
+const EIntentNotFound: u64 = 0;
+// REMOVED: EObjectAlreadyLocked and EObjectNotLocked - no locking in new design
+const ENoExecutionTime: u64 = 3;
+const EExecutionTimesNotAscending: u64 = 4;
+const EActionsNotEmpty: u64 = 5;
+const EKeyAlreadyExists: u64 = 6;
+const EWrongAccount: u64 = 7;
+const EWrongWitness: u64 = 8;
+const ESingleExecution: u64 = 9;
+const EMaxPlaceholdersExceeded: u64 = 10;
+const EUnsupportedActionVersion: u64 = 11;
+const EActionDataTooLarge: u64 = 12;
+
+// Version constants
+const CURRENT_ACTION_VERSION: u8 = 1;
+
+// === Limits ===
+
+/// Maximum number of placeholders allowed in a single intent.
+/// Exposed as a function to allow future upgrades to change this value.
+public fun max_placeholders(): u64 { 50 }
+
+/// Maximum size for action data in bytes (4KB).
+/// Exposed as a function to allow future upgrades to change this value.
+/// Prevents excessively large action data that could cause DoS.
+public fun max_action_data_size(): u64 { 4096 }
+
+// === Structs ===
+
+/// A blueprint for a single action within an intent.
+public struct ActionSpec has store, copy, drop {
+    version: u8,                // Version byte for forward compatibility
+    action_type: TypeName,      // The type of the action struct
+    action_data: vector<u8>,    // The BCS-serialized action struct
+}
+
+/// Create a new ActionSpec for testing
+public fun new_action_spec<T>(action_data: vector<u8>, version: u8): ActionSpec {
+    ActionSpec {
+        version,
+        action_type: type_name::with_defining_ids<T>(),
+        action_data,
+    }
+}
+
+/// Parent struct protecting the intents
+public struct Intents has store {
+    // map of intents: key -> Intent<Outcome>
+    inner: Bag,
+}
+
+/// Child struct, intent owning a sequence of actions requested to be executed
+/// Outcome is a custom struct depending on the config
+public struct Intent<Outcome> has store {
+    // type of the intent, checked against the witness to ensure correct execution
+    type_: TypeName,
+    // name of the intent, serves as a key, should be unique
+    key: String,
+    // what this intent aims to do, for informational purpose
+    description: String,
+    // address of the account that created the intent
+    account: address,
+    // address of the user that created the intent
+    creator: address,
+    // timestamp of the intent creation
+    creation_time: u64,
+    // proposer can add a timestamp_ms before which the intent can't be executed
+    // can be used to schedule actions via a backend
+    // recurring intents can be executed at these times
+    execution_times: vector<u64>,
+    // the intent can be deleted from this timestamp
+    expiration_time: u64,
+    // role for the intent
+    role: String,
+    // Structured action specifications for type-safe routing (single source of truth)
+    action_specs: vector<ActionSpec>,
+    // Counter for unique placeholder IDs
+    next_placeholder_id: u64,
+    // Generic struct storing vote related data, depends on the config
+    outcome: Outcome,
+}
+
+/// Hot potato wrapping actions from an intent that expired or has been executed
+public struct Expired {
+    // address of the account that created the intent
+    account: address,
+    // action specs that expired or were executed
+    action_specs: vector<ActionSpec>,
+    // NEW: Track which actions were executed for proper destruction
+    executed_actions: vector<bool>,
+    // intent ID for tracking
+    intent_id: ID,
+}
+
+/// Params of an intent to reduce boilerplate.
+public struct Params has key, store {
+    id: UID,
+}
+/// Fields are a df so it intents can be improved in the future
+public struct ParamsFieldsV1 has copy, drop, store {
+    key: String,
+    description: String,
+    creation_time: u64,
+    execution_times: vector<u64>,
+    expiration_time: u64,
+}
+
+// === Public functions ===
+
+/// Reserve a placeholder ID for use during intent creation
+public(package) fun reserve_placeholder_id<Outcome>(
+    intent: &mut Intent<Outcome>
+): u64 {
+    let id = intent.next_placeholder_id;
+    assert!(id < max_placeholders(), EMaxPlaceholdersExceeded);
+    intent.next_placeholder_id = id + 1;
+    id
+}
+
+/// Add an action specification with pre-serialized bytes (serialize-then-destroy pattern)
+public fun add_action_spec<Outcome, T: drop, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    action_type_witness: T,
+    action_data_bytes: vector<u8>,
+    intent_witness: IW,
+) {
+    intent.assert_is_witness(intent_witness);
+
+    // Validate action data size to prevent excessively large actions
+    assert!(
+        action_data_bytes.length() <= max_action_data_size(),
+        EActionDataTooLarge
+    );
+
+    // Create and store the action spec with BCS-serialized action
+    let spec = ActionSpec {
+        version: CURRENT_ACTION_VERSION,
+        action_type: type_name::with_defining_ids<T>(),
+        action_data: action_data_bytes,
+    };
+    intent.action_specs.push_back(spec);
+}
+
+public fun new_params(
+    key: String,
+    description: String,
+    execution_times: vector<u64>,
+    expiration_time: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Params {
+    assert!(!execution_times.is_empty(), ENoExecutionTime);
+    let mut i = 0;
+    while (i < vector::length(&execution_times) - 1) {
+        assert!(execution_times[i] <= execution_times[i + 1], EExecutionTimesNotAscending);
+        i = i + 1;
+    };
+    
+    let fields = ParamsFieldsV1 { 
+        key, 
+        description, 
+        creation_time: clock.timestamp_ms(), 
+        execution_times, 
+        expiration_time 
+    };
+    let mut id = object::new(ctx);
+    id.df_add(true, fields);
+
+    Params { id }
+}
+
+public fun new_params_with_rand_key(
+    description: String,
+    execution_times: vector<u64>,
+    expiration_time: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Params, String) {
+    let key = ctx.fresh_object_address().to_string();
+    let params = new_params(key, description, execution_times, expiration_time, clock, ctx);
+
+    (params, key)
+}
+
+// REMOVED: Old add_action function without types - use add_typed_action instead
+
+/// Add a typed action with pre-serialized bytes (serialize-then-destroy pattern)
+/// Callers must serialize the action and then explicitly destroy it
+public fun add_typed_action<Outcome, T: drop, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    action_type: T,
+    action_data: vector<u8>,
+    intent_witness: IW,
+) {
+    add_action_spec(intent, action_type, action_data, intent_witness);
+}
+
+public fun remove_action_spec(
+    expired: &mut Expired,
+): ActionSpec {
+    // Also mark as not executed when removing
+    expired.executed_actions.remove(0);
+    expired.action_specs.remove(0)
+}
+
+/// Mark an action as executed in the Expired struct
+public fun mark_action_executed(
+    expired: &mut Expired,
+    index: u64,
+) {
+    let executed = vector::borrow_mut(&mut expired.executed_actions, index);
+    *executed = true;
+}
+
+/// Check if an action was executed
+public fun is_action_executed(
+    expired: &Expired,
+    index: u64,
+): bool {
+    *vector::borrow(&expired.executed_actions, index)
+}
+
+/// Get the number of actions in the Expired struct
+public fun expired_action_count(expired: &Expired): u64 {
+    expired.action_specs.length()
+}
+
+public use fun destroy_empty_expired as Expired.destroy_empty;
+public fun destroy_empty_expired(expired: Expired) {
+    let Expired { action_specs, executed_actions, .. } = expired;
+    assert!(action_specs.is_empty(), EActionsNotEmpty);
+    assert!(executed_actions.is_empty(), EActionsNotEmpty);
+    // vectors don't need explicit destroy
+}
+
+// === View functions ===
+
+public use fun params_key as Params.key;
+public fun params_key(params: &Params): String {
+    params.id.df_borrow<_, ParamsFieldsV1>(true).key
+}
+
+public use fun params_description as Params.description;
+public fun params_description(params: &Params): String {
+    params.id.df_borrow<_, ParamsFieldsV1>(true).description
+}
+
+public use fun params_creation_time as Params.creation_time;
+public fun params_creation_time(params: &Params): u64 {
+    params.id.df_borrow<_, ParamsFieldsV1>(true).creation_time
+}
+
+public use fun params_execution_times as Params.execution_times;
+public fun params_execution_times(params: &Params): vector<u64> {
+    params.id.df_borrow<_, ParamsFieldsV1>(true).execution_times
+}
+
+public use fun params_expiration_time as Params.expiration_time;
+public fun params_expiration_time(params: &Params): u64 {
+    params.id.df_borrow<_, ParamsFieldsV1>(true).expiration_time
+}
+
+public fun length(intents: &Intents): u64 {
+    intents.inner.length()
+}
+
+// REMOVED: locked() getter - no longer tracking locked objects
+
+public fun contains(intents: &Intents, key: String): bool {
+    intents.inner.contains(key)
+}
+
+public fun get<Outcome: store>(intents: &Intents, key: String): &Intent<Outcome> {
+    assert!(intents.inner.contains(key), EIntentNotFound);
+    intents.inner.borrow(key)
+}
+
+public fun get_mut<Outcome: store>(intents: &mut Intents, key: String): &mut Intent<Outcome> {
+    assert!(intents.inner.contains(key), EIntentNotFound);
+    intents.inner.borrow_mut(key)
+}
+
+public fun type_<Outcome>(intent: &Intent<Outcome>): TypeName {
+    intent.type_
+}
+
+public fun key<Outcome>(intent: &Intent<Outcome>): String {
+    intent.key
+}
+
+public fun description<Outcome>(intent: &Intent<Outcome>): String {
+    intent.description
+}
+
+public fun account<Outcome>(intent: &Intent<Outcome>): address {
+    intent.account
+}
+
+public fun creator<Outcome>(intent: &Intent<Outcome>): address {
+    intent.creator
+}
+
+public fun creation_time<Outcome>(intent: &Intent<Outcome>): u64 {
+    intent.creation_time
+}
+
+public fun execution_times<Outcome>(intent: &Intent<Outcome>): vector<u64> {
+    intent.execution_times
+}
+
+public fun expiration_time<Outcome>(intent: &Intent<Outcome>): u64 {
+    intent.expiration_time
+}
+
+public fun role<Outcome>(intent: &Intent<Outcome>): String {
+    intent.role
+}
+
+// Actions are now accessed through action_specs
+public fun action_count<Outcome>(intent: &Intent<Outcome>): u64 {
+    intent.action_specs.length()
+}
+
+public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
+    &intent.outcome
+}
+
+public fun outcome_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Outcome {
+    &mut intent.outcome
+}
+
+public fun action_specs<Outcome>(intent: &Intent<Outcome>): &vector<ActionSpec> {
+    &intent.action_specs
+}
+
+public fun action_spec_version(spec: &ActionSpec): u8 {
+    spec.version
+}
+
+public fun action_spec_type(spec: &ActionSpec): TypeName {
+    spec.action_type
+}
+
+public fun action_spec_data(spec: &ActionSpec): &vector<u8> {
+    &spec.action_data
+}
+
+public fun action_spec_action_data(spec: ActionSpec): vector<u8> {
+    let ActionSpec { version: _, action_data, .. } = spec;
+    action_data
+}
+
+public use fun expired_account as Expired.account;
+public fun expired_account(expired: &Expired): address {
+    expired.account
+}
+
+// start_index no longer exists in ActionSpec-based design
+
+public use fun expired_action_specs as Expired.action_specs;
+public fun expired_action_specs(expired: &Expired): &vector<ActionSpec> {
+    &expired.action_specs
+}
+
+public fun assert_is_account<Outcome>(
+    intent: &Intent<Outcome>,
+    account_addr: address,
+) {
+    assert!(intent.account == account_addr, EWrongAccount);
+}
+
+public fun assert_is_witness<Outcome, IW: drop>(
+    intent: &Intent<Outcome>,
+    _: IW,
+) {
+    assert!(intent.type_ == type_name::with_defining_ids<IW>(), EWrongWitness);
+}
+
+public use fun assert_expired_is_account as Expired.assert_is_account;
+public fun assert_expired_is_account(expired: &Expired, account_addr: address) {
+    assert!(expired.account == account_addr, EWrongAccount);
+}
+
+public fun assert_single_execution(params: &Params) {
+    assert!(
+        params.id.df_borrow<_, ParamsFieldsV1>(true).execution_times.length() == 1, 
+        ESingleExecution
+    );
+}
+
+// === Package functions ===
+
+/// The following functions are only used in the `account` module
+
+public(package) fun empty(ctx: &mut TxContext): Intents {
+    Intents { inner: bag::new(ctx) }
+}
+
+public(package) fun new_intent<Outcome, IW: drop>(
+    params: Params,
+    outcome: Outcome,
+    managed_name: String,
+    account_addr: address,
+    _intent_witness: IW,
+    ctx: &mut TxContext
+): Intent<Outcome> {
+    let Params { mut id } = params;
+    
+    let ParamsFieldsV1 { 
+        key, 
+        description, 
+        creation_time, 
+        execution_times, 
+        expiration_time 
+    } = id.df_remove(true);
+    id.delete();
+
+    Intent<Outcome> {
+        type_: type_name::with_defining_ids<IW>(),
+        key,
+        description,
+        account: account_addr,
+        creator: ctx.sender(),
+        creation_time,
+        execution_times,
+        expiration_time,
+        role: new_role<IW>(managed_name),
+        action_specs: vector::empty(),
+        next_placeholder_id: 0,
+        outcome,
+    }
+}
+
+public(package) fun add_intent<Outcome: store>(
+    intents: &mut Intents,
+    intent: Intent<Outcome>,
+) {
+    assert!(!intents.contains(intent.key), EKeyAlreadyExists);
+    intents.inner.add(intent.key, intent);
+}
+
+public(package) fun remove_intent<Outcome: store>(
+    intents: &mut Intents,
+    key: String,
+): Intent<Outcome> {
+    assert!(intents.contains(key), EIntentNotFound);
+    intents.inner.remove(key)
+}
+
+public(package) fun pop_front_execution_time<Outcome>(
+    intent: &mut Intent<Outcome>,
+): u64 {
+    intent.execution_times.remove(0)
+}
+
+// REMOVED: lock and unlock functions - no locking needed in the new design
+// Conflicts between intents are natural in DAO governance where multiple proposals
+// can compete for the same resources
+
+/// Removes an intent being executed if the execution_time is reached
+/// Outcome must be validated in AccountMultisig to be destroyed
+public(package) fun destroy_intent<Outcome: store + drop>(
+    intents: &mut Intents,
+    key: String,
+): Expired {
+    let Intent<Outcome> { account, action_specs, key, .. } = intents.inner.remove(key);
+    let num_actions = action_specs.length();
+    let mut executed_actions = vector::empty<bool>();
+    let mut i = 0;
+    while (i < num_actions) {
+        vector::push_back(&mut executed_actions, false);
+        i = i + 1;
+    };
+
+    // Create a dummy ID for now - in production you might want to use a hash of the key
+    let intent_id = object::id_from_address(@0x0);
+
+    Expired { account, action_specs, executed_actions, intent_id }
+}
+
+// === Private functions ===
+
+fun new_role<IW: drop>(managed_name: String): String {
+    let intent_type = type_name::with_defining_ids<IW>();
+    let mut role = intent_type.address_string().to_string();
+    role.append_utf8(b"::");
+    role.append(intent_type.module_string().to_string());
+
+    if (!managed_name.is_empty()) {
+        role.append_utf8(b"::");
+        role.append(managed_name);
+    };
+
+    role
+}
+
+//**************************************************************************************************//
+// Tests                                                                                            //
+//**************************************************************************************************//
+
+#[test_only]
+use sui::test_utils::{assert_eq, destroy};
+#[test_only]
+use sui::clock;
+
+#[test_only]
+public struct TestOutcome has copy, drop, store {}
+#[test_only]
+public struct TestAction has drop, store {}
+#[test_only]
+public struct TestActionType has drop {}
+#[test_only]
+public struct TestIntentWitness() has drop;
+#[test_only]
+public struct WrongWitness() has drop;
+
+#[test]
+fun test_new_params() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    assert_eq(params.key(), b"test_key".to_string());
+    assert_eq(params.description(), b"test_description".to_string());
+    assert_eq(params.execution_times(), vector[1000]);
+    assert_eq(params.expiration_time(), 2000);
+    assert_eq(params.creation_time(), 0);
+    
+    destroy(params);
+    destroy(clock);
+}
+
+#[test]
+fun test_new_params_with_rand_key() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let (params, key) = new_params_with_rand_key(
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    assert_eq(params.key(), key);
+    assert_eq(params.description(), b"test_description".to_string());
+    assert_eq(params.execution_times(), vector[1000]);
+    assert_eq(params.expiration_time(), 2000);
+    
+    destroy(params);
+    destroy(clock);
+}
+
+#[test, expected_failure(abort_code = ENoExecutionTime)]
+fun test_new_params_empty_execution_times() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[],
+        2000,
+        &clock,
+        ctx
+    );
+    destroy(params);
+    destroy(clock);
+}
+
+#[test, expected_failure(abort_code = EExecutionTimesNotAscending)]
+fun test_new_params_not_ascending_execution_times() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[2000, 1000],
+        3000,
+        &clock,
+        ctx
+    );
+    destroy(params);
+    destroy(clock);
+}
+
+#[test]
+fun test_new_intent() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    assert_eq(intent.key(), b"test_key".to_string());
+    assert_eq(intent.description(), b"test_description".to_string());
+    assert_eq(intent.account(), @0xCAFE);
+    assert_eq(intent.creation_time(), clock.timestamp_ms());
+    assert_eq(intent.execution_times(), vector[1000]);
+    assert_eq(intent.expiration_time(), 2000);
+    assert_eq(intent.action_count(), 0);
+    
+    destroy(intent);
+    destroy(clock);
+}
+
+#[test]
+fun test_add_action() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let mut intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    let action_data1 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data1, TestIntentWitness());
+    assert_eq(intent.action_count(), 1);
+
+    let action_data2 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data2, TestIntentWitness());
+    assert_eq(intent.action_count(), 2);
+    
+    destroy(intent);
+    destroy(clock);
+}
+
+#[test]
+fun test_remove_action() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    let mut intents = empty(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let mut intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    let action_data1 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data1, TestIntentWitness());
+
+    let action_data2 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data2, TestIntentWitness());
+    add_intent(&mut intents, intent);
+    
+    let mut expired = intents.destroy_intent<TestOutcome>(b"test_key".to_string());
+    
+    let _action1 = expired.remove_action_spec();
+    let _action2 = expired.remove_action_spec();
+
+    assert_eq(expired.expired_action_count(), 0);
+
+    expired.destroy_empty();
+    destroy(intents);
+    destroy(clock);
+}
+
+#[test]
+fun test_empty_intents() {
+    let ctx = &mut tx_context::dummy();
+    let intents = empty(ctx);
+    
+    assert_eq(length(&intents), 0);
+    // No longer checking locked() - removed in new design
+    assert!(!contains(&intents, b"test_key".to_string()));
+    
+    destroy(intents);
+}
+
+#[test]
+fun test_add_and_remove_intent() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    let mut intents = empty(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    add_intent(&mut intents, intent);
+    assert_eq(length(&intents), 1);
+    assert!(contains(&intents, b"test_key".to_string()));
+    
+    let removed_intent = remove_intent<TestOutcome>(&mut intents, b"test_key".to_string());
+    assert_eq(length(&intents), 0);
+    assert!(!contains(&intents, b"test_key".to_string()));
+    
+    destroy(removed_intent);
+    destroy(intents);
+    destroy(clock);
+}
+
+#[test, expected_failure(abort_code = EKeyAlreadyExists)]
+fun test_add_duplicate_intent() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    let mut intents = empty(ctx);
+    
+    let params1 = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let params2 = new_params(
+        b"test_key".to_string(),
+        b"test_description2".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let intent1 = new_intent(
+        params1,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    let intent2 = new_intent(
+        params2,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    add_intent(&mut intents, intent1);
+    add_intent(&mut intents, intent2);
+    
+    destroy(intents);
+    destroy(clock);
+}
+
+#[test, expected_failure(abort_code = EIntentNotFound)]
+fun test_remove_nonexistent_intent() {
+    let ctx = &mut tx_context::dummy();
+    let mut intents = empty(ctx);
+    
+    let removed_intent = remove_intent<TestOutcome>(&mut intents, b"nonexistent_key".to_string());
+    
+    destroy(removed_intent);
+    destroy(intents);
+}
+
+// REMOVED: test_lock_and_unlock_object - no locking in new design
+// REMOVED: test_lock_already_locked_object - no locking in new design  
+// REMOVED: test_unlock_not_locked_object - no locking in new design
+
+#[test]
+fun test_pop_front_execution_time() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000, 2000, 3000],
+        4000,
+        &clock,
+        ctx
+    );
+    
+    let mut intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    assert_eq(intent.execution_times(), vector[1000, 2000, 3000]);
+    
+    let time1 = pop_front_execution_time(&mut intent);
+    assert_eq(time1, 1000);
+    assert_eq(intent.execution_times(), vector[2000, 3000]);
+    
+    let time2 = pop_front_execution_time(&mut intent);
+    assert_eq(time2, 2000);
+    assert_eq(intent.execution_times(), vector[3000]);
+    
+    destroy(intent);
+    destroy(clock);
+}
+
+#[test]
+fun test_assert_is_account() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    // Should not abort
+    assert_is_account(&intent, @0xCAFE);
+    
+    destroy(intent);
+    destroy(clock);
+}
+
+#[test, expected_failure(abort_code = EWrongAccount)]
+fun test_assert_is_account_wrong() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    assert_is_account(&intent, @0xBAD);
+    
+    destroy(intent);
+    destroy(clock);
+}
+
+#[test]
+fun test_assert_is_witness() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    // Should not abort
+    assert_is_witness(&intent, TestIntentWitness());
+    
+    destroy(intent);
+    destroy(clock);
+}
+
+#[test, expected_failure(abort_code = EWrongWitness)]
+fun test_assert_is_witness_wrong() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    let intent = new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx
+    );
+    
+    assert_is_witness(&intent, WrongWitness());
+    
+    destroy(intent);
+    destroy(clock);
+}
+
+#[test]
+fun test_assert_single_execution() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx
+    );
+    
+    // Should not abort
+    assert_single_execution(&params);
+    
+    destroy(params);
+    destroy(clock);
+}
+
+#[test, expected_failure(abort_code = ESingleExecution)]
+fun test_assert_single_execution_multiple() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+    
+    let params = new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000, 2000],
+        3000,
+        &clock,
+        ctx
+    );
+    
+    assert_single_execution(&params);
+    
+    destroy(params);
+    destroy(clock);
+}// ============================================================================
+// FORK MODIFICATION NOTICE - Simplified Executable without ExecutionContext
+// ============================================================================
+// Hot potato ensuring actions are executed as intended (can't be stored).
+//
+// CHANGES IN THIS FORK (2025-09-16):
+// - Added type_name imports for type-based action routing
+// - Added current_action_type() to get the TypeName of current action
+// - Added is_current_action<T>() to check if current action matches type T
+// - REMOVED ExecutionContext - PTBs handle object flow naturally
+//
+// RATIONALE:
+// PTBs (Programmable Transaction Blocks) handle object flow between actions
+// naturally through direct parameter passing. No hidden context needed.
+// ============================================================================
+/// The Executable struct is hot potato constructed from an Intent that has been resolved.
+/// It ensures that the actions are executed as intended as it can't be stored.
+/// Action index is tracked to ensure each action is executed exactly once.
+
+module account_protocol::executable;
+
+use account_protocol::intents::{Self, Intent};
+use std::type_name::{Self, TypeName};
+
+// === Imports ===
+
+// === Structs ===
+
+/// Hot potato ensuring the actions in the intent are executed as intended.
+public struct Executable<Outcome: store> {
+    // intent to return or destroy (if execution_times empty) after execution
+    intent: Intent<Outcome>,
+    // current action index for sequential processing
+    action_idx: u64,
+}
+
+// === View functions ===
+
+/// Returns the issuer of the corresponding intent
+public fun intent<Outcome: store>(executable: &Executable<Outcome>): &Intent<Outcome> {
+    &executable.intent
+}
+
+/// Returns the current action index
+public fun action_idx<Outcome: store>(executable: &Executable<Outcome>): u64 {
+    executable.action_idx
+}
+
+// Actions are now stored as BCS bytes in ActionSpec
+// The dispatcher must deserialize them when needed
+
+/// Get the type of the current action
+public fun current_action_type<Outcome: store>(executable: &Executable<Outcome>): TypeName {
+    let specs = executable.intent().action_specs();
+    intents::action_spec_type(specs.borrow(executable.action_idx))
+}
+
+/// Check if current action matches a specific type
+public fun is_current_action<Outcome: store, T: store + drop + copy>(
+    executable: &Executable<Outcome>,
+): bool {
+    let current_type = current_action_type(executable);
+    current_type == type_name::with_defining_ids<T>()
+}
+
+/// Get type of action at specific index
+public fun action_type_at<Outcome: store>(executable: &Executable<Outcome>, idx: u64): TypeName {
+    let specs = executable.intent().action_specs();
+    intents::action_spec_type(specs.borrow(idx))
+}
+
+/// Increment the action index to mark progress
+public fun increment_action_idx<Outcome: store>(executable: &mut Executable<Outcome>) {
+    executable.action_idx = executable.action_idx + 1;
+}
+
+// === Helper Functions ===
+// (ExecutionContext removed - PTBs handle object flow naturally)
+
+// === Package functions ===
+
+public(package) fun new<Outcome: store>(
+    intent: Intent<Outcome>,
+    _ctx: &mut TxContext, // No longer needed, kept for API compatibility
+): Executable<Outcome> {
+    Executable {
+        intent,
+        action_idx: 0,
+    }
+}
+
+public(package) fun destroy<Outcome: store>(executable: Executable<Outcome>): Intent<Outcome> {
+    let Executable { intent, .. } = executable;
+    intent
+}
+
+//**************************************************************************************************//
+// Tests                                                                                            //
+//**************************************************************************************************//
+
+#[test_only]
+use sui::test_utils::{assert_eq, destroy as test_destroy};
+#[test_only]
+use sui::clock;
+// intents already imported at top of module
+
+#[test_only]
+public struct TestOutcome has copy, drop, store {}
+#[test_only]
+public struct TestAction has drop, store {}
+#[test_only]
+public struct TestActionType has drop {}
+#[test_only]
+public struct TestIntentWitness() has drop;
+
+#[test]
+fun test_new_executable() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+
+    let params = intents::new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx,
+    );
+
+    let intent = intents::new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx,
+    );
+
+    let executable = new(intent, ctx);
+
+    assert_eq(action_idx(&executable), 0);
+    assert_eq(intent(&executable).key(), b"test_key".to_string());
+
+    test_destroy(executable);
+    test_destroy(clock);
+}
+
+// Test removed: next_action function no longer exists
+// Actions are now accessed via action specs and deserialized on demand
+
+// Test removed: contains_action function no longer exists
+// Actions are now stored as serialized bytes and checked via type names
+
+// Test removed: contains_action function no longer exists
+// Actions are now stored as serialized bytes and checked via type names
+
+#[test]
+fun test_destroy_executable() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+
+    let params = intents::new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx,
+    );
+
+    let intent = intents::new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx,
+    );
+
+    let executable = new(intent, ctx);
+    let recovered_intent = destroy(executable);
+
+    assert_eq(recovered_intent.key(), b"test_key".to_string());
+    assert_eq(recovered_intent.description(), b"test_description".to_string());
+
+    test_destroy(recovered_intent);
+    test_destroy(clock);
+}
+
+#[test]
+fun test_executable_with_multiple_actions() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+
+    let params = intents::new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx,
+    );
+
+    let mut intent = intents::new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx,
+    );
+
+    // Actions are now added as serialized bytes via action specs
+    // This test focuses on ExecutionContext functionality
+
+    let mut executable = new(intent, ctx);
+
+    assert_eq(action_idx(&executable), 0);
+    assert_eq(intent(&executable).action_specs().length(), 0);
+
+    // Actions are now accessed via action specs
+    // Incrementing action index to simulate execution
+    increment_action_idx(&mut executable);
+    assert_eq(action_idx(&executable), 1);
+    increment_action_idx(&mut executable);
+    assert_eq(action_idx(&executable), 2);
+    increment_action_idx(&mut executable);
+    assert_eq(action_idx(&executable), 3);
+
+    test_destroy(executable);
+    test_destroy(clock);
+}
+
+#[test]
+fun test_intent_access() {
+    let ctx = &mut tx_context::dummy();
+    let clock = clock::create_for_testing(ctx);
+
+    let params = intents::new_params(
+        b"test_key".to_string(),
+        b"test_description".to_string(),
+        vector[1000],
+        2000,
+        &clock,
+        ctx,
+    );
+
+    let intent = intents::new_intent(
+        params,
+        TestOutcome {},
+        b"test_role".to_string(),
+        @0xCAFE,
+        TestIntentWitness(),
+        ctx,
+    );
+
+    let executable = new(intent, ctx);
+    let intent_ref = intent(&executable);
+
+    assert_eq(intent_ref.key(), b"test_key".to_string());
+    assert_eq(intent_ref.description(), b"test_description".to_string());
+    assert_eq(intent_ref.account(), @0xCAFE);
+    let mut role = @account_protocol.to_string();
+    role.append_utf8(b"::executable");
+    role.append_utf8(b"::test_role");
+    assert_eq(intent_ref.role(), role);
+
+    test_destroy(executable);
+    test_destroy(clock);
+}
+/// This module manages the metadata field of Account.
+/// It provides the interface to create and get the fields of a Metadata struct.
+
+module account_protocol::metadata;
+
+use std::string::String;
+use sui::vec_map::{Self, VecMap};
+
+// === Imports ===
+
+// === Errors ===
+
+const EMetadataNotSameLength: u64 = 0;
+
+// === Structs ===
+
+/// Parent struct protecting the metadata
+public struct Metadata has copy, drop, store {
+    inner: VecMap<String, String>,
+}
+
+// === Public functions ===
+
+/// Creates an empty Metadata struct
+public fun empty(): Metadata {
+    Metadata { inner: vec_map::empty() }
+}
+
+/// Creates a new Metadata struct from keys and values.
+public fun from_keys_values(keys: vector<String>, values: vector<String>): Metadata {
+    assert!(keys.length() == values.length(), EMetadataNotSameLength);
+    Metadata {
+        inner: vec_map::from_keys_values(keys, values),
+    }
+}
+
+/// Gets the value for the key.
+public fun get(metadata: &Metadata, key: String): String {
+    *metadata.inner.get(&key)
+}
+
+/// Gets the entry at the index.
+public fun get_entry_by_idx(metadata: &Metadata, idx: u64): (String, String) {
+    let (key, value) = metadata.inner.get_entry_by_idx(idx);
+    (*key, *value)
+}
+
+/// Returns the number of entries.
+public fun size(metadata: &Metadata): u64 {
+    metadata.inner.length()
+}
+
+//**************************************************************************************************//
+// Tests                                                                                            //
+//**************************************************************************************************//
+
+// === Test Helpers ===
+
+#[test_only]
+use sui::test_utils::{assert_eq, destroy};
+
+// === Unit Tests ===
+
+#[test]
+fun test_empty() {
+    let metadata = empty();
+    assert_eq(size(&metadata), 0);
+    destroy(metadata);
+}
+
+#[test]
+fun test_from_keys_values() {
+    let keys = vector[b"key1".to_string(), b"key2".to_string()];
+    let values = vector[b"value1".to_string(), b"value2".to_string()];
+
+    let metadata = from_keys_values(keys, values);
+    assert_eq(size(&metadata), 2);
+    assert_eq(get(&metadata, b"key1".to_string()), b"value1".to_string());
+    assert_eq(get(&metadata, b"key2".to_string()), b"value2".to_string());
+
+    destroy(metadata);
+}
+
+#[test, expected_failure(abort_code = EMetadataNotSameLength)]
+fun test_from_keys_values_different_lengths() {
+    let keys = vector[b"key1".to_string(), b"key2".to_string()];
+    let values = vector[b"value1".to_string()];
+
+    let metadata = from_keys_values(keys, values);
+    destroy(metadata);
+}
+
+#[test]
+fun test_get() {
+    let keys = vector[b"test_key".to_string()];
+    let values = vector[b"test_value".to_string()];
+
+    let metadata = from_keys_values(keys, values);
+    let value = get(&metadata, b"test_key".to_string());
+    assert_eq(value, b"test_value".to_string());
+
+    destroy(metadata);
+}
+
+#[test]
+fun test_get_entry_by_idx() {
+    let keys = vector[b"key1".to_string(), b"key2".to_string()];
+    let values = vector[b"value1".to_string(), b"value2".to_string()];
+
+    let metadata = from_keys_values(keys, values);
+
+    let (key1, value1) = get_entry_by_idx(&metadata, 0);
+    let (key2, value2) = get_entry_by_idx(&metadata, 1);
+
+    assert_eq(key1, b"key1".to_string());
+    assert_eq(value1, b"value1".to_string());
+    assert_eq(key2, b"key2".to_string());
+    assert_eq(value2, b"value2".to_string());
+
+    destroy(metadata);
+}
+
+#[test]
+fun test_size() {
+    let metadata = empty();
+    assert_eq(size(&metadata), 0);
+
+    let keys = vector[b"key1".to_string()];
+    let values = vector[b"value1".to_string()];
+    let metadata2 = from_keys_values(keys, values);
+    assert_eq(size(&metadata2), 1);
+
+    destroy(metadata);
+    destroy(metadata2);
+}
+
+#[test]
+fun test_multiple_entries() {
+    let keys = vector[b"name".to_string(), b"description".to_string(), b"version".to_string()];
+    let values = vector[
+        b"Test Account".to_string(),
+        b"A test account".to_string(),
+        b"1.0".to_string(),
+    ];
+
+    let metadata = from_keys_values(keys, values);
+    assert_eq(size(&metadata), 3);
+    assert_eq(get(&metadata, b"name".to_string()), b"Test Account".to_string());
+    assert_eq(get(&metadata, b"description".to_string()), b"A test account".to_string());
+    assert_eq(get(&metadata, b"version".to_string()), b"1.0".to_string());
+
+    destroy(metadata);
+}
+// ============================================================================
+// FORK MODIFICATION NOTICE - On-Chain Schema System
+// ============================================================================
+// NEW FILE added to the fork for self-describing actions.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Created ActionDecoderRegistry as global shared object
+// - Added HumanReadableField for standardized decoded output
+// - Added assert_decoder_exists for mandatory validation
+// - Decoders attached as dynamic object fields keyed by TypeName
+//
+// PURPOSE:
+// Provides the foundation for on-chain action decoding, ensuring all actions
+// can be transparently decoded and displayed to users before execution.
+//
+// ARCHITECTURE:
+// - ActionDecoderRegistry: Global shared object holding all decoders
+// - HumanReadableField: Standard format for decoded field display
+// - Decoder objects attached as dynamic fields keyed by TypeName
+//
+// KEY DESIGN PRINCIPLES:
+// - Protocol layer provides structure, application layer provides decoders
+// - Mandatory validation at application boundary (entry functions)
+// - Clean separation - protocol remains unaware of specific decoders
+// - Universal transparency through self-describing actions
+// ============================================================================
+
+/// Simple, elegant schema system with active decoder objects
+/// Each action module provides its own decoder that knows how to decode its actions
+module account_protocol::schema;
+
+use std::string::String;
+use std::type_name::TypeName;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
+
+// === Structs ===
+
+/// A standard, human-readable representation of a single decoded field
+public struct HumanReadableField has copy, drop, store {
+    name: String, // Field name, e.g., "recipient"
+    value: String, // String representation of value, e.g., "0xabc..."
+    type_name: String, // Type description, e.g., "address"
+}
+
+/// The registry that holds all decoder objects
+/// Decoders are attached as dynamic object fields keyed by TypeName
+public struct ActionDecoderRegistry has key, store {
+    id: UID,
+}
+
+// === Public Functions ===
+
+/// Initialize an empty decoder registry
+public fun init_registry(ctx: &mut TxContext): ActionDecoderRegistry {
+    ActionDecoderRegistry {
+        id: object::new(ctx),
+    }
+}
+
+/// Create a human-readable field
+public fun new_field(name: String, value: String, type_name: String): HumanReadableField {
+    HumanReadableField { name, value, type_name }
+}
+
+// === View Functions ===
+
+/// Get the registry's ID (immutable reference)
+public fun registry_id(registry: &ActionDecoderRegistry): &UID {
+    &registry.id
+}
+
+/// Get the registry's ID (mutable reference for adding decoders)
+public fun registry_id_mut(registry: &mut ActionDecoderRegistry): &mut UID {
+    &mut registry.id
+}
+
+/// Get field name
+public fun field_name(field: &HumanReadableField): &String {
+    &field.name
+}
+
+/// Get field value
+public fun field_value(field: &HumanReadableField): &String {
+    &field.value
+}
+
+/// Get field type
+public fun field_type(field: &HumanReadableField): &String {
+    &field.type_name
+}
+
+/// Check if a decoder exists for the given action type in the registry
+public fun has_decoder(registry: &ActionDecoderRegistry, action_type: TypeName): bool {
+    dynamic_object_field::exists_(registry_id(registry), action_type)
+}
+
+/// Assert that a decoder exists for the given action type
+/// Aborts with EDecoderNotFound if the decoder is not registered
+public fun assert_decoder_exists(registry: &ActionDecoderRegistry, action_type: TypeName) {
+    assert!(has_decoder(registry, action_type), EDecoderNotFound);
+}
+
+// === Errors ===
+const EDecoderNotFound: u64 = 1;
+/// Decoder validation helper module
+/// Provides functions to check if decoders exist for action types
+module account_protocol::decoder_validation;
+
+use account_protocol::schema;
+use std::type_name::TypeName;
+
+// === Imports ===
+
+// === Public Functions ===
+
+/// Check if a decoder exists for the given action type in the registry
+/// This is a wrapper around schema::has_decoder for convenience
+public fun has_decoder(registry: &schema::ActionDecoderRegistry, action_type: TypeName): bool {
+    schema::has_decoder(registry, action_type)
+}
+
+/// Validate that a decoder exists, aborting if not found
+/// Use this when you want to enforce decoder existence
+public fun assert_decoder_exists(registry: &schema::ActionDecoderRegistry, action_type: TypeName) {
+    assert!(has_decoder(registry, action_type), EDecoderNotFound);
+}
+
+// === Errors ===
+
+const EDecoderNotFound: u64 = 0;
+/// This module tracks the version of the package by implementing the version_witness type.
+/// A new version type should be defined for each new version of the package.
+
+module account_protocol::version;
+
+use account_protocol::version_witness::{Self, VersionWitness};
+
+// === Imports ===
+
+// === Constants ===
+
+const VERSION: u64 = 1; // bump this when the package is upgraded
+
+// === Structs ===
+
+// define a new version struct for each new version of the package
+public struct V1() has drop;
+
+public(package) fun current(): VersionWitness {
+    version_witness::new(V1()) // modify with the new version struct
+}
+
+// === Public functions ===
+
+public fun get(): u64 {
+    VERSION
+}
+
+// === Test functions ===
+
+#[test_only]
+public struct Witness() has drop;
+
+#[test_only]
+public fun witness(): Witness {
+    Witness()
+}
+
+#[test]
+public fun test_get() {
+    assert!(get() == 1, 1);
+}
+// ============================================================================
+// FORK MODIFICATION - Owned Objects with BCS Serialization
+// ============================================================================
+// This module manages withdrawal and transfer of owned objects from Account.
+//
+// KEY FEATURES:
+// - BCS serialization for all actions (type-safe storage as bytes)
+// - Separate handling for objects vs coins:
+//   * WithdrawObjectAction: Tracks specific object IDs
+//   * WithdrawCoinAction: Tracks coin type + amount (flexible matching)
+// - No pessimistic locking - conflicts resolved by blockchain ownership
+// - Actions serialize via add_typed_action() with type markers
+// - Manual BCS deserialization during execution
+//
+// ADVANTAGES OF BCS SERIALIZATION:
+// - Explicit control over serialization format
+// - Type markers provide compile-time safety
+// - Can version action formats independently
+// - Smaller on-chain storage footprint
+// ============================================================================
+
+/// This module allows objects owned by the account to be accessed through intents in a secure way.
+/// The objects can be taken only via Actions which use Transfer to Object (TTO).
+/// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
+
+module account_protocol::owned;
+
+// === Imports ===
+
+use std::{
+    string::String,
+    type_name,
+};
+use sui::{
+    coin::{Self, Coin},
+    transfer::Receiving,
+    bcs
+};
+use account_protocol::{
+    action_validation,
+    account::{Self, Account, Auth},
+    intents::{Self, Expired, Intent},
+    executable::Executable,
+};
+use account_extensions::framework_action_types;
+
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+
+// === Errors ===
+
+const EWrongObject: u64 = 0;
+const EWrongAmount: u64 = 1;
+const EWrongCoinType: u64 = 2;
+
+// === Structs ===
+
+/// Action guarding access to account owned objects which can only be received via this action
+public struct WithdrawObjectAction has drop, store {
+    // the owned object we want to access
+    object_id: ID,
+}
+
+/// Action guarding access to account owned coins which can only be received via this action
+public struct WithdrawCoinAction has drop, store {
+    // the type of the coin we want to access
+    coin_type: String,
+    // the amount of the coin we want to access
+    coin_amount: u64,
+}
+
+// === Destruction Functions ===
+
+/// Destroy a WithdrawObjectAction after serialization
+public fun destroy_withdraw_object_action(action: WithdrawObjectAction) {
+    let WithdrawObjectAction { object_id: _ } = action;
+}
+
+/// Destroy a WithdrawCoinAction after serialization
+public fun destroy_withdraw_coin_action(action: WithdrawCoinAction) {
+    let WithdrawCoinAction { coin_type: _, coin_amount: _ } = action;
+}
+
+// === Public functions ===
+
+/// Creates a new WithdrawObjectAction and add it to an intent
+public fun new_withdraw_object<Config, Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    account: &Account<Config>,
+    object_id: ID,
+    intent_witness: IW,
+) {
+    intent.assert_is_account(account.addr());
+
+    // Create the action struct
+    let action = WithdrawObjectAction { object_id };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
+    intent.add_typed_action(
+        framework_action_types::owned_withdraw_object(),
+        action_data,
+        intent_witness
+    );
+
+    // Explicitly destroy the action struct
+    destroy_withdraw_object_action(action);
+}
+
+/// Executes a WithdrawObjectAction and returns the object
+public fun do_withdraw_object<Config, Outcome: store, T: key + store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    receiving: Receiving<T>,
+    intent_witness: IW,
+): T {
+    executable.intent().assert_is_account(account.addr());
+
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::OwnedWithdrawObject>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let object_id = object::id_from_address(bcs::peel_address(&mut reader));
+
+    assert!(receiving.receiving_object_id() == object_id, EWrongObject);
+
+    // Receive the object and increment action index
+    let obj = account::receive(account, receiving);
+    account_protocol::executable::increment_action_idx(executable);
+
+    obj
+}
+
+/// Deletes a WithdrawObjectAction from an expired intent
+public fun delete_withdraw_object<Config>(expired: &mut Expired, account: &Account<Config>) {
+    expired.assert_is_account(account.addr());
+
+    let spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+
+    // We don't need the value, but we must peel it to consume the bytes
+    let WithdrawObjectAction { object_id: _ } = WithdrawObjectAction {
+        object_id: object::id_from_bytes(bcs::peel_vec_u8(&mut reader))
+    };
+}
+
+/// Creates a new WithdrawCoinAction and add it to an intent
+public fun new_withdraw_coin<Config, Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    account: &Account<Config>,
+    coin_type: String,
+    coin_amount: u64,
+    intent_witness: IW,
+) {
+    intent.assert_is_account(account.addr());
+
+    // Create the action struct
+    let action = WithdrawCoinAction { coin_type, coin_amount };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
+    intent.add_typed_action(
+        framework_action_types::owned_withdraw_coin(),
+        action_data,
+        intent_witness
+    );
+
+    // Explicitly destroy the action struct
+    destroy_withdraw_coin_action(action);
+}
+
+/// Executes a WithdrawCoinAction and returns the coin
+public fun do_withdraw_coin<Config, Outcome: store, CoinType, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    receiving: Receiving<Coin<CoinType>>,
+    intent_witness: IW,
+): Coin<CoinType> {
+    executable.intent().assert_is_account(account.addr());
+
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::OwnedWithdrawCoin>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let coin_type = std::string::utf8(bcs::peel_vec_u8(&mut reader));
+    let coin_amount = bcs::peel_u64(&mut reader);
+
+    // Receive the coin
+    let coin = account::receive(account, receiving);
+
+    // Validate coin type and amount
+    assert!(coin.value() == coin_amount, EWrongAmount);
+    assert!(
+        type_name::with_defining_ids<CoinType>().into_string().to_string() == coin_type,
+        EWrongCoinType
+    );
+
+    // Increment action index
+    account_protocol::executable::increment_action_idx(executable);
+
+    coin
+}
+
+/// Deletes a WithdrawCoinAction from an expired intent
+public fun delete_withdraw_coin<Config>(expired: &mut Expired, account: &Account<Config>) {
+    expired.assert_is_account(account.addr());
+
+    let spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+
+    // We don't need the values, but we must peel them to consume the bytes
+    let WithdrawCoinAction { coin_type: _, coin_amount: _ } = WithdrawCoinAction {
+        coin_type: std::string::utf8(bcs::peel_vec_u8(&mut reader)),
+        coin_amount: bcs::peel_u64(&mut reader)
+    };
+}
+
+// Coin operations
+
+/// Authorized addresses can merge and split coins.
+/// Returns the IDs to use in a following intent, conserves the order.
+public fun merge_and_split<Config, CoinType>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    to_merge: vector<Receiving<Coin<CoinType>>>, // there can be only one coin if we just want to split
+    to_split: vector<u64>, // there can be no amount if we just want to merge
+    ctx: &mut TxContext
+): vector<ID> {
+    account.verify(auth);
+    // receive all coins
+    let mut coins = vector::empty();
+    to_merge.do!(|item| {
+        let coin = account::receive(account, item);
+        coins.push_back(coin);
+    });
+
+    let coin = merge(coins, ctx);
+    let ids = split(account, coin, to_split, ctx);
+
+    ids
+}
+
+fun merge<CoinType>(
+    coins: vector<Coin<CoinType>>,
+    ctx: &mut TxContext
+): Coin<CoinType> {
+    let mut merged = coin::zero<CoinType>(ctx);
+    coins.do!(|coin| {
+        merged.join(coin);
+    });
+
+    merged
+}
+
+fun split<Config, CoinType>(
+    account: &mut Account<Config>,
+    mut coin: Coin<CoinType>,
+    amounts: vector<u64>,
+    ctx: &mut TxContext
+): vector<ID> {
+    let ids = amounts.map!(|amount| {
+        let split = coin.split(amount, ctx);
+        let id = object::id(&split);
+        account.keep(split, ctx);
+        id
+    });
+    account.keep(coin, ctx);
+
+    ids
+}
+// ============================================================================
+// FORK MODIFICATION NOTICE - Config with Serialize-Then-Destroy Pattern
+// ============================================================================
+// This module manages Account settings and configuration updates.
+//
+// CHANGES IN THIS FORK:
+// - Config actions use type markers: ConfigUpdateDeps, ConfigToggleUnverified,
+//   ConfigUpdateDeposits, ConfigManageWhitelist
+// - Implemented serialize-then-destroy pattern for all 4 action types
+// - Added destruction functions for explicit resource management
+// - Actions serialize to bytes before adding to intent via add_typed_action()
+// - Better separation between config, deps, and metadata updates
+// - Type-safe action validation through compile-time TypeName comparison
+//
+// RATIONALE:
+// Ensures DAOs can safely update configuration without risking inconsistent
+// states during multi-step governance processes.
+// ============================================================================
+
+/// This module allows to manage Account settings.
+/// The actions are related to the modifications of all the fields of the Account (except Intents and Config).
+/// All these fields are encapsulated in the `Account` struct and each managed in their own module.
+/// They are only accessible mutably via package functions defined in account.move which are used here only.
+/// 
+/// Dependencies are all the packages and their versions that the account can call (including this one).
+/// The allowed dependencies are defined in the `Extensions` struct and are maintained by account.tech team.
+/// Optionally, any package can be added to the account if unverified_allowed is true.
+/// 
+/// Accounts can choose to use any version of any package and must explicitly migrate to the new version.
+/// This is closer to a trustless model preventing anyone with the UpgradeCap from updating the dependencies maliciously.
+
+module account_protocol::config;
+
+// === Imports ===
+
+use std::{string::{Self, String}, option::Option, type_name::{Self, TypeName}};
+use sui::bcs::{Self, BCS};
+use sui::{vec_set::{Self, VecSet}, event};
+use account_protocol::{
+    account::{Self, Account, Auth},
+    intents::{Intent, Expired, Params},
+    executable::Executable,
+    deps::{Self, Dep},
+    metadata,
+    version,
+    intent_interface,
+};
+use account_extensions::extensions::Extensions;
+use account_extensions::framework_action_types::{Self, ConfigUpdateDeps, ConfigUpdateMetadata};
+
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+
+// === Aliases ===
+
+use fun intent_interface::build_intent as Account.build_intent;
+use fun intent_interface::process_intent as Account.process_intent;
+
+// === Structs ===
+
+/// Intent Witness
+public struct ConfigDepsIntent() has drop;
+/// Intent Witness
+public struct ToggleUnverifiedAllowedIntent() has drop;
+/// Intent Witness for deposit configuration
+public struct ConfigureDepositsIntent() has drop;
+/// Intent Witness for whitelist management
+public struct ManageWhitelistIntent() has drop;
+
+/// Action struct wrapping the deps account field into an action
+public struct ConfigDepsAction has drop, store {
+    deps: vector<Dep>,
+}
+/// Action struct wrapping the unverified_allowed account field into an action
+public struct ToggleUnverifiedAllowedAction has drop, store {}
+/// Action to configure object deposit settings
+public struct ConfigureDepositsAction has drop, store {
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+}
+/// Action to manage type whitelist for deposits
+public struct ManageWhitelistAction has drop, store {
+    add_types: vector<String>,
+    remove_types: vector<String>,
+}
+
+// === Helper Functions for BCS Deserialization ===
+
+/// Helper to deserialize deps data as three vectors
+fun peel_deps_as_vectors(reader: &mut BCS): (vector<String>, vector<address>, vector<u64>) {
+    let len = bcs::peel_vec_length(reader);
+    let mut names = vector::empty();
+    let mut addrs = vector::empty();
+    let mut versions = vector::empty();
+    let mut i = 0;
+    while (i < len) {
+        // Each Dep has: name (String), addr (address), version (u64)
+        names.push_back(string::utf8(bcs::peel_vec_u8(reader)));
+        addrs.push_back(bcs::peel_address(reader));
+        versions.push_back(bcs::peel_u64(reader));
+        i = i + 1;
+    };
+    (names, addrs, versions)
+}
+
+// === Destruction Functions ===
+
+/// Destroy a ConfigDepsAction after serialization
+public fun destroy_config_deps_action(action: ConfigDepsAction) {
+    let ConfigDepsAction { deps: _ } = action;
+}
+
+/// Destroy a ToggleUnverifiedAllowedAction after serialization
+public fun destroy_toggle_unverified_action(action: ToggleUnverifiedAllowedAction) {
+    let ToggleUnverifiedAllowedAction {} = action;
+}
+
+/// Destroy a ConfigureDepositsAction after serialization
+public fun destroy_configure_deposits_action(action: ConfigureDepositsAction) {
+    let ConfigureDepositsAction { enable: _, new_max: _, reset_counter: _ } = action;
+}
+
+/// Destroy a ManageWhitelistAction after serialization
+public fun destroy_manage_whitelist_action(action: ManageWhitelistAction) {
+    let ManageWhitelistAction { add_types: _, remove_types: _ } = action;
+}
+
+/// Helper to deserialize vector<String>
+fun peel_vector_string(reader: &mut BCS): vector<String> {
+    let len = bcs::peel_vec_length(reader);
+    let mut i = 0;
+    let mut vec = vector::empty();
+    while (i < len) {
+        vec.push_back(string::utf8(bcs::peel_vec_u8(reader)));
+        i = i + 1;
+    };
+    vec
+}
+
+// === Public functions ===
+
+/// Authorized addresses can configure object deposit settings directly
+public fun configure_deposits<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+) {
+    account.verify(auth);
+    // Apply the configuration using the helper function
+    account.apply_deposit_config(enable, new_max, reset_counter);
+}
+
+/// Authorized addresses can edit the metadata of the account
+public fun edit_metadata<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    keys: vector<String>,
+    values: vector<String>,
+) {
+    account.verify(auth);
+    *account::metadata_mut(account, version::current()) = metadata::from_keys_values(keys, values);
+}
+
+/// Authorized addresses can update the existing dependencies of the account to the latest versions
+public fun update_extensions_to_latest<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    extensions: &Extensions,
+) {
+    account.verify(auth);
+
+    let mut i = 0;
+    let mut new_names = vector<String>[];
+    let mut new_addrs = vector<address>[];
+    let mut new_versions = vector<u64>[];
+
+    while (i < account.deps().length()) {
+        let dep = account.deps().get_by_idx(i);
+        if (extensions.is_extension(dep.name(), dep.addr(), dep.version())) {
+            let (addr, version) = extensions.get_latest_for_name(dep.name());
+            new_names.push_back(dep.name());
+            new_addrs.push_back(addr);
+            new_versions.push_back(version);
+        } else {
+            // else cannot automatically update to latest version so add as is
+            new_names.push_back(dep.name());
+            new_addrs.push_back(dep.addr());
+            new_versions.push_back(dep.version());
+        };
+        i = i + 1;
+    };
+
+    *account::deps_mut(account, version::current()) = 
+        deps::new_inner(extensions, account.deps(), new_names, new_addrs, new_versions);
+}
+
+/// Creates an intent to update the dependencies of the account
+public fun request_config_deps<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>, 
+    params: Params,
+    outcome: Outcome,
+    extensions: &Extensions,
+    names: vector<String>,
+    addresses: vector<address>,
+    versions: vector<u64>,
+    ctx: &mut TxContext
+) {
+    account.verify(auth);
+    params.assert_single_execution();
+    
+    let mut deps = deps::new_inner(extensions, account.deps(), names, addresses, versions);
+    let deps_inner = *deps.inner_mut();
+
+    account.build_intent!(
+        params,
+        outcome, 
+        b"".to_string(),
+        version::current(),
+        ConfigDepsIntent(),   
+        ctx,
+        |intent, iw| {
+            // Create the action struct
+            let action = ConfigDepsAction { deps: deps_inner };
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
+            intent.add_typed_action(
+                framework_action_types::config_update_deps(),
+                action_data,
+                iw
+            );
+
+            // Explicitly destroy the action struct
+            destroy_config_deps_action(action);
+        },
+    );
+}
+
+/// Executes an intent updating the dependencies of the account
+public fun execute_config_deps<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    extensions: &Extensions,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        ConfigDepsIntent(),
+        |executable, _iw| {
+            // Get BCS bytes from ActionSpec
+            let specs = executable.intent().action_specs();
+            let spec = specs.borrow(executable.action_idx());
+            let action_data = account_protocol::intents::action_spec_data(spec);
+
+            // Create BCS reader and deserialize
+            let mut reader = bcs::new(*action_data);
+            let (names, addrs, versions) = peel_deps_as_vectors(&mut reader);
+
+            // Apply the action - reconstruct deps using the public constructor
+            *account::deps_mut(account, version::current()) =
+                deps::new_inner(extensions, account.deps(), names, addrs, versions);
+            account_protocol::executable::increment_action_idx(executable);
+        }
+    );
+} 
+
+/// Deletes the ConfigDepsAction from an expired intent
+public fun delete_config_deps(expired: &mut Expired) {
+    let spec = expired.remove_action_spec();
+    let action_data = account_protocol::intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+
+    // We don't need the values, but we must peel them to consume the bytes
+    let (names, addrs, versions) = peel_deps_as_vectors(&mut reader);
+    // Just consume the data without creating the struct
+    let _ = names;
+    let _ = addrs;
+    let _ = versions;
+}
+
+/// Creates an intent to toggle the unverified_allowed flag of the account
+public fun request_toggle_unverified_allowed<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>, 
+    params: Params,
+    outcome: Outcome,
+    ctx: &mut TxContext
+) {
+    account.verify(auth);
+    params.assert_single_execution();
+    
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        ToggleUnverifiedAllowedIntent(),
+        ctx,
+        |intent, iw| {
+            // Create the action struct
+            let action = ToggleUnverifiedAllowedAction {};
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
+            intent.add_typed_action(
+                framework_action_types::config_toggle_unverified(),
+                action_data,
+                iw
+            );
+
+            // Explicitly destroy the action struct
+            destroy_toggle_unverified_action(action);
+        },
+    );
+}
+
+/// Executes an intent toggling the unverified_allowed flag of the account
+public fun execute_toggle_unverified_allowed<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>, 
+) {
+    account.process_intent!(
+        executable, 
+        version::current(),
+        ToggleUnverifiedAllowedIntent(),
+        |executable, _iw| {
+            // ToggleUnverifiedAllowedAction is an empty struct, no deserialization needed
+            // Just increment the action index
+            account::deps_mut(account, version::current()).toggle_unverified_allowed();
+            account_protocol::executable::increment_action_idx(executable);
+        },
+    );    
+}
+
+/// Deletes the ToggleUnverifiedAllowedAction from an expired intent
+public fun delete_toggle_unverified_allowed(expired: &mut Expired) {
+    let spec = expired.remove_action_spec();
+    // ToggleUnverifiedAllowedAction is an empty struct, no deserialization needed
+    let ToggleUnverifiedAllowedAction {} = ToggleUnverifiedAllowedAction {};
+}
+
+/// Creates an intent to configure object deposit settings
+public fun request_configure_deposits<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    outcome: Outcome,
+    params: Params,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    account.build_intent!(
+        params,
+        outcome,
+        b"ConfigureDepositsIntent".to_string(),
+        version::current(),
+        ConfigureDepositsIntent(),
+        ctx,
+        |intent, iw| {
+            // Create the action struct
+            let action = ConfigureDepositsAction { enable, new_max, reset_counter };
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
+            intent.add_typed_action(
+                framework_action_types::config_update_deposits(),
+                action_data,
+                iw
+            );
+
+            // Explicitly destroy the action struct
+            destroy_configure_deposits_action(action);
+        },
+    );
+}
+
+/// Executes an intent to configure object deposit settings
+public fun execute_configure_deposits<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        ConfigureDepositsIntent(),
+        |executable, _iw| {
+            // Get BCS bytes from ActionSpec
+            let specs = executable.intent().action_specs();
+            let spec = specs.borrow(executable.action_idx());
+            let action_data = account_protocol::intents::action_spec_data(spec);
+
+            // Create BCS reader and deserialize
+            let mut reader = bcs::new(*action_data);
+            let enable = bcs::peel_bool(&mut reader);
+            let new_max = bcs::peel_option_u128(&mut reader);
+            let reset_counter = bcs::peel_bool(&mut reader);
+
+            // Apply the action
+            account.apply_deposit_config(enable, new_max, reset_counter);
+            account_protocol::executable::increment_action_idx(executable);
+        },
+    );
+}
+
+/// Deletes the ConfigureDepositsAction from an expired intent
+public fun delete_configure_deposits(expired: &mut Expired) {
+    let spec = expired.remove_action_spec();
+    let action_data = account_protocol::intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+
+    // We don't need the values, but we must peel them to consume the bytes
+    let ConfigureDepositsAction { enable: _, new_max: _, reset_counter: _ } = ConfigureDepositsAction {
+        enable: bcs::peel_bool(&mut reader),
+        new_max: bcs::peel_option_u128(&mut reader),
+        reset_counter: bcs::peel_bool(&mut reader)
+    };
+}
+
+/// Creates an intent to manage type whitelist
+public fun request_manage_whitelist<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    outcome: Outcome,
+    params: Params,
+    add_types: vector<String>,
+    remove_types: vector<String>,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    account.build_intent!(
+        params,
+        outcome,
+        b"ManageWhitelistIntent".to_string(),
+        version::current(),
+        ManageWhitelistIntent(),
+        ctx,
+        |intent, iw| {
+            // Create the action struct
+            let action = ManageWhitelistAction { add_types, remove_types };
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
+            intent.add_typed_action(
+                framework_action_types::config_manage_whitelist(),
+                action_data,
+                iw
+            );
+
+            // Explicitly destroy the action struct
+            destroy_manage_whitelist_action(action);
+        },
+    );
+}
+
+/// Executes an intent to manage type whitelist
+public fun execute_manage_whitelist<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        ManageWhitelistIntent(),
+        |executable, _iw| {
+            // Get BCS bytes from ActionSpec
+            let specs = executable.intent().action_specs();
+            let spec = specs.borrow(executable.action_idx());
+            let action_data = account_protocol::intents::action_spec_data(spec);
+
+            // Create BCS reader and deserialize
+            let mut reader = bcs::new(*action_data);
+            let add_types = peel_vector_string(&mut reader);
+            let remove_types = peel_vector_string(&mut reader);
+
+            // Apply the action
+            account.apply_whitelist_changes(&add_types, &remove_types);
+            account_protocol::executable::increment_action_idx(executable);
+        },
+    );
+}
+
+/// Deletes the ManageWhitelistAction from an expired intent
+public fun delete_manage_whitelist(expired: &mut Expired) {
+    let spec = expired.remove_action_spec();
+    let action_data = account_protocol::intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+
+    // We don't need the values, but we must peel them to consume the bytes
+    let ManageWhitelistAction { add_types: _, remove_types: _ } = ManageWhitelistAction {
+        add_types: peel_vector_string(&mut reader),
+        remove_types: peel_vector_string(&mut reader)
+    };
+}
+
+/// [Intent Interface] - Functions to create intents and add actions to them.
+///
+/// 1. Build an intent by stacking actions into it.
+/// 2. Process an intent by executing the actions sequentially.
+
+module account_protocol::intent_interface;
+
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::Executable;
+use account_protocol::intents::{Intent, Params};
+use account_protocol::version_witness::VersionWitness;
+use std::string::String;
+
+// === Imports ===
+
+// === Public functions ===
+
+/// Example implementation:
+///
+/// ```move
+///
+/// public fun request_intent_name<Config, Outcome: store>(
+///     auth: Auth,
+///     account: &mut Account<Config>,
+///     params: Params,
+///     outcome: Outcome,
+///     action1: Action1,
+///     action2: Action2,
+///     ctx: &mut TxContext
+/// ) {
+///     account.verify(auth);
+///     params.assert_single_execution(); // if not a recurring intent
+///
+///     account.build_intent!(
+///         params,
+///         outcome,
+///         b"".to_string(),
+///         version::current(),
+///         IntentWitness(),
+///         ctx,
+///         |intent, iw| {
+///             intent.add_action(action1, iw);
+///             intent.add_action(action2, iw);
+///         }
+///     );
+/// }
+///
+/// ```
+
+/// Creates an intent with actions and adds it to the account.
+public macro fun build_intent<$Config, $Outcome, $IW: drop>(
+    $account: &mut Account<$Config>,
+    $params: Params,
+    $outcome: $Outcome,
+    $managed_name: String,
+    $version_witness: VersionWitness,
+    $intent_witness: $IW,
+    $ctx: &mut TxContext,
+    $new_actions: |&mut Intent<$Outcome>, $IW|,
+) {
+    let mut intent = account::create_intent(
+        $account,
+        $params,
+        $outcome,
+        $managed_name,
+        $version_witness,
+        $intent_witness,
+        $ctx,
+    );
+
+    $new_actions(&mut intent, $intent_witness);
+
+    account::insert_intent($account, intent, $version_witness, $intent_witness);
+}
+
+/// Example implementation:
+///
+/// ```move
+///
+/// public fun execute_intent_name<Config, Outcome: store>(
+///     executable: &mut Executable<Outcome>,
+///     account: &mut Account<Config>,
+/// ) {
+///     account.process_intent!(
+///         executable,
+///         version::current(),
+///         ConfigDepsIntent(),
+///         |executable, iw| {
+///             do_action(executable, iw, <ADDITIONAL_ARG>)
+///             do_other_action(executable, iw)
+///         }
+///     );
+/// }
+///
+/// ```
+
+/// Executes the actions from the executable intent.
+public macro fun process_intent<$Config, $Outcome: store, $IW: drop>(
+    $account: &Account<$Config>,
+    $executable: &mut Executable<$Outcome>,
+    $version_witness: VersionWitness,
+    $intent_witness: $IW,
+    $do_actions: |&mut Executable<$Outcome>, $IW| -> _,
+): _ {
+    let account = $account;
+    let executable = $executable;
+    // let version_witness = $version_witness;
+    // let intent_witness = $intent_witness;
+    // ensures the package address is a dependency for this account
+    account.deps().check($version_witness);
+    // ensures the right account is passed
+    executable.intent().assert_is_account(account.addr());
+    // ensures the intent is created by the same package that creates the action
+    executable.intent().assert_is_witness($intent_witness);
+
+    $do_actions(executable, $intent_witness)
+}
+// ============================================================================
+// FORK MODIFICATION NOTICE - Enhanced Account Interface
+// ============================================================================
+// High-level functions to create Account "methods" with specific configs.
+//
+// CHANGES IN THIS FORK:
+// - Enhanced interface to support typed Intent system
+// - Integration with new BCS-based action validation
+// - Support for hot potato pattern with Executable
+// - Improved type safety through compile-time checks
+// ============================================================================
+/// [Account Interface] - High level functions to create required "methods" for the account.
+///
+/// 1. Define a new Account type with a specific config and default dependencies.
+/// 2. Define a mechanism to authenticate an address to grant permission to call certain functions.
+/// 3. Define a way to modify the outcome of an intent.
+/// 4. Define an `Outcome.validate()` that will be called upon intent execution.
+
+module account_protocol::account_interface;
+
+use account_protocol::account::{Self, Account, Auth};
+use account_protocol::deps::Deps;
+use account_protocol::executable::Executable;
+use account_protocol::version_witness::VersionWitness;
+use std::string::String;
+use sui::clock::Clock;
+
+// === Imports ===
+
+// === Public functions ===
+
+/// Example implementation:
+///
+/// ```move
+///
+/// public struct Witness() has drop;
+///
+/// public fun new_account(
+///     extensions: &Extensions,
+///     ctx: &mut TxContext,
+/// ): Account<Config> {
+///     fees.process(coin);
+///
+///     let config = Config {
+///        .. <FIELDS>
+///     };
+///
+///     create_account!(
+///        config,
+///        version::current(),
+///        Witness(),
+///        ctx,
+///        || deps::new_latest_extensions(extensions, vector[b"AccountProtocol".to_string(), b"MyConfig".to_string()])
+///     )
+/// }
+///
+/// ```
+
+/// Returns a new Account object with a specific config and initialize dependencies.
+public macro fun create_account<$Config, $CW: drop>(
+    $config: $Config,
+    $version_witness: VersionWitness,
+    $config_witness: $CW,
+    $ctx: &mut TxContext,
+    $init_deps: || -> Deps,
+): Account<$Config> {
+    let deps = $init_deps();
+    account::new<$Config, $CW>($config, deps, $version_witness, $config_witness, $ctx)
+}
+
+/// Example implementation:
+///
+/// ```move
+///
+/// public fun authenticate(
+///     account: &Account<Multisig, Approvals>,
+///     ctx: &TxContext
+/// ): Auth {
+///     authenticate!(
+///        account,
+///        version::current(),
+///        Witness(),
+///        || account.config().assert_is_member(ctx)
+///     )
+/// }
+///
+/// ```
+
+/// Returns an Auth if the conditions passed are met (used to create intents and more).
+public macro fun create_auth<$Config, $CW: drop>(
+    $account: &Account<$Config>,
+    $version_witness: VersionWitness,
+    $config_witness: $CW,
+    $grant_permission: ||, // condition to grant permission, must throw if not met
+): Auth {
+    let account = $account;
+
+    $grant_permission();
+
+    account.new_auth($version_witness, $config_witness)
+}
+
+/// Example implementation:
+///
+/// ```move
+///
+/// public fun approve_intent<Config>(
+///     account: &mut Account<Config>,
+///     key: String,
+///     ctx: &TxContext
+/// ) {
+///     <PREPARE_DATA>
+///
+///     resolve_intent!(
+///         account,
+///         key,
+///         version::current(),
+///         Witness(),
+///         |outcome_mut| {
+///             <DO_SOMETHING>
+///         }
+///     );
+/// }
+///
+/// ```
+
+/// Modifies the outcome of an intent.
+public macro fun resolve_intent<$Config, $Outcome, $CW: drop>(
+    $account: &mut Account<$Config>,
+    $key: String,
+    $version_witness: VersionWitness,
+    $config_witness: $CW,
+    $modify_outcome: |&mut $Outcome|,
+) {
+    let account = $account;
+
+    let outcome_mut = account
+        .intents_mut($version_witness, $config_witness)
+        .get_mut($key)
+        .outcome_mut<$Outcome>();
+
+    $modify_outcome(outcome_mut);
+}
+
+/// Example implementation:
+///
+/// IMPORTANT: You must provide an Outcome.validate() function that will be called automatically.
+/// It must take the outcome by value, a reference to the Config and the role of the intent even if not used.
+///
+/// ```move
+///
+/// public fun execute_intent(
+///     account: &mut Account<Config>,
+///     key: String,
+///     clock: &Clock,
+/// ): Executable<Outcome> {
+///     execute_intent!<_, Outcome, _>(account, key, clock, version::current(), Witness())
+/// }
+///
+/// fun validate_outcome(
+///     outcome: Outcome,
+///     config: &Config,
+///     role: String,
+/// ) {
+///     let Outcome { fields, .. } = outcome;
+///
+///     assert!(<CHECK_CONDITIONS>);
+/// }
+///
+/// ```
+
+/// Validates the outcome of an intent and returns an executable.
+public macro fun execute_intent<$Config, $Outcome, $CW: drop>(
+    $account: &mut Account<$Config>,
+    $key: String,
+    $clock: &Clock,
+    $version_witness: VersionWitness,
+    $config_witness: $CW,
+    $ctx: &mut TxContext,
+    $validate_outcome: |$Outcome|,
+): Executable<$Outcome> {
+    let (outcome, executable) = account::create_executable<_, $Outcome, _>(
+        $account,
+        $key,
+        $clock,
+        $version_witness,
+        $config_witness,
+        $ctx,
+    );
+
+    $validate_outcome(outcome);
+
+    executable
+}

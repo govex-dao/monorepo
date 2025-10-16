@@ -773,6 +773,7 @@ public(package) fun deps_mut<Config>(
 }
 
 /// Receives an object from an account with tracking, only used in owned action lib module.
+/// NOTE: This is for WITHDRAWALS - receiving an object FROM the account to return it.
 public(package) fun receive<Config, T: key + store>(
     account: &mut Account<Config>,
     receiving: Receiving<T>,
@@ -787,11 +788,13 @@ public(package) fun receive<Config, T: key + store>(
 
     // Only count non-coin, non-whitelisted types
     if (!is_coin && !is_whitelisted) {
-        tracker.object_count = tracker.object_count + 1;
+        // This is a WITHDRAWAL, so DECREMENT the counter
+        assert!(tracker.object_count > 0, EObjectCountUnderflow);
+        tracker.object_count = tracker.object_count - 1;
 
-        // Auto-disable if hitting threshold
-        if (tracker.object_count >= tracker.max_objects) {
-            tracker.deposits_open = false;
+        // Re-enable deposits if we're back under 50% of threshold
+        if (tracker.object_count < tracker.max_objects / 2) {
+            tracker.deposits_open = true;
         };
     };
 

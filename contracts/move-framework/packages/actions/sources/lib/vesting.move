@@ -727,9 +727,11 @@ public fun cancel_vesting<Config, Outcome: store, CoinType, IW: drop>(
     };
 
     // Emit cancellation event
+    // Note: Only report actual refund amount (to_refund), not unvested_claimed
+    // as those tokens were already claimed and cannot be recovered
     event::emit(VestingCancelled {
         vesting_id,
-        refunded_amount: to_refund + unvested_claimed,
+        refunded_amount: to_refund,
         final_payment,
     });
 

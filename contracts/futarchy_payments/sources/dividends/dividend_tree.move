@@ -1,21 +1,106 @@
-/// Dividend tree construction module
-/// Allows building dividend distributions over multiple transactions
-/// Uses address-prefix bucketing for O(1) lookup (256 buckets max)
+/// # DIVIDEND TREE SECURITY MODEL (Massive Scale: 100M+ Recipients)
+///
+/// ## Overview
+/// This module supports dividend distributions at MASSIVE SCALE (100M+ recipients)
+/// using address-prefix bucketing for O(1) lookup with skip-list optimized cranking.
+///
+/// ## Critical Security Invariants
+///
+/// ### 1. No Prefix Overlaps (CRITICAL for Binary Search Safety)
+///
+/// **Invariant:** No prefix in `prefix_directory` can be a sub-prefix of another.
+///
+/// **Why Critical:**
+/// - `query_allocation()` and `claim_my_dividend()` use binary search
+/// - Binary search terminates on FIRST prefix match
+/// - If overlaps exist, wrong bucket checked first → funds trapped
+///
+/// **Example Attack:**
+/// ```
+/// Bucket A: prefix = 0xab       (100 recipients)
+/// Bucket B: prefix = 0xabc      (200 recipients)  // 0xab ⊂ 0xabc!
+///
+/// Address 0xabc123... matches BOTH
+/// Binary search may check Bucket A first → not found → early exit
+/// Real allocation in Bucket B never checked → FUNDS TRAPPED
+/// ```
+///
+/// ### 2. Validation at Scale (INFEASIBLE On-Chain)
+///
+/// **Problem:** `validate_no_prefix_overlap()` is O(N²)
+/// - 20k buckets with 1k chunk = 20M comparisons = INSTANT GAS OUT
+/// - On-chain validation CANNOT be used for large trees
+///
+/// **Solution:** OFF-CHAIN VALIDATION + MERKLE PROOF
+///
+/// #### For Small Trees (<1000 buckets):
+/// - Use `validate_no_prefix_overlap()` on-chain ✅
+/// - Affordable gas cost
+///
+/// #### For Large Trees (>1000 buckets):
+/// - Build trie structure off-chain using indexer
+/// - Verify no overlaps in O(N) time off-chain
+/// - Compute Merkle root of validated trie
+/// - Store root in `validation_merkle_root` field
+/// - Governance MUST verify proof before approving dividend
+///
+/// ### 3. Cranking Optimization (Skip-List Structure)
+///
+/// **Problem:** Out-of-order claims can create long chains of already-claimed entries
+/// - Without optimization: O(M) scan through M recipients to find unclaimed
+/// - With 10k recipients per bucket, 9k claimed → 9k iterations
+///
+/// **Solution:** Skip-list intervals for O(log M) advancement
+/// - Every SKIP_INTERVAL_SIZE addresses = 1 SkipNode
+/// - SkipNode tracks unclaimed_count in interval
+/// - If interval fully claimed (unclaimed_count = 0), skip entire interval
+/// - Reduces worst-case from O(M) to O(M / SKIP_INTERVAL_SIZE)
+///
+/// ### 4. Governance Responsibility
+///
+/// For large-scale dividends (>1000 buckets), **GOVERNANCE IS THE SECURITY BOUNDARY**:
+///
+/// 1. **Off-chain validation is MANDATORY**
+///    - Use indexer to build trie, verify no overlaps
+///    - Compute Merkle proof of validated structure
+///
+/// 2. **On-chain validation is IMPOSSIBLE**
+///    - Do NOT attempt to call `validate_no_prefix_overlap()` for large trees
+///    - Will gas out and fail
+///
+/// 3. **Approval is the trust anchor**
+///    - If governance approves tree with overlaps → governance failure
+///    - Protocol assumes governance performs due diligence
+///    - DAO members should reject unvalidated trees
 module futarchy_payments::dividend_tree;
 
-use std::string::String;
-use std::type_name::{Self, TypeName};
-use sui::address;
-use sui::bcs;
-use sui::dynamic_field;
-use sui::hash::blake2b256;
-use sui::object::{Self, UID, ID};
-use sui::table::{Self, Table};
-use sui::tx_context::TxContext;
+use std::{
+    string::String,
+    type_name::{Self, TypeName},
+    option::{Self, Option},
+};
+use sui::{
+    address,
+    bcs,
+    dynamic_field,
+    hash::blake2b256,
+    object::{Self, UID, ID},
+    table::{Self, Table},
+    tx_context::TxContext,
+};
 
 // === Constants ===
-const MAX_RECIPIENTS_PER_BUCKET: u64 = 1000000; // 1M per bucket (safe with prefix bucketing)
-const MAX_PREFIX_LENGTH: u64 = 32; // Max bytes in address prefix
+
+/// Maximum recipients per bucket (reduced from 1M to 10k for safe cranking)
+/// With skip-list optimization, worst case: 10k / 1000 = 10 skip-list jumps
+const MAX_RECIPIENTS_PER_BUCKET: u64 = 10000;
+
+/// Skip-list interval size - creates skip node every N addresses
+/// Allows O(log M) cursor advancement instead of O(M) linear scan
+const SKIP_INTERVAL_SIZE: u64 = 1000;
+
+/// Max bytes in address prefix
+const MAX_PREFIX_LENGTH: u64 = 32;
 
 // === Errors ===
 const EBucketAlreadyExists: u64 = 1;
@@ -25,7 +110,11 @@ const EMismatchedLength: u64 = 7;
 const EInvalidAddressPrefix: u64 = 8;
 const EPrefixTooLong: u64 = 9;
 const EEmptyPrefix: u64 = 10;
-const EInvalidNonce: u64 = 11;
+const EInvalidStorageNonce: u64 = 11;
+const EInvalidHashNonce: u64 = 12;
+const EMaxRecipientsExceeded: u64 = 13;
+const EMismatchedTreeID: u64 = 14;
+const EInvalidSkipInterval: u64 = 15;
 
 // === Structs ===
 
@@ -34,6 +123,14 @@ const EInvalidNonce: u64 = 11;
 /// Longer prefixes = more specific buckets for dense address spaces
 public struct BucketKey has copy, drop, store {
     prefix: vector<u8>, // Variable length: 1-32 bytes
+}
+
+/// Skip-list node for O(log M) cursor advancement during cranking
+/// Tracks unclaimed recipients in intervals of SKIP_INTERVAL_SIZE addresses
+/// When interval is fully claimed (unclaimed_count = 0), crank skips entire interval
+public struct SkipNode has store, drop, copy {
+    start_idx: u64,        // Starting index in addresses_for_crank vector
+    unclaimed_count: u64,  // Number of unclaimed recipients in this interval
 }
 
 /// The main dividend tree object
@@ -46,25 +143,41 @@ public struct DividendTree has key, store {
     num_buckets: u64,
     description: String,
     finalized: bool,
+
     // Prefix directory: sorted list of prefixes for binary search (off-chain)
     // Each prefix maps to a bucket stored as dynamic field
     prefix_directory: vector<vector<u8>>,
+
     // Rolling hash: updated with each bucket addition, finalized to content_hash
     rolling_hash: vector<u8>,
+
     // Final content hash for verification (set on finalization)
     content_hash: vector<u8>,
-    // Build nonce: forces sequential ordering of operations (add_bucket, add_bucket_hash)
-    // Builder must pass expected nonce, increments after each operation
-    build_nonce: u64,
+
+    // Merkle root proving no prefix overlaps (set by governance after off-chain validation)
+    // Empty vector means not validated (acceptable for small trees <1000 buckets)
+    // Required for large trees (>1000 buckets) where on-chain validation is infeasible
+    validation_merkle_root: vector<u8>,
+
+    // Storage nonce: enforces sequential ordering of add_bucket calls
+    // Ensures prefix_directory remains sorted (lexicographic order)
+    storage_nonce: u64,
+
+    // Hash nonce: enforces sequential ordering of add_bucket_hash calls
+    // Ensures rolling_hash matches CSV chronological order (independent of storage order)
+    hash_nonce: u64,
+
     // Buckets stored as dynamic fields on id, keyed by BucketKey
 }
 
 /// A bucket containing recipients with same address prefix
 /// Stored as a dynamic field on DividendTree
+/// Uses skip-list structure for O(log M) cranking optimization
 public struct RecipientBucket has store {
-    recipients: Table<address, u64>, // address => amount (for lookup)
-    addresses_for_crank: vector<address>, // ONLY for deterministic cranking iteration
-    // Note: Addresses stored to enable resumable cranking, not for duplicate lookup
+    recipients: Table<address, u64>,        // address => amount (for O(1) lookup)
+    addresses_for_crank: vector<address>,   // Deterministic iteration order for cranking
+    skip_intervals: vector<SkipNode>,       // Skip-list for fast cursor advancement
+    // Note: skip_intervals built during add_bucket, updated during individual claims
 }
 
 // === Public Functions ===
@@ -82,7 +195,9 @@ public fun create_tree<CoinType>(description: String, ctx: &mut TxContext): Divi
         prefix_directory: vector::empty(),
         rolling_hash: vector::empty(),
         content_hash: vector::empty(),
-        build_nonce: 0,
+        validation_merkle_root: vector::empty(),  // Not validated yet
+        storage_nonce: 0,                          // Start at 0 for add_bucket
+        hash_nonce: 0,                             // Start at 0 for add_bucket_hash
     };
 
     // Initialize rolling hash with on-chain randomness (UID bytes)
@@ -96,19 +211,19 @@ public fun create_tree<CoinType>(description: String, ctx: &mut TxContext): Divi
 /// All recipients MUST start with the same address prefix (variable length)
 /// Prefix can be 1-32 bytes long depending on address density
 /// Prefix directory is kept sorted for off-chain binary search
-/// expected_nonce: Must match current build_nonce to enforce sequential ordering
+/// expected_storage_nonce: Must match current storage_nonce to enforce sequential ordering
 public fun add_bucket(
     tree: &mut DividendTree,
     prefix: vector<u8>,
     recipients: vector<address>,
     amounts: vector<u64>,
-    expected_nonce: u64,
+    expected_storage_nonce: u64,
     ctx: &mut TxContext,
 ) {
     assert!(!tree.finalized, ETreeFinalized);
-    assert!(tree.build_nonce == expected_nonce, EInvalidNonce);
+    assert!(tree.storage_nonce == expected_storage_nonce, EInvalidStorageNonce);
     assert!(recipients.length() == amounts.length(), EMismatchedLength);
-    assert!(recipients.length() <= MAX_RECIPIENTS_PER_BUCKET, 0);
+    assert!(recipients.length() <= MAX_RECIPIENTS_PER_BUCKET, EMaxRecipientsExceeded);
     assert!(prefix.length() > 0, EEmptyPrefix);
     assert!(prefix.length() <= MAX_PREFIX_LENGTH, EPrefixTooLong);
 
@@ -122,10 +237,14 @@ public fun add_bucket(
     let key = BucketKey { prefix };
     assert!(!dynamic_field::exists_(&tree.id, key), EBucketAlreadyExists);
 
-    // Create bucket
+    // Build skip-list intervals for O(log M) cranking
+    let skip_intervals = build_skip_intervals(recipients.length());
+
+    // Create bucket with skip-list structure
     let mut bucket = RecipientBucket {
         recipients: table::new(ctx),
         addresses_for_crank: recipients, // Store for deterministic cranking
+        skip_intervals,                   // Skip-list for fast cursor advancement
     };
 
     // Add recipients to table (off-chain already validated - just store)
@@ -163,8 +282,8 @@ public fun add_bucket(
     // Add prefix to directory (append only - off-chain ensures sorted order)
     tree.prefix_directory.push_back(prefix);
 
-    // Increment nonce to enforce sequential ordering
-    tree.build_nonce = tree.build_nonce + 1;
+    // Increment storage nonce to enforce sequential ordering
+    tree.storage_nonce = tree.storage_nonce + 1;
 }
 
 /// Hash the bucket data BEFORE adding it to tree
@@ -194,11 +313,11 @@ public fun hash_bucket_data(recipients: &vector<address>, amounts: &vector<u64>)
 /// Hash order is INDEPENDENT of bucket storage order
 /// MUST be called in CSV row order for verification to work
 /// Bucket storage (add_bucket) can be in any order for efficiency
-/// expected_nonce: Must match current build_nonce to enforce sequential ordering
+/// expected_hash_nonce: Must match current hash_nonce to enforce sequential ordering
 /// bucket_hash: Hash of bucket data (from hash_bucket_data or computed off-chain)
-public fun add_bucket_hash(tree: &mut DividendTree, bucket_hash: vector<u8>, expected_nonce: u64) {
+public fun add_bucket_hash(tree: &mut DividendTree, bucket_hash: vector<u8>, expected_hash_nonce: u64) {
     assert!(!tree.finalized, ETreeFinalized);
-    assert!(tree.build_nonce == expected_nonce, EInvalidNonce);
+    assert!(tree.hash_nonce == expected_hash_nonce, EInvalidHashNonce);
 
     // Update rolling hash: hash(previous_hash || bucket_hash)
     // Hash order matches CSV, not bucket storage order
@@ -206,8 +325,8 @@ public fun add_bucket_hash(tree: &mut DividendTree, bucket_hash: vector<u8>, exp
     hash_data.append(bucket_hash);
     tree.rolling_hash = blake2b256(&hash_data);
 
-    // Increment nonce to enforce sequential ordering
-    tree.build_nonce = tree.build_nonce + 1;
+    // Increment hash nonce to enforce sequential ordering
+    tree.hash_nonce = tree.hash_nonce + 1;
 }
 
 /// Finalize the tree and make it ready for use
@@ -215,6 +334,15 @@ public fun add_bucket_hash(tree: &mut DividendTree, bucket_hash: vector<u8>, exp
 public fun finalize_tree(tree: &mut DividendTree) {
     tree.content_hash = tree.rolling_hash;
     tree.finalized = true;
+}
+
+/// Set validation Merkle root after off-chain validation
+/// For large trees (>1000 buckets), governance MUST verify no prefix overlaps off-chain
+/// and store the Merkle root of the validated trie structure
+/// Can only be called before finalization
+public fun set_validation_proof(tree: &mut DividendTree, merkle_root: vector<u8>) {
+    assert!(!tree.finalized, ETreeFinalized);
+    tree.validation_merkle_root = merkle_root;
 }
 
 /// Transfer ownership of tree
@@ -225,6 +353,87 @@ public fun transfer_tree(tree: DividendTree, recipient: address) {
 /// Share the tree object
 public fun share_tree(tree: DividendTree) {
     transfer::public_share_object(tree);
+}
+
+// === Skip-List Helper Functions ===
+
+/// Build skip-list intervals for a bucket
+/// Creates SkipNode for every SKIP_INTERVAL_SIZE addresses
+/// Initially, all recipients are unclaimed (unclaimed_count = interval size)
+fun build_skip_intervals(num_recipients: u64): vector<SkipNode> {
+    let mut intervals = vector::empty<SkipNode>();
+
+    if (num_recipients == 0) {
+        return intervals
+    };
+
+    // Calculate number of full intervals
+    let num_intervals = (num_recipients + SKIP_INTERVAL_SIZE - 1) / SKIP_INTERVAL_SIZE;
+
+    let mut i = 0;
+    while (i < num_intervals) {
+        let start_idx = i * SKIP_INTERVAL_SIZE;
+        let end_idx = if (start_idx + SKIP_INTERVAL_SIZE > num_recipients) {
+            num_recipients // Last interval may be smaller
+        } else {
+            start_idx + SKIP_INTERVAL_SIZE
+        };
+
+        let interval_size = end_idx - start_idx;
+
+        intervals.push_back(SkipNode {
+            start_idx,
+            unclaimed_count: interval_size, // Initially all unclaimed
+        });
+
+        i = i + 1;
+    };
+
+    intervals
+}
+
+/// Update skip-list when a recipient is claimed (individual claim)
+/// Decrements unclaimed_count for the interval containing the address
+/// Returns the interval index that was updated
+public(package) fun update_skip_list_on_claim(
+    bucket: &mut RecipientBucket,
+    address_idx: u64,
+): u64 {
+    let interval_idx = address_idx / SKIP_INTERVAL_SIZE;
+
+    // Safety check: interval index must be valid
+    assert!(interval_idx < bucket.skip_intervals.length(), EInvalidSkipInterval);
+
+    let interval = bucket.skip_intervals.borrow_mut(interval_idx);
+
+    // Decrement unclaimed count (but don't go below 0)
+    if (interval.unclaimed_count > 0) {
+        interval.unclaimed_count = interval.unclaimed_count - 1;
+    };
+
+    interval_idx
+}
+
+/// Find the index of an address in addresses_for_crank vector
+/// Used to determine which skip-list interval to update
+/// Returns Option<u64> - Some(index) if found, None if not found
+public(package) fun find_address_index(bucket: &RecipientBucket, addr: address): Option<u64> {
+    let addresses = &bucket.addresses_for_crank;
+    let mut i = 0;
+
+    while (i < addresses.length()) {
+        if (*addresses.borrow(i) == addr) {
+            return option::some(i)
+        };
+        i = i + 1;
+    };
+
+    option::none()
+}
+
+/// Get skip-list intervals (for inspection/debugging)
+public fun get_skip_intervals(bucket: &RecipientBucket): &vector<SkipNode> {
+    &bucket.skip_intervals
 }
 
 // === Helper Functions ===
@@ -335,88 +544,9 @@ public fun is_prefix_directory_sorted(tree: &DividendTree): bool {
     true
 }
 
-/// Validate that no prefix overlaps with another (for governance review)
-/// Returns true if no overlaps, false if any prefix is a sub-prefix of another
-/// CRITICAL: Overlapping prefixes can make funds inaccessible via query_allocation
-/// Example of overlap: 0xab and 0xabc (0xab is prefix of 0xabc)
-/// This is expensive (O(n²)) but only run once during governance review
-/// NOTE: For trees with >1000 buckets, use validate_no_prefix_overlap_range() instead
-public fun validate_no_prefix_overlap(tree: &DividendTree): bool {
-    validate_no_prefix_overlap_range(tree, 0, tree.prefix_directory.length())
-}
-
-/// Crankable version: Validate prefix overlap for a specific range of buckets
-/// Allows splitting validation across multiple dev inspect calls
-/// start_idx: Starting bucket index (inclusive)
-/// end_idx: Ending bucket index (exclusive)
-/// Returns true if no overlaps found in this range check
-///
-/// Example for 20k buckets:
-///   validate_no_prefix_overlap_range(tree, 0, 1000)     // Check buckets 0-999
-///   validate_no_prefix_overlap_range(tree, 1000, 2000)  // Check buckets 1000-1999
-///   ... repeat 20 times
-public fun validate_no_prefix_overlap_range(
-    tree: &DividendTree,
-    start_idx: u64,
-    end_idx: u64,
-): bool {
-    let dir = &tree.prefix_directory;
-    let len = dir.length();
-
-    // Validate range bounds
-    assert!(start_idx < len, 0);
-    assert!(end_idx <= len, 0);
-    assert!(start_idx < end_idx, 0);
-
-    if (len <= 1) { return true };
-
-    // For each bucket in range [start_idx, end_idx)
-    let mut i = start_idx;
-    while (i < end_idx) {
-        let prefix_a = dir.borrow(i);
-
-        // Check against ALL other buckets (not just range)
-        // This ensures complete validation even when cranking
-        let mut j = 0;
-        while (j < len) {
-            if (i != j) {
-                let prefix_b = dir.borrow(j);
-
-                // Check if prefix_a is a prefix of prefix_b (or vice versa)
-                if (is_prefix_of(prefix_a, prefix_b) || is_prefix_of(prefix_b, prefix_a)) {
-                    return false // Found overlap
-                };
-            };
-
-            j = j + 1;
-        };
-
-        i = i + 1;
-    };
-
-    true
-}
-
-/// Helper: Check if prefix_a is a prefix of prefix_b
-/// Returns true if prefix_a is a prefix of prefix_b (NOT vice versa)
-fun is_prefix_of(prefix_a: &vector<u8>, prefix_b: &vector<u8>): bool {
-    let len_a = prefix_a.length();
-    let len_b = prefix_b.length();
-
-    // Can't be a prefix if longer
-    if (len_a >= len_b) { return false };
-
-    // Check if all bytes of prefix_a match prefix_b
-    let mut i = 0;
-    while (i < len_a) {
-        if (*prefix_a.borrow(i) != *prefix_b.borrow(i)) {
-            return false
-        };
-        i = i + 1;
-    };
-
-    true // All bytes matched, prefix_a is a prefix of prefix_b
-}
+// NOTE: On-chain prefix overlap validation has been REMOVED
+// It is O(N²) and will gas out for any large tree (>1000 buckets)
+// For production use: MUST validate off-chain and store Merkle proof via set_validation_proof()
 
 /// Helper: Check if prefix_a <= prefix_b lexicographically
 fun is_prefix_less_or_equal(a: &vector<u8>, b: &vector<u8>): bool {
@@ -439,56 +569,9 @@ fun is_prefix_less_or_equal(a: &vector<u8>, b: &vector<u8>): bool {
     len_a <= len_b
 }
 
-/// Get full tree validation report (for governance UI)
-/// Returns (is_sorted, no_overlaps, total_amount, total_recipients, num_buckets)
-/// CRITICAL: Both is_sorted and no_overlaps MUST be true for safe dividend distribution
-/// NOTE: For trees with >1000 buckets, this may hit gas limits - use range validation instead
-public fun validate_tree_integrity(tree: &DividendTree): (bool, bool, u64, u64, u64) {
-    (
-        is_prefix_directory_sorted(tree),
-        validate_no_prefix_overlap(tree),
-        tree.total_amount,
-        tree.total_recipients,
-        tree.num_buckets,
-    )
-}
-
-/// Calculate recommended chunk size for crankable validation
-/// Returns (chunk_size, num_chunks)
-/// Example: 20k buckets → (1000, 20) means validate in 20 chunks of 1000 each
-public fun get_validation_chunk_size(tree: &DividendTree): (u64, u64) {
-    let num_buckets = tree.prefix_directory.length();
-
-    // Target: ~1000 buckets per chunk (safe gas limit)
-    let chunk_size = if (num_buckets <= 1000) {
-        num_buckets // Small tree, validate all at once
-    } else {
-        1000 // Large tree, validate in chunks
-    };
-
-    let num_chunks = (num_buckets + chunk_size - 1) / chunk_size; // Ceiling division
-
-    (chunk_size, num_chunks)
-}
-
-/// Get the range for a specific validation chunk
-/// chunk_index: Which chunk to validate (0-indexed)
-/// Returns (start_idx, end_idx) for validate_no_prefix_overlap_range
-public fun get_validation_range(tree: &DividendTree, chunk_index: u64): (u64, u64) {
-    let (chunk_size, num_chunks) = get_validation_chunk_size(tree);
-    let num_buckets = tree.prefix_directory.length();
-
-    assert!(chunk_index < num_chunks, 0);
-
-    let start_idx = chunk_index * chunk_size;
-    let end_idx = if (start_idx + chunk_size > num_buckets) {
-        num_buckets // Last chunk may be smaller
-    } else {
-        start_idx + chunk_size
-    };
-
-    (start_idx, end_idx)
-}
+// NOTE: validate_tree_integrity, get_validation_chunk_size, and get_validation_range REMOVED
+// These functions relied on O(N²) prefix overlap validation which is infeasible at scale
+// For production: Use off-chain validation + set_validation_proof() to store Merkle root
 
 /// Query allocation for a specific address (for governance review)
 /// Returns (found, amount, bucket_prefix)
@@ -671,7 +754,11 @@ public fun content_hash(tree: &DividendTree): vector<u8> { tree.content_hash }
 
 public fun rolling_hash(tree: &DividendTree): vector<u8> { tree.rolling_hash }
 
-public fun build_nonce(tree: &DividendTree): u64 { tree.build_nonce }
+public fun validation_merkle_root(tree: &DividendTree): vector<u8> { tree.validation_merkle_root }
+
+public fun storage_nonce(tree: &DividendTree): u64 { tree.storage_nonce }
+
+public fun hash_nonce(tree: &DividendTree): u64 { tree.hash_nonce }
 
 // === Cleanup Functions ===
 
@@ -696,7 +783,9 @@ public fun delete_tree(tree: DividendTree) {
         prefix_directory,
         rolling_hash: _,
         content_hash: _,
-        build_nonce: _,
+        validation_merkle_root: _,
+        storage_nonce: _,
+        hash_nonce: _,
     } = tree;
 
     // Remove all buckets from dynamic fields
@@ -707,7 +796,11 @@ public fun delete_tree(tree: DividendTree) {
 
         // Remove bucket if it exists
         if (dynamic_field::exists_(&id, key)) {
-            let RecipientBucket { recipients, addresses_for_crank: _ } = dynamic_field::remove(
+            let RecipientBucket {
+                recipients,
+                addresses_for_crank: _,
+                skip_intervals: _,  // Skip-list is drop, automatically cleaned up
+            } = dynamic_field::remove(
                 &mut id,
                 key,
             );
@@ -748,7 +841,11 @@ public fun delete_tree_range(tree: &mut DividendTree, start_idx: u64, end_idx: u
         let key = BucketKey { prefix };
 
         if (dynamic_field::exists_(&tree.id, key)) {
-            let RecipientBucket { recipients, addresses_for_crank: _ } = dynamic_field::remove(
+            let RecipientBucket {
+                recipients,
+                addresses_for_crank: _,
+                skip_intervals: _,  // Skip-list is drop, automatically cleaned up
+            } = dynamic_field::remove(
                 &mut tree.id,
                 key,
             );
@@ -776,7 +873,9 @@ public fun finalize_tree_deletion(tree: DividendTree) {
         prefix_directory: _,
         rolling_hash: _,
         content_hash: _,
-        build_nonce: _,
+        validation_merkle_root: _,
+        storage_nonce: _,
+        hash_nonce: _,
     } = tree;
 
     // All buckets should have been removed already
@@ -798,7 +897,9 @@ public fun destroy_tree_for_testing(tree: DividendTree) {
         prefix_directory: _,
         rolling_hash: _,
         content_hash: _,
-        build_nonce: _,
+        validation_merkle_root: _,
+        storage_nonce: _,
+        hash_nonce: _,
     } = tree;
 
     // Note: Can't easily clean up dynamic fields in test

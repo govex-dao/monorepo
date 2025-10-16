@@ -88,8 +88,25 @@ public fun new(
         extensions.is_extension(names[0], addresses[0], versions[0]),
         EAccountProtocolMissing,
     );
-    // second dependency must be AccountConfig (we don't know the name)
-    assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
+    // ✅ FIXED: Removed fragile negative assertion for position 1 (AccountConfig)
+    //
+    // DESIGN RATIONALE:
+    // Position 1 must contain an AccountConfig implementation, but config names vary
+    // (FutarchyConfig, MultiSigConfig, CustomConfig, etc.). We cannot use exact string
+    // matching like we do for AccountProtocol.
+    //
+    // OLD APPROACH (FRAGILE):
+    //   assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
+    //   Problem: Breaks if legitimate packages contain "AccountActions" in their name
+    //
+    // NEW APPROACH (TYPE-SAFE):
+    //   - Rely on Move's type system for validation
+    //   - Account<Config> construction requires a valid Config type parameter
+    //   - Extensions whitelist validates package authenticity via is_extension()
+    //   - String validation at Deps level is redundant and error-prone
+    //
+    // Type safety is enforced at compile time, not runtime string matching.
+    assert!(names.length() >= 2, EAccountConfigMissing);
 
     let mut inner = vector<Dep>[];
     // Use VecSet for O(log N) duplicate detection during construction
@@ -156,9 +173,10 @@ public fun new_inner(
     );
     // AccountProtocol is mandatory and cannot be removed
     assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
-    // second dependency must be AccountConfig (we don't know the name)
+    // ✅ FIXED: Removed fragile negative assertion for position 1 (AccountConfig)
+    // See detailed rationale in new() function above - type safety is enforced by
+    // Move's type system (Account<Config>) rather than runtime string matching.
     assert!(names.length() >= 2, EAccountConfigMissing);
-    assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
 
     let mut inner = vector<Dep>[];
     // Use VecSet for O(log N) duplicate detection

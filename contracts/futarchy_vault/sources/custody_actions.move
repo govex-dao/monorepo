@@ -23,13 +23,7 @@ use futarchy_core::{
 };
 use sui::bcs::{Self, BCS};
 
-// === Witness Types ===
-
-/// Witness for ApproveCustody action
-public struct ApproveCustodyWitness has drop {}
-
-/// Witness for AcceptIntoCustody action
-public struct AcceptIntoCustodyWitness has drop {}
+// === Action Structs ===
 
 /// DAO-side approval to accept an object R into council custody.
 public struct ApproveCustodyAction<phantom R> has store, drop, copy {
@@ -64,10 +58,11 @@ public fun new_approve_custody<Outcome, R, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with type marker
+    // Add to intent with PARAMETERIZED action type (not witness)
+    // This enables type-level policies like: "Borrowing UpgradeCap needs Technical Council"
     protocol_intents::add_typed_action(
         intent,
-        type_name::get<ApproveCustodyWitness>(),
+        type_name::get<ApproveCustodyAction<R>>(),
         action_data,
         intent_witness
     );
@@ -89,10 +84,11 @@ public fun new_accept_into_custody<Outcome, R, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with type marker
+    // Add to intent with PARAMETERIZED action type (not witness)
+    // This enables type-level policies like: "Accepting UpgradeCap into custody needs Technical Council"
     protocol_intents::add_typed_action(
         intent,
-        type_name::get<AcceptIntoCustodyWitness>(),
+        type_name::get<AcceptIntoCustodyAction<R>>(),
         action_data,
         intent_witness
     );
@@ -101,27 +97,7 @@ public fun new_accept_into_custody<Outcome, R, IW: drop>(
     destroy_accept_into_custody(action);
 }
 
-// === Legacy Constructors (for backward compatibility) ===
-
-public fun create_approve_custody<R>(
-    dao_id: ID,
-    object_id: ID,
-    resource_key: String,
-    context: String,
-    expires_at: u64,
-): ApproveCustodyAction<R> {
-    ApproveCustodyAction<R> { dao_id, object_id, resource_key, context, expires_at }
-}
-
-public fun create_accept_into_custody<R>(
-    object_id: ID,
-    resource_key: String,
-    context: String,
-): AcceptIntoCustodyAction<R> {
-    AcceptIntoCustodyAction<R> { object_id, resource_key, context }
-}
-
-// Getters
+// === Getters ===
 
 public fun get_approve_custody_params<R>(
     a: &ApproveCustodyAction<R>
@@ -152,7 +128,8 @@ public fun do_approve_custody<Config: store, Outcome: store, R: store, IW: drop>
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL: Assert action type before deserialization
-    action_validation::assert_action_type<ApproveCustodyWitness>(spec);
+    // Check for parameterized action type, not witness
+    action_validation::assert_action_type<ApproveCustodyAction<R>>(spec);
 
     let action_data = protocol_intents::action_spec_data(spec);
 
@@ -210,7 +187,8 @@ public fun do_accept_into_custody<Config: store, Outcome: store, R: store, IW: d
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL: Assert action type before deserialization
-    action_validation::assert_action_type<AcceptIntoCustodyWitness>(spec);
+    // Check for parameterized action type, not witness
+    action_validation::assert_action_type<AcceptIntoCustodyAction<R>>(spec);
 
     let action_data = protocol_intents::action_spec_data(spec);
 

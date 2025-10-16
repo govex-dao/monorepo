@@ -249,7 +249,7 @@ public fun do_delete_document<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     _version_witness: VersionWitness,
     _witness: IW,
-    _clock: &Clock,
+    clock: &Clock,
     _ctx: &mut TxContext,
 ) {
     let specs = executable::intent(executable).action_specs();
@@ -266,9 +266,8 @@ public fun do_delete_document<Outcome: store, IW: drop>(
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Note: Actual deletion would transfer document to 0x0 or mark as deleted
-    // For now, we just validate the action
-    // TODO: Implement deletion logic in dao_doc_registry
+    let registry = dao_file_registry::get_registry_mut(account, version::current());
+    dao_file_registry::delete_document(registry, doc_id, clock);
 
     executable::increment_action_idx(executable);
 }

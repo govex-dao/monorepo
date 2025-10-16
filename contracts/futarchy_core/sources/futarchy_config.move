@@ -210,6 +210,11 @@ public struct FutarchyConfig has copy, drop, store {
     launchpad_initial_price: Option<u128>,
     // Early resolve configuration
     early_resolve_config: EarlyResolveConfig,
+    // Quota refund on eviction
+    // If true: When a proposal using quota is evicted, restore their quota slot
+    // If false: Eviction consumes the quota slot permanently
+    // Default: false (eviction counts as usage)
+    refund_quota_on_eviction: bool,
 }
 
 /// Dynamic state stored on Account<FutarchyConfig> via dynamic fields
@@ -269,6 +274,7 @@ public fun new<AssetType: drop, StableType: drop>(
         optimistic_intent_challenge_enabled: true, // Safe default: require 10-day challenge period
         launchpad_initial_price: option::none(), // Not set initially
         early_resolve_config: default_early_resolve_config(), // Disabled by default
+        refund_quota_on_eviction: false, // Default: eviction counts as usage
     }
 }
 
@@ -358,6 +364,10 @@ public fun optimistic_intent_challenge_enabled(config: &FutarchyConfig): bool {
 
 public fun early_resolve_config(config: &FutarchyConfig): &EarlyResolveConfig {
     &config.early_resolve_config
+}
+
+public fun refund_quota_on_eviction(config: &FutarchyConfig): bool {
+    config.refund_quota_on_eviction
 }
 
 // === Getters for SlashDistribution ===
@@ -451,6 +461,7 @@ public fun with_rewards(
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
         early_resolve_config: config.early_resolve_config,
+        refund_quota_on_eviction: config.refund_quota_on_eviction,
     }
 }
 
@@ -469,6 +480,7 @@ public fun with_verification_level(config: FutarchyConfig, verification_level: u
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
         early_resolve_config: config.early_resolve_config,
+        refund_quota_on_eviction: config.refund_quota_on_eviction,
     }
 }
 
@@ -487,6 +499,7 @@ public fun with_dao_score(config: FutarchyConfig, dao_score: u64): FutarchyConfi
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
         early_resolve_config: config.early_resolve_config,
+        refund_quota_on_eviction: config.refund_quota_on_eviction,
     }
 }
 
@@ -508,6 +521,7 @@ public fun with_slash_distribution(
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
         early_resolve_config: config.early_resolve_config,
+        refund_quota_on_eviction: config.refund_quota_on_eviction,
     }
 }
 
@@ -535,6 +549,7 @@ public fun with_optimistic_intent_challenge_enabled(
         optimistic_intent_challenge_enabled: enabled,
         launchpad_initial_price: config.launchpad_initial_price,
         early_resolve_config: config.early_resolve_config,
+        refund_quota_on_eviction: config.refund_quota_on_eviction,
     }
 }
 
@@ -916,6 +931,10 @@ public fun set_early_resolve_config(
     early_resolve_config: EarlyResolveConfig,
 ) {
     config.early_resolve_config = early_resolve_config;
+}
+
+public fun set_refund_quota_on_eviction(config: &mut FutarchyConfig, refund: bool) {
+    config.refund_quota_on_eviction = refund;
 }
 
 public fun update_slash_distribution(

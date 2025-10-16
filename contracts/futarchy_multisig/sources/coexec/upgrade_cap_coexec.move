@@ -1,5 +1,5 @@
 /// 2-of-2 co-execution for accepting and locking UpgradeCaps (DAO + Security Council).
-/// Enforced when DAO sets policy "UpgradeCap:Custodian" -> council_id in policy_registry.
+/// Enforced when DAO sets type policy BorrowAction<UpgradeCap> → council_id in policy_registry.
 module futarchy_multisig::upgrade_cap_coexec;
 
 use account_actions::package_upgrade;
@@ -28,9 +28,9 @@ const EPackageNameMismatch: u64 = 1002;
 const EWrongCapObject: u64 = 1003;
 
 /// Require 2-of-2 for accepting/locking an UpgradeCap:
-/// - DAO must have policy "UpgradeCap:Custodian" pointing to Security Council
+/// - DAO must have type policy BorrowAction<UpgradeCap> pointing to Security Council
 /// - DAO executable contains custody action or DAO's approval
-/// - Council executable contains ApproveUpgradeCapAction with matching params
+/// - Council executable contains ApproveGenericAction with matching params
 /// If checks pass, withdraw and lock the cap into the council via package_upgrade,
 /// and confirm both executables atomically.
 public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + copy>(
@@ -55,7 +55,7 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     let action_type = string::utf8(action_type_bytes);
     let resource_key_bytes = bcs::peel_vec_u8(&mut bcs);
     let resource_key = string::utf8(resource_key_bytes);
-    let _resource_id = bcs::peel_address(&mut bcs).to_id(); // cap_id will be checked later
+    let resource_id_from_council = bcs::peel_address(&mut bcs).to_id(); // Will validate against DAO's cap_id
     let expires_at = bcs::peel_u64(&mut bcs);
 
     // Deserialize metadata vector
@@ -105,12 +105,29 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     );
     let pkg_name_expected = metadata.borrow(1);
 
+    // === CRITICAL: Data Integrity Check ===
+    // NOTE: Unlike coexec_custody.move, we cannot use digest validation here because
+    // the two actions are DIFFERENT TYPES:
+    // - DAO side: AcceptAndLockUpgradeCapAction { cap_id, package_name }
+    // - Council side: ApproveGenericAction { dao_id, action_type, resource_key, metadata, expires_at }
+    //
+    // Instead, we validate that all KEY PARAMETERS match:
+    // 1. cap_id (extracted below from DAO action) == cap_id_expected (from council approval)
+    // 2. package_name (extracted below from DAO action) == pkg_name_expected (from council metadata)
+    // 3. dao_id (from Council action) == actual DAO ID (validated below)
+    // 4. expires_at (from Council action) is not expired (validated below)
+    //
+    // This achieves the same security goal: both parties agree on critical parameters.
+    // The parameter validation happens at lines 130-133 (dao_id, expires_at) and
+    // lines 142-143 (cap_id, package_name).
+
     // Validate basic requirements
     assert!(dao_id == object::id(dao), coexec_common::error_dao_mismatch());
     assert!(clock.timestamp_ms() < expires_at, coexec_common::error_expired());
 
-    // Verify council is the UpgradeCap custodian
-    coexec_common::enforce_custodian_policy(dao, council, b"UpgradeCap:Custodian".to_string());
+    // Verify council is the UpgradeCap custodian (type-level policy)
+    // Checks if BorrowAction<UpgradeCap> policy requires this council
+    coexec_common::enforce_custodian_policy_for_type<UpgradeCap>(dao, council);
 
     // Extract the accept action to get the cap
     // Get the action data and deserialize it
@@ -126,6 +143,10 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     coexec_common::advance_action(&mut futarchy_exec);
 
     let pkg_name_council_ref = &pkg_name_from_accept;
+
+    // Validate that council's resource_id matches DAO's cap_id
+    // This ensures both parties agree on which specific object is being transferred
+    assert!(resource_id_from_council == cap_id_expected, ECapIdMismatch);
 
     // Validate package names match
     assert!(*pkg_name_expected == pkg_name_from_accept, EPackageNameMismatch);

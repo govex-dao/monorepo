@@ -1,8 +1,8 @@
 module futarchy_one_shot_utils::metadata;
 
 use std::string::String;
-use sui::bag::{Self, Bag};
 use sui::table::{Self, Table};
+use sui::vec_set::{Self, VecSet};
 
 // === Errors ===
 const EInvalidMetadataLength: u64 = 0; // Keys and values vectors must have same length
@@ -107,10 +107,14 @@ public fun length(metadata: &Table<String, String>): u64 {
 }
 
 /// Validate metadata without creating a table (useful for pre-validation)
+///
+/// Gas optimization: Uses VecSet (stack-based) instead of Bag (object-based)
+/// for temporary uniqueness checking. For 50 keys:
+/// - Old (Bag): 1 object creation + 50 dynamic field writes + 50 deletions
+/// - New (VecSet): 50 in-memory insertions (O(log N) each)
 public fun validate_metadata_vectors(
     keys: &vector<String>,
     values: &vector<String>,
-    ctx: &mut TxContext,
 ) {
     let keys_len = keys.length();
     let values_len = values.length();
@@ -119,7 +123,7 @@ public fun validate_metadata_vectors(
     assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
 
     let mut i = 0;
-    let mut seen_keys = bag::new(ctx);
+    let mut seen_keys = vec_set::empty<String>();
 
     while (i < keys_len) {
         let key = &keys[i];
@@ -131,20 +135,13 @@ public fun validate_metadata_vectors(
         assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
 
         // Check for duplicates
-        assert!(!bag::contains(&seen_keys, *key), EDuplicateKey);
-        bag::add(&mut seen_keys, *key, true);
+        assert!(!vec_set::contains(&seen_keys, key), EDuplicateKey);
+        vec_set::insert(&mut seen_keys, *key);
 
         i = i + 1;
     };
 
-    // Clean up: remove all items before destroying
-    i = 0;
-    while (i < keys_len) {
-        let _: bool = bag::remove(&mut seen_keys, keys[i]);
-        i = i + 1;
-    };
-
-    bag::destroy_empty(seen_keys);
+    // No cleanup needed - VecSet automatically destroyed when it goes out of scope
 }
 
 // === Common Metadata Keys ===

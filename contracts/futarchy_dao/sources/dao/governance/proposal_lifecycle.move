@@ -433,20 +433,15 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
             // Mint a scoped cancel witness for this specific proposal/outcome
             let mut cw_opt = proposal::make_cancel_witness(proposal, i);
             if (option::is_some(&cw_opt)) {
-                let cw = option::extract(&mut cw_opt);
-                // TODO: Intent cancellation logic needs to be updated for new InitActionSpecs design
-                // The proposal now stores InitActionSpecs instead of intent keys
-                // This code will need to be refactored once the intent creation flow is clarified
-                let _ = cw;
+                let _cw = option::extract(&mut cw_opt);
+                // No additional work required: make_cancel_witness removes the spec
+                // and resets the action count for this outcome in the new InitActionSpecs model.
             };
             // Properly destroy the empty option
             option::destroy_none(cw_opt);
         };
         i = i + 1;
     };
-
-    // Also cleanup any other expired intents during finalization
-    gc_janitor::cleanup_all_expired_intents(account, clock, ctx);
 
     // --- BEGIN REGISTRY PRUNING ---
     // Prune expired proposal reservations from the registry to prevent state bloat.
@@ -900,10 +895,8 @@ public entry fun advance_proposal_state<AssetType, StableType>(
 
             // CRITICAL FIX (Issue 3): Store escrow ID in spot pool
             // This enables has_active_escrow() to return true, which routes LPs to TRANSITIONING bucket
-            // TODO: Populate conditional_types vector with actual TypeNames from market_state
             let escrow_id = object::id(escrow);
-            let conditional_types = vector::empty(); // TODO: Extract from market_state when needed
-            unified_spot_pool::store_active_escrow(spot_pool, escrow_id, conditional_types);
+            unified_spot_pool::store_active_escrow(spot_pool, escrow_id);
         };
         // If withdraw_only_mode = true, skip quantum split
         // Liquidity will be returned to provider when proposal finalizes
@@ -1150,13 +1143,8 @@ public fun can_execute_proposal<AssetType, StableType>(
         return false
     };
 
-    // TODO: Update this check for new InitActionSpecs design
-    // For now, just check if there are action specs
-    // let intent_key = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
-    // if (!intent_key.is_some()) {
-    //     return false
-    // };
-
+    // InitActionSpecs are now stored directly in proposals (no separate intent key system)
+    // No additional check needed - if proposal is finalized with ACCEPTED outcome, it can execute
     true
 }
 
@@ -1196,29 +1184,6 @@ public fun is_passed<AssetType, StableType>(proposal: &Proposal<AssetType, Stabl
     use futarchy_markets_core::proposal as proposal_mod;
     // A proposal is passed if its market is finalized and the winning outcome is ACCEPTED
     proposal_mod::is_finalized(proposal) && proposal_mod::get_winning_outcome(proposal) == OUTCOME_ACCEPTED
-}
-
-/// Check if a proposal has been executed
-public fun is_executed<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {
-    // For now, always return false since we don't have execution tracking yet
-    // TODO: Add execution tracking to proposal module
-    let _ = proposal;
-    false
-}
-
-/// Mark a proposal as executed
-public fun mark_executed<AssetType, StableType>(proposal: &mut Proposal<AssetType, StableType>) {
-    // For now, this is a no-op since we don't have execution tracking yet
-    // TODO: Add execution tracking to proposal module
-    let _ = proposal;
-}
-
-/// Get the intent key for a proposal's winning outcome
-public fun intent_key<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): String {
-    // For now, return a placeholder intent key
-    // TODO: Add intent key tracking to proposal module
-    let _ = proposal;
-    b"proposal_intent".to_string()
 }
 
 /// Get intent spec from a queued proposal

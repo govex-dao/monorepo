@@ -348,12 +348,13 @@ public fun fulfill_create_proposal(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
+    quota_registry: Option<&mut proposal_quota_registry::ProposalQuotaRegistry>,
     fee_coin: Coin<SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ResourceReceipt<CreateProposalAction> {
     internal_fulfill_create_proposal(
-        request, account, queue, fee_manager, registry,
+        request, account, queue, fee_manager, registry, quota_registry,
         false, @0x0.to_id(), // No approval
         fee_coin, clock, ctx
     )
@@ -367,6 +368,7 @@ public fun fulfill_create_proposal_with_approval(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
+    quota_registry: Option<&mut proposal_quota_registry::ProposalQuotaRegistry>,
     approved_spec: &mut ApprovedIntentSpec,
     fee_coin: Coin<SUI>,
     clock: &Clock,
@@ -401,7 +403,7 @@ public fun fulfill_create_proposal_with_approval(
     approved_intent_spec::increment_usage(approved_spec, clock);
 
     internal_fulfill_create_proposal(
-        request, account, queue, fee_manager, registry,
+        request, account, queue, fee_manager, registry, quota_registry,
         true, object::id(approved_spec),
         fee_coin, clock, ctx
     )
@@ -414,6 +416,7 @@ fun internal_fulfill_create_proposal(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
+    mut quota_registry: Option<&mut proposal_quota_registry::ProposalQuotaRegistry>,
     has_approval: bool,
     approval_id: ID,
     fee_coin: Coin<SUI>,
@@ -449,9 +452,23 @@ fun internal_fulfill_create_proposal(
     
     // Enforce the chain depth limit
     assert!(parent_depth < max_depth, EMaxDepthExceeded);
-    
-    // Verify the fee coin matches the required fee amount
-    assert!(coin::value(&fee_coin) >= action.proposal_fee, EInsufficientFee);
+
+    // Check quota and calculate actual fee
+    let (actual_fee, used_quota) = if (option::is_some(&quota_registry)) {
+        let registry_ref = option::borrow(&quota_registry);
+        proposal_fee_manager::calculate_fee_with_quota(
+            registry_ref,
+            account_id,
+            tx_context::sender(ctx),
+            action.proposal_fee,
+            clock
+        )
+    } else {
+        (action.proposal_fee, false)
+    };
+
+    // Verify the fee coin matches the actual fee amount (may be reduced by quota)
+    assert!(coin::value(&fee_coin) >= actual_fee, EInsufficientFee);
 
     // === CRITICAL SECURITY CHECK: COUNCIL PRE-APPROVAL ===
     // For each IntentSpec in the proposal, check if it requires council pre-approval
@@ -543,6 +560,7 @@ fun internal_fulfill_create_proposal(
         policy_mode,
         required_council_id,
         council_approval_proof,
+        used_quota,
         clock,
         ctx
     );
@@ -554,13 +572,14 @@ fun internal_fulfill_create_proposal(
         clock,
         ctx
     );
-    
+
     // Handle eviction - refund fee if a proposal was evicted
     if (option::is_some(&eviction_info)) {
         let eviction = option::borrow(&eviction_info);
         let evicted_proposal_id = priority_queue::eviction_proposal_id(eviction);
         let evicted_proposer = priority_queue::eviction_proposer(eviction);
-        
+        let evicted_used_quota = priority_queue::eviction_used_quota(eviction);
+
         // Refund the evicted proposal's fee
         let refund_coin = proposal_fee_manager::refund_proposal_fee(
             fee_manager,
@@ -568,7 +587,21 @@ fun internal_fulfill_create_proposal(
             ctx
         );
         transfer::public_transfer(refund_coin, evicted_proposer);
-        
+
+        // Refund quota if DAO config allows it and proposal used quota
+        if (evicted_used_quota && option::is_some(&quota_registry)) {
+            let config = account::config(account);
+            if (futarchy_config::refund_quota_on_eviction(config)) {
+                let registry_mut = option::borrow_mut(&mut quota_registry);
+                proposal_quota_registry::refund_quota(
+                    registry_mut,
+                    account_id,
+                    evicted_proposer,
+                    clock
+                );
+            };
+        };
+
         // Create a reservation for the current proposal since it caused an eviction
         create_reservation(
             registry,
@@ -593,6 +626,17 @@ fun internal_fulfill_create_proposal(
             council_approval_proof,
             clock,
             ctx
+        );
+    };
+
+    // Commit quota usage AFTER proposal successfully inserted
+    if (used_quota && option::is_some(&quota_registry)) {
+        let registry_mut = option::borrow_mut(&mut quota_registry);
+        proposal_fee_manager::use_quota_for_proposal(
+            registry_mut,
+            account_id,
+            tx_context::sender(ctx),
+            clock
         );
     };
     
@@ -813,6 +857,7 @@ fun create_queued_proposal_with_id(
     policy_mode: u8,
     required_council_id: Option<ID>,
     council_approval_proof: Option<ID>,
+    used_quota: bool,
     clock: &Clock,
     ctx: &TxContext,
 ): priority_queue::QueuedProposal<FutarchyConfig> {
@@ -839,7 +884,7 @@ fun create_queued_proposal_with_id(
         policy_mode,
         required_council_id,
         council_approval_proof,
-        false, // used_quota - TODO: Integrate quota system to track if admin budget was used
+        used_quota,
         clock
     )
 }
@@ -874,7 +919,7 @@ fun create_queued_proposal_from_reservation(
         reservation.policy_mode, // ✅ Use original policy data
         reservation.required_council_id,
         reservation.council_approval_proof,
-        false, // used_quota - TODO: Integrate quota system to track if admin budget was used
+        false, // used_quota - Recreation doesn't use quota (must pay full fee)
         clock
     )
 }
@@ -911,7 +956,7 @@ fun create_queued_proposal_from_reservation_with_id(
         reservation.policy_mode, // ✅ Use original policy data
         reservation.required_council_id,
         reservation.council_approval_proof,
-        false, // used_quota - TODO: Integrate quota system to track if admin budget was used
+        false, // used_quota - Recreation doesn't use quota (must pay full fee)
         clock
     )
 }

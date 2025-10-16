@@ -261,6 +261,9 @@ public fun execute_config_deps<Config, Outcome: store>(
             let mut reader = bcs::new(*action_data);
             let (names, addrs, versions) = peel_deps_as_vectors(&mut reader);
 
+            // Validate all bytes consumed (prevent trailing data attacks)
+            account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
+
             // Apply the action - reconstruct deps using the public constructor
             *account::deps_mut(account, version::current()) =
                 deps::new_inner(extensions, account.deps(), names, addrs, versions);
@@ -406,6 +409,9 @@ public fun execute_configure_deposits<Config, Outcome: store>(
             let new_max = bcs::peel_option_u128(&mut reader);
             let reset_counter = bcs::peel_bool(&mut reader);
 
+            // Validate all bytes consumed (prevent trailing data attacks)
+            account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
+
             // Apply the action
             account.apply_deposit_config(enable, new_max, reset_counter);
             account_protocol::executable::increment_action_idx(executable);
@@ -484,6 +490,9 @@ public fun execute_manage_whitelist<Config, Outcome: store>(
             let mut reader = bcs::new(*action_data);
             let add_types = peel_vector_string(&mut reader);
             let remove_types = peel_vector_string(&mut reader);
+
+            // Validate all bytes consumed (prevent trailing data attacks)
+            account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
 
             // Apply the action
             account.apply_whitelist_changes(&add_types, &remove_types);

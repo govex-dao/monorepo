@@ -1,6 +1,6 @@
 module futarchy_multisig::security_council_intents;
 
-use std::{string::String, option::{Self, Option}};
+use std::{string::String, option::{Self, Option}, type_name};
 use sui::{
     package::{UpgradeCap, UpgradeTicket, UpgradeReceipt},
     clock::Clock,
@@ -230,7 +230,7 @@ public fun execute_accept_and_lock_cap_with_dao_check(
     };
 
     // Policy exists - ensure the mode actually permits council participation
-    let action_type = type_name::with_defining_ids<UpgradeCap>();
+    let action_type = type_name::get<UpgradeCap>();
     let mode = policy_registry::get_type_mode(reg, action_type);
     let council_allowed =
         mode == policy_registry::MODE_COUNCIL_ONLY() ||
@@ -845,13 +845,13 @@ public fun request_execute_optimistic_intent(
         ExecuteOptimisticIntent{},
         ctx,
         |intent, iw| {
-            // Create action to execute the optimistic intent
-            use futarchy_multisig::optimistic_intents;
-            let action = optimistic_intents::new_execute_optimistic_intent_action(
-                optimistic_intent_id
+            // Add the execute optimistic intent action to the intent
+            security_council_actions::new_council_execute_optimistic_intent<Approvals, ExecuteOptimisticIntent>(
+                intent,
+                dao_id,
+                optimistic_intent_id,
+                iw
             );
-            // Action is added via new_council_execute_optimistic_intent function
-            let _ = action;
         }
     );
 }
@@ -877,13 +877,14 @@ public fun request_cancel_optimistic_intent(
         CancelOptimisticIntent{},
         ctx,
         |intent, iw| {
-            use futarchy_multisig::optimistic_intents;
-            let action = optimistic_intents::new_cancel_optimistic_intent_action(
+            // Add the cancel optimistic intent action to the intent
+            security_council_actions::new_council_cancel_optimistic_intent<Approvals, CancelOptimisticIntent>(
+                intent,
+                dao_id,
                 optimistic_intent_id,
-                reason
+                reason,
+                iw
             );
-            // Action is added via new_council_cancel_optimistic_intent function
-            let _ = action;
         }
     );
 }

@@ -140,7 +140,8 @@ public fun decode_toggle_stream_pause_action(
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
     let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let stream_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let stream_id_address = bcs::peel_address(&mut bcs_data);
+    let stream_id = object::id_from_address(stream_id_address);
     let pause_duration_ms = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -176,7 +177,8 @@ public fun decode_toggle_stream_freeze_action(
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
     let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let stream_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let stream_id_address = bcs::peel_address(&mut bcs_data);
+    let stream_id = object::id_from_address(stream_id_address);
     let freeze = bcs::peel_bool(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);

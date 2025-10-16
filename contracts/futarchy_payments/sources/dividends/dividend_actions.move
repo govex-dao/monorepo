@@ -32,6 +32,7 @@ module futarchy_payments::dividend_actions;
 use std::{
     string::{Self, String},
     type_name::{Self, TypeName},
+    option::{Self, Option},
 };
 use sui::{
     clock::{Self, Clock},
@@ -400,7 +401,7 @@ public fun claim_my_dividend<Config: store, CoinType: drop>(
     let payment = pool.split(amount_to_claim);
     transfer::public_transfer(coin::from_balance(payment, ctx), claimer);
 
-    // Mark as claimed in tree
+    // Mark as claimed in tree and update skip-list
     let tree_mut: &mut DividendTree = account::borrow_managed_data_mut(
         account,
         tree_key,
@@ -408,6 +409,15 @@ public fun claim_my_dividend<Config: store, CoinType: drop>(
     );
 
     let bucket = dividend_tree::get_bucket_mut(tree_mut, prefix);
+
+    // Update skip-list: find address index and decrement interval unclaimed_count
+    let addr_idx_opt = dividend_tree::find_address_index(bucket, claimer);
+    if (option::is_some(&addr_idx_opt)) {
+        let addr_idx = option::destroy_some(addr_idx_opt);
+        dividend_tree::update_skip_list_on_claim(bucket, addr_idx);
+    };
+
+    // Mark as claimed in recipients table
     let recipients_table = dividend_tree::bucket_recipients_mut(bucket);
     let amount_ptr = table::borrow_mut(recipients_table, claimer);
     *amount_ptr = 0;  // Mark as claimed
@@ -477,13 +487,40 @@ public fun crank_dividend<Config: store, CoinType: drop>(
         let bucket = dividend_tree::get_bucket(tree, current_prefix);
         let addresses = dividend_tree::bucket_addresses(bucket);
         let recipients_table = dividend_tree::bucket_recipients(bucket);
+        let skip_intervals = dividend_tree::get_skip_intervals(bucket);
 
-        // Collect recipients
+        // Collect recipients using skip-list optimization
         let batch_size = if (max_recipients > MAX_BATCH_SIZE) { MAX_BATCH_SIZE } else { max_recipients };
         let mut to_send = vector::empty<RecipientPayment>();
         let mut idx = start_index;
 
+        // Skip-list optimization: Jump over fully-claimed intervals
+        // Find the interval containing start_index
+        let skip_interval_size = 1000; // SKIP_INTERVAL_SIZE from dividend_tree
+        let mut current_interval_idx = idx / skip_interval_size;
+
         while (idx < addresses.length() && to_send.length() < batch_size) {
+            // Check if we've moved to a new skip interval
+            let interval_idx = idx / skip_interval_size;
+
+            if (interval_idx != current_interval_idx && interval_idx < skip_intervals.length()) {
+                current_interval_idx = interval_idx;
+
+                // Check if this interval is fully claimed (unclaimed_count = 0)
+                let interval = skip_intervals.borrow(interval_idx);
+                if (interval.unclaimed_count == 0) {
+                    // Skip entire interval - jump to start of next interval
+                    let next_interval_start = (interval_idx + 1) * skip_interval_size;
+                    if (next_interval_start < addresses.length()) {
+                        idx = next_interval_start;
+                        continue  // Jump to next interval
+                    } else {
+                        break  // No more intervals
+                    }
+                };
+            };
+
+            // Process address at idx
             let addr = *addresses.borrow(idx);
             let amount_ptr = table::borrow(recipients_table, addr);
             let amount = *amount_ptr;
@@ -555,11 +592,25 @@ public fun crank_dividend<Config: store, CoinType: drop>(
             addresses.length()
         }; // addresses borrow ends here
 
-        // Mark recipients as sent (only if we processed any)
+        // Mark recipients as sent and update skip-list (only if we processed any)
         if (processed > 0) {
-            let recipients_table = dividend_tree::bucket_recipients_mut(bucket);
+            // Update skip-list for each sent recipient
+            let mut i = 0;
+            while (i < recipients_to_send.length()) {
+                let recipient = recipients_to_send.borrow(i);
 
-            // Mark recipients as sent using addresses from recipients_to_send
+                // Find address index and update skip-list
+                let addr_idx_opt = dividend_tree::find_address_index(bucket, recipient.addr);
+                if (option::is_some(&addr_idx_opt)) {
+                    let addr_idx = option::destroy_some(addr_idx_opt);
+                    dividend_tree::update_skip_list_on_claim(bucket, addr_idx);
+                };
+
+                i = i + 1;
+            };
+
+            // Mark as sent in recipients table
+            let recipients_table = dividend_tree::bucket_recipients_mut(bucket);
             let mut i = 0;
             while (i < recipients_to_send.length()) {
                 let recipient = recipients_to_send.borrow(i);

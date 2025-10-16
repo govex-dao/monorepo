@@ -195,7 +195,8 @@ public fun decode_cancel_vesting_action(
 ): vector<HumanReadableField> {
     // Deserialize the fields directly - DO NOT reconstruct the Action struct
     let mut bcs_data = bcs::new(action_data);
-    let vesting_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let vesting_id_address = bcs::peel_address(&mut bcs_data);
+    let vesting_id = object::id_from_address(vesting_id_address);
 
     // Security: ensure all bytes are consumed to prevent trailing data attacks
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -215,7 +216,8 @@ public fun decode_toggle_vesting_pause_action(
     action_data: vector<u8>,
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
-    let vesting_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let vesting_id_address = bcs::peel_address(&mut bcs_data);
+    let vesting_id = object::id_from_address(vesting_id_address);
     let pause_duration_ms = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -245,7 +247,8 @@ public fun decode_toggle_vesting_freeze_action(
     action_data: vector<u8>,
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
-    let vesting_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let vesting_id_address = bcs::peel_address(&mut bcs_data);
+    let vesting_id = object::id_from_address(vesting_id_address);
     let freeze = bcs::peel_bool(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);

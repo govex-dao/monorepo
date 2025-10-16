@@ -472,14 +472,114 @@ fun try_extract_file_id(spec: &action_specs::ActionSpec): Option<ID> {
     option::none()
 }
 
-/// Try to extract capability type from action spec
+/// Try to extract capability type from custody action specs
 ///
 /// # Returns
-/// - `None`: Type-specific policies not yet implemented (same as coin types)
+/// - `Some(TypeName)`: The action's full parameterized type (e.g., `ApproveCustodyAction<UpgradeCap>`)
+/// - `None`: Action is not a custody action or not parameterized
 ///
-/// # Future: Type-Specific Policies
-/// Similar to coin types - needs parameterized action registration.
-fun try_extract_cap_type(_spec: &action_specs::ActionSpec): Option<TypeName> {
-    // Type-specific policies disabled pending parameterized action registration
-    option::none()
+/// # How It Works
+/// Checks if the action TypeName is a custody action (ApproveCustodyAction or AcceptIntoCustodyAction)
+/// with type parameters. If so, returns the full action type for policy lookup.
+///
+/// # Policy Registration Model
+/// Type-level policies can be registered on parameterized custody actions:
+/// ```move
+/// // Register policy for UpgradeCap custody specifically
+/// set_type_policy<ApproveCustodyAction<UpgradeCap>>(
+///     account,
+///     option::some(technical_council_id),
+///     MODE_DAO_AND_COUNCIL
+/// );
+///
+/// // Register policy for TreasuryCap<USDC> custody specifically
+/// set_type_policy<ApproveCustodyAction<TreasuryCap<USDC>>>(
+///     account,
+///     option::some(treasury_council_id),
+///     MODE_COUNCIL_ONLY  // Different policy!
+/// );
+/// ```
+///
+/// # Supported Actions
+/// - `ApproveCustodyAction<R>`: DAO approves transferring object R to council custody
+/// - `AcceptIntoCustodyAction<R>`: Council accepts object R into custody
+///
+/// Where R can be any capability type like:
+/// - `sui::package::UpgradeCap`
+/// - `sui::coin::TreasuryCap<CoinType>`
+/// - Custom capability types
+fun try_extract_cap_type(spec: &action_specs::ActionSpec): Option<TypeName> {
+    use futarchy_vault::custody_actions;
+
+    let action_type = action_specs::action_type(spec);
+    let type_str = std::type_name::into_string(action_type);
+    let type_bytes = std::ascii::into_bytes(type_str);
+
+    // Check if this is a custody action type
+    // We look for "ApproveCustodyAction" or "AcceptIntoCustodyAction" in the type string
+    let approve_custody_str = std::ascii::string(b"ApproveCustodyAction");
+    let accept_custody_str = std::ascii::string(b"AcceptIntoCustodyAction");
+    let type_str_copy = std::ascii::string(type_bytes);
+
+    // Simple substring check: does the type name contain our custody action names?
+    let is_custody_action = contains_substring(&type_str_copy, &approve_custody_str) ||
+                           contains_substring(&type_str_copy, &accept_custody_str);
+
+    if (!is_custody_action) {
+        return option::none()
+    };
+
+    // Check if TypeName contains '<' (indicating type parameters)
+    let mut i = 0;
+    let len = type_bytes.length();
+    let mut has_params = false;
+
+    while (i < len) {
+        if (*type_bytes.borrow(i) == 60) { // '<' ASCII code
+            has_params = true;
+            break
+        };
+        i = i + 1;
+    };
+
+    // If parameterized custody action, return the full action type for policy lookup
+    if (has_params) {
+        option::some(action_type)
+    } else {
+        option::none()
+    }
+}
+
+/// Helper: Check if haystack contains needle substring
+fun contains_substring(haystack: &std::ascii::String, needle: &std::ascii::String): bool {
+    let haystack_bytes = std::ascii::into_bytes(*haystack);
+    let needle_bytes = std::ascii::into_bytes(*needle);
+    let haystack_len = haystack_bytes.length();
+    let needle_len = needle_bytes.length();
+
+    if (needle_len > haystack_len) {
+        return false
+    };
+
+    let mut i = 0;
+    while (i <= haystack_len - needle_len) {
+        let mut j = 0;
+        let mut matches = true;
+
+        while (j < needle_len) {
+            if (*haystack_bytes.borrow(i + j) != *needle_bytes.borrow(j)) {
+                matches = false;
+                break
+            };
+            j = j + 1;
+        };
+
+        if (matches) {
+            return true
+        };
+
+        i = i + 1;
+    };
+
+    false
 }

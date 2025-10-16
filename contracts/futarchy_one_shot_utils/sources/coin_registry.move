@@ -15,9 +15,14 @@ const ENoCoinSetsAvailable: u64 = 0;
 const EInsufficientFee: u64 = 1;
 const ERegistryNotEmpty: u64 = 2;
 const ERegistryFull: u64 = 3;
+const EFeeExceedsMaximum: u64 = 4;
 
 // === Constants ===
 const MAX_COIN_SETS: u64 = 100_000;
+/// Maximum fee in SUI MIST (10 SUI = 10_000_000_000 MIST)
+/// Prevents malicious actors from setting arbitrarily high fees that would DoS the registry
+/// by filling it with economically unusable coin sets
+const MAX_FEE: u64 = 10_000_000_000;
 
 // === Structs ===
 
@@ -95,6 +100,12 @@ public fun deposit_coin_set<T>(
 ) {
     // Check registry not full
     assert!(registry.total_sets < MAX_COIN_SETS, ERegistryFull);
+
+    // Validate fee is reasonable to prevent DoS attacks
+    // Without this check, malicious actors could fill the registry with
+    // coin sets demanding arbitrarily high fees (e.g., u64::max = 18.4B SUI),
+    // making them economically unusable and permanently occupying registry slots
+    assert!(fee <= MAX_FEE, EFeeExceedsMaximum);
 
     // Validate coin meets requirements
     coin_validation::validate_conditional_coin(&treasury_cap, &metadata);

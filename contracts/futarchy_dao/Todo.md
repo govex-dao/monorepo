@@ -1,3 +1,6 @@
+You are a highly experienced professional priciple sui engineer, successful white hat hacker and maths genius. find bugs in this code
+
+
 # V2 Large
 - [ ] Add correct cross package security capaility / requirements
 - [ ] Get specs for https://github.com/MetaLex-Tech/RicardianTriplerDoubleTokenLeXscroW and add any missing things to this protocol

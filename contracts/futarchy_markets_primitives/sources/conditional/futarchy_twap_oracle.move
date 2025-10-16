@@ -7,12 +7,11 @@
 /// USED BY:
 /// - Conditional AMMs during proposals (outcome evaluation)
 /// - Proposal resolution (determining winners based on TWAP)
-/// - SpotAMM for governance TWAP (base fair value)
 /// - NOT for external protocols (use price_based_unlocks_oracle instead)
 ///
 /// KEY FEATURES:
 /// - Write-through pattern (MUST update before reading)
-/// - Price capping to prevent manipulation
+/// - Price capping to prevent manipulation up or down
 /// - Complex window-based accumulation
 /// - Designed specifically for futarchy mechanics
 /// - Internal use only (wrapped by price_based_unlocks_oracle for external access)

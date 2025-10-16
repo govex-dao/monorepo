@@ -19,6 +19,7 @@ use std::string::String;
 use std::type_name;
 use sui::table::{Self, Table};
 use sui::vec_map::{Self, VecMap};
+use sui::vec_set;
 
 // === Imports ===
 
@@ -124,7 +125,13 @@ public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
     // there can never be duplicates in the first place (add_account asserts this)
     // we only need to check there is the same number of accounts and that all accounts are present
     assert!(accounts.length() == addrs.length(), EWrongNumberOfAccounts);
-    assert!(accounts.all!(|acc| addrs.contains(acc)), EAccountNotFound);
+
+    // ✅ FIXED: Use VecSet for O(N log N) lookup instead of O(N²)
+    // - Building VecSet: O(N log N)
+    // - Checking all accounts: O(N log N) total
+    // - Old approach: O(N²) due to nested linear searches
+    let addrs_set = vec_set::from_keys(addrs);
+    assert!(accounts.all!(|acc| addrs_set.contains(acc)), EAccountNotFound);
 
     *accounts = addrs;
 }
