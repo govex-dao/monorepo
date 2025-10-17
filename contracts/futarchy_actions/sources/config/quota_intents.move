@@ -38,6 +38,7 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
     quota_amount: u64,
     quota_period_ms: u64,
     reduced_fee: u64,
+    sponsor_quota_amount: u64,
     ctx: &mut TxContext,
 ) {
     // Enforce decoder exists for this action type
@@ -59,6 +60,7 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
                 quota_amount,
                 quota_period_ms,
                 reduced_fee,
+                sponsor_quota_amount,
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
@@ -68,31 +70,6 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
             );
         },
     );
-}
-
-/// Create intent to grant quotas (convenience wrapper)
-public fun create_grant_quotas_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
-    registry: &ActionDecoderRegistry,
-    params: Params,
-    outcome: Outcome,
-    users: vector<address>,
-    quota_amount: u64,
-    quota_period_ms: u64,
-    reduced_fee: u64,
-    ctx: &mut TxContext,
-) {
-    create_set_quotas_intent(
-        account,
-        registry,
-        params,
-        outcome,
-        users,
-        quota_amount,
-        quota_period_ms,
-        reduced_fee,
-        ctx,
-    )
 }
 
 /// Create intent to remove quotas (convenience wrapper)
@@ -113,6 +90,7 @@ public fun create_remove_quotas_intent<Outcome: store + drop + copy>(
         0, // 0 quota_amount = remove
         0, // ignored
         0, // ignored
+        0, // ignored - sponsor quota
         ctx,
     )
 }

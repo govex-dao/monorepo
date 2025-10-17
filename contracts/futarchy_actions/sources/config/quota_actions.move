@@ -36,6 +36,8 @@ public struct SetQuotasAction has store, drop {
     quota_period_ms: u64,
     /// Reduced fee (0 for free, ignored if removing)
     reduced_fee: u64,
+    /// N sponsorships per period (0 to disable sponsorship for these users)
+    sponsor_quota_amount: u64,
 }
 
 // === Public Functions ===
@@ -80,6 +82,7 @@ public fun do_set_quotas<Outcome: store, IW: drop>(
     let quota_amount = reader.peel_u64();
     let quota_period_ms = reader.peel_u64();
     let reduced_fee = reader.peel_u64();
+    let sponsor_quota_amount = reader.peel_u64();
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -90,6 +93,7 @@ public fun do_set_quotas<Outcome: store, IW: drop>(
         quota_amount,
         quota_period_ms,
         reduced_fee,
+        sponsor_quota_amount,
     };
 
     // Execute internal logic
@@ -109,18 +113,32 @@ fun do_set_quotas_internal(
     _ctx: &mut TxContext,
 ) {
     // Destructure to consume the action
-    let SetQuotasAction { users, quota_amount, quota_period_ms, reduced_fee } = action;
+    let SetQuotasAction { users, quota_amount, quota_period_ms, reduced_fee, sponsor_quota_amount } = action;
 
-    // Set quotas with DAO ID check
+    let dao_id = object::id(account);
+
+    // Set proposal quotas with DAO ID check
     futarchy_core::proposal_quota_registry::set_quotas(
         registry,
-        object::id(account),
+        dao_id,
         users,
         quota_amount,
         quota_period_ms,
         reduced_fee,
         clock,
     );
+
+    // Set sponsor quotas if quota_amount > 0 (only for active quota holders)
+    // If quota_amount is 0, we're removing quotas, so don't set sponsor quota
+    if (quota_amount > 0) {
+        futarchy_core::proposal_quota_registry::set_sponsor_quotas(
+            registry,
+            dao_id,
+            users,
+            sponsor_quota_amount,
+            clock,
+        );
+    };
 }
 
 // === Constructor Functions ===
@@ -131,12 +149,14 @@ public fun new_set_quotas(
     quota_amount: u64,
     quota_period_ms: u64,
     reduced_fee: u64,
+    sponsor_quota_amount: u64,
 ): SetQuotasAction {
     SetQuotasAction {
         users,
         quota_amount,
         quota_period_ms,
         reduced_fee,
+        sponsor_quota_amount,
     }
 }
 
@@ -155,3 +175,4 @@ public fun users(action: &SetQuotasAction): &vector<address> { &action.users }
 public fun quota_amount(action: &SetQuotasAction): u64 { action.quota_amount }
 public fun quota_period_ms(action: &SetQuotasAction): u64 { action.quota_period_ms }
 public fun reduced_fee(action: &SetQuotasAction): u64 { action.reduced_fee }
+public fun sponsor_quota_amount(action: &SetQuotasAction): u64 { action.sponsor_quota_amount }

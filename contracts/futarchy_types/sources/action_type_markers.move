@@ -71,6 +71,7 @@ public struct SetQuotas has drop {}
 public struct UpdateConditionalMetadata has drop {}
 public struct SetOptimisticIntentChallengeEnabled has drop {}
 public struct EarlyResolveConfigUpdate has drop {}
+public struct SponsorshipConfigUpdate has drop {}
 
 // === Liquidity Action Types ===
 
@@ -304,6 +305,10 @@ public fun set_optimistic_intent_challenge_enabled(): TypeName {
 
 public fun early_resolve_config_update(): TypeName {
     type_name::with_defining_ids<EarlyResolveConfigUpdate>()
+}
+
+public fun sponsorship_config_update(): TypeName {
+    type_name::with_defining_ids<SponsorshipConfigUpdate>()
 }
 
 // Liquidity actions

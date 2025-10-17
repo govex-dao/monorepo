@@ -819,6 +819,7 @@ public fun can_execute_proposal<AssetType, StableType>(
 
 /// Calculates the winning outcome and returns TWAP prices to avoid double computation
 /// Returns (outcome, twap_prices) where outcome is OUTCOME_ACCEPTED or OUTCOME_REJECTED
+/// IMPORTANT: Uses effective threshold which accounts for sponsorship reduction
 public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
@@ -830,7 +831,11 @@ public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
     // For a simple YES/NO proposal, compare the YES TWAP to the threshold
     let winning_outcome = if (twap_prices.length() >= 2) {
         let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
-        let threshold = proposal::get_twap_threshold(proposal);
+
+        // CRITICAL: Use effective threshold which accounts for sponsorship reduction
+        // If proposal is sponsored, this returns (base_threshold - sponsor_reduction)
+        // making it easier for the proposal to pass
+        let threshold = proposal::get_effective_twap_threshold(proposal);
         let yes_signed = signed::from_u128(yes_twap);
 
         // If YES TWAP exceeds threshold, YES wins

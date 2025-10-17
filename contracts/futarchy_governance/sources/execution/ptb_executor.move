@@ -44,8 +44,8 @@ const OUTCOME_ACCEPTED: u64 = 0;
 /// - Verifies market finalization and approval.
 /// - Deposits the execution fee.
 /// - Synthesizes the intent from the stored InitActionSpecs.
-/// Returns the executable hot potato that must be threaded through all action calls.
-public entry fun begin_execution<AssetType, StableType>(
+/// Returns the executable hot potato and intent key for cleanup.
+public fun begin_execution<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
@@ -53,7 +53,7 @@ public entry fun begin_execution<AssetType, StableType>(
     fee_coin: Coin<sui::sui::SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
-): Executable<FutarchyOutcome> {
+): (Executable<FutarchyOutcome>, String) {
     assert!(market_state::is_finalized(market), EMarketNotFinalized);
 
     let winning_outcome = market_state::get_winning_outcome(market);

@@ -178,6 +178,32 @@ public fun add_action_spec<Outcome, T: drop, IW: drop>(
     intent.action_specs.push_back(spec);
 }
 
+/// Add action spec with TypeName directly (for replaying stored init intents)
+/// This avoids redundant TypeName -> witness -> TypeName conversions when the
+/// action type is already known from storage (e.g., InitActionSpecs).
+public fun add_action_spec_with_typename<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    action_type: TypeName,
+    action_data_bytes: vector<u8>,
+    intent_witness: IW,
+) {
+    intent.assert_is_witness(intent_witness);
+
+    // Validate action data size to prevent excessively large actions
+    assert!(
+        action_data_bytes.length() <= max_action_data_size(),
+        EActionDataTooLarge
+    );
+
+    // Create and store the action spec with TypeName directly
+    let spec = ActionSpec {
+        version: CURRENT_ACTION_VERSION,
+        action_type,
+        action_data: action_data_bytes,
+    };
+    intent.action_specs.push_back(spec);
+}
+
 public fun new_params(
     key: String,
     description: String,

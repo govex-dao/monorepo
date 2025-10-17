@@ -140,8 +140,7 @@ public fun pending_receipt<T>(): ResourceReceipt<T> {
 // === Getters ===
 
 public fun request_spec<T>(request: &InitResourceRequest<T>): &ActionSpec {
-    &request
-    ERROR
+    &request.spec
 }
 
 public fun request_resource_type<T>(request: &InitResourceRequest<T>): TypeName {

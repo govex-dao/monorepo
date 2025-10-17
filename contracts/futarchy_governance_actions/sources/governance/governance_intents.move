@@ -160,6 +160,7 @@ public fun create_dissolution_intent<Outcome: store + drop + copy>(
 /// Execute a governance intent from an approved proposal
 /// This creates an Intent just-in-time from the stored IntentSpec blueprint
 /// and immediately converts it to an executable for execution
+/// Returns both the executable and the intent key for cleanup
 public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     proposal: &mut Proposal<AssetType, StableType>,
@@ -168,7 +169,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
     outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext
-): Executable<Outcome> {
+): (Executable<Outcome>, String) {
     // Get the intent spec from the proposal for the specified outcome
     let mut intent_spec_opt = proposal::take_intent_spec_for_outcome(proposal, outcome_index);
 
@@ -196,7 +197,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
         ctx,
     );
 
-    executable
+    (executable, intent_key)
 }
 
 // === Helper Functions ===
@@ -229,11 +230,9 @@ public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
     clock: &Clock,
     ctx: &mut TxContext
 ): String {
-    // Generate a unique key for this just-in-time intent
-    let mut intent_key = b"jit_intent_".to_string();
-    intent_key.append(clock.timestamp_ms().to_string());
-    intent_key.append(b"_".to_string());
-    intent_key.append(object::id_address(account).to_string());
+    // Generate a guaranteed-unique key using Sui's native ID generation
+    // This ensures uniqueness even when multiple proposals execute in the same block
+    let intent_key = ctx.fresh_object_address().to_string();
 
     // Create intent parameters with immediate execution
     let params = intents::new_params(

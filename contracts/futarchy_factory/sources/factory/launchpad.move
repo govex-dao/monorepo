@@ -5,7 +5,7 @@ module futarchy_factory::launchpad;
 
 use account_actions::init_actions as account_init_actions;
 use account_extensions::extensions::Extensions;
-use account_protocol::account::{self as account, Account};
+use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::priority_queue::ProposalQueue;
 use futarchy_core::version;
@@ -16,7 +16,7 @@ use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_one_shot_utils::constants;
 use futarchy_one_shot_utils::math;
 use futarchy_types::init_action_specs::{Self as action_specs, InitActionSpecs};
-use std::option::{self as option, Option};
+use std::option::{Self, Option};
 use std::string::{Self, String};
 use std::type_name;
 use std::vector;
@@ -26,7 +26,7 @@ use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
 use sui::display::{Self, Display};
 use sui::dynamic_field as df;
 use sui::event;
-use sui::object::{self as object, UID, ID};
+use sui::object::{Self, UID, ID};
 use sui::package::{Self, Publisher};
 use sui::transfer as sui_transfer;
 use sui::tx_context::TxContext;
@@ -505,7 +505,7 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
 
 /// Stage initialization actions that will run when the raise activates the DAO.
 /// Multiple calls append specs until intents are locked.
-public entry fun stage_launchpad_init_intent<RaiseToken, StableCoin>(
+public fun stage_launchpad_init_intent<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     spec: InitActionSpecs,
@@ -1585,18 +1585,11 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
         raise_price,
     );
 
-    // Execute staged init intents (computed earlier in the raise lifecycle)
-    if (!vector::is_empty(&raise.staged_init_specs)) {
-        let raise_id = object::id(raise);
-        init_actions::execute_init_intents(
-            &mut account,
-            &raise_id,
-            &raise.staged_init_specs,
-            clock,
-            ctx,
-        );
-        raise.staged_init_specs = vector::empty();
-    };
+    // NOTE: Init actions are now executed via PTB after raise completes.
+    // Frontend reads staged_init_specs from chain and constructs deterministic PTB.
+    // See INIT_ACTIONS_GUIDE.md for details.
+    //
+    // The staged_init_specs remain stored for PTB construction reference.
 
     // Deposit the capped raise amount into the DAO treasury vault.
     let raised_funds = coin::from_balance(

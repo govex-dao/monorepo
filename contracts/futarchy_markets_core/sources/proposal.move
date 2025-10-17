@@ -44,6 +44,7 @@ const ETooManyActions: u64 = 14;
 const EInvalidConditionalCoinCount: u64 = 15;
 const EConditionalCoinAlreadySet: u64 = 16;
 const ENotLiquidityProvider: u64 = 17;
+const EAlreadySponsored: u64 = 18;
 
 // === Constants ===
 
@@ -115,6 +116,10 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     withdraw_only_mode: bool, // When true, return liquidity to provider instead of auto-reinvesting
     /// Track if proposal used admin quota/budget (excludes from creator rewards)
     used_quota: bool,
+    /// Track who sponsored this proposal (if any)
+    sponsored_by: Option<address>,
+    /// Track the threshold reduction applied by sponsorship
+    sponsor_threshold_reduction: SignedU128,
 
     // Market-related fields (pools now live in MarketState)
     escrow_id: Option<ID>,
@@ -401,6 +406,8 @@ public fun initialize_market<AssetType, StableType>(
         liquidity_provider: option::some(ctx.sender()),
         withdraw_only_mode: false,
         used_quota,
+        sponsored_by: option::none(), // No sponsorship by default
+        sponsor_threshold_reduction: signed::from_u64(0), // No reduction by default
         escrow_id: option::some(escrow_id),
         market_state_id: option::some(market_state_id),
         conditional_treasury_caps: bag::new(ctx),
@@ -529,6 +536,8 @@ public fun new_premarket<AssetType, StableType>(
         liquidity_provider: option::none(),
         withdraw_only_mode: false,
         used_quota,
+        sponsored_by: option::none(), // No sponsorship by default
+        sponsor_threshold_reduction: signed::from_u64(0), // No reduction by default
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
@@ -1674,6 +1683,8 @@ public fun new_for_testing<AssetType, StableType>(
         liquidity_provider,
         withdraw_only_mode: false,
         used_quota: false, // Default to false for testing
+        sponsored_by: option::none(), // No sponsorship by default
+        sponsor_threshold_reduction: signed::from_u64(0), // No reduction by default
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
@@ -1881,6 +1892,110 @@ public fun borrow_uid<AssetType, StableType>(
     &proposal.id
 }
 
+// === Sponsorship Functions ===
+
+/// Get the sponsor address (if any)
+public fun get_sponsored_by<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): Option<address> {
+    proposal.sponsored_by
+}
+
+/// Get the threshold reduction applied by sponsorship
+public fun get_sponsor_threshold_reduction<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): SignedU128 {
+    proposal.sponsor_threshold_reduction
+}
+
+/// Check if proposal is sponsored
+public fun is_sponsored<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): bool {
+    proposal.sponsored_by.is_some()
+}
+
+/// Set sponsorship information on a proposal
+/// Can be called at any time before proposal is finalized
+/// SECURITY: This is public(package) - only callable by governance/lifecycle modules
+public(package) fun set_sponsorship<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    sponsor: address,
+    threshold_reduction: SignedU128,
+) {
+    // Only restriction: cannot sponsor finalized proposals
+    assert!(proposal.state != STATE_FINALIZED, EInvalidState);
+
+    // Prevent double-sponsorship
+    assert!(proposal.sponsored_by.is_none(), EAlreadySponsored);
+
+    proposal.sponsored_by = option::some(sponsor);
+    proposal.sponsor_threshold_reduction = threshold_reduction;
+}
+
+/// Clear sponsorship information (for refunds on eviction/cancellation)
+/// SECURITY: This is public(package) - only callable by governance/lifecycle modules
+public(package) fun clear_sponsorship<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+) {
+    proposal.sponsored_by = option::none();
+    proposal.sponsor_threshold_reduction = signed::from_u64(0);
+}
+
+/// Get the effective TWAP threshold for this proposal (base threshold - sponsor reduction)
+/// Note: Thresholds CAN be negative in futarchy (allowing proposals to pass if TWAP goes below threshold)
+/// The reduction is applied as: effective = base - reduction
+/// If the reduction would make the threshold excessively negative, cap at a reasonable minimum
+public fun get_effective_twap_threshold<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): SignedU128 {
+    let base_threshold = proposal.twap_config.twap_threshold;
+
+    // If not sponsored, return base threshold
+    if (!proposal.sponsored_by.is_some()) {
+        return base_threshold
+    };
+
+    // Apply sponsorship reduction
+    let reduction = &proposal.sponsor_threshold_reduction;
+
+    // Handle the subtraction: base - reduction
+    // Case 1: Both same sign
+    let base_neg = signed::is_negative(&base_threshold);
+    let red_neg = signed::is_negative(reduction);
+    let base_mag = signed::magnitude(&base_threshold);
+    let red_mag = signed::magnitude(reduction);
+
+    if (base_neg == red_neg) {
+        // Same sign: base - reduction = base + (-reduction)
+        // Positive - Positive: subtract magnitudes
+        // Negative - Negative: add magnitudes (more negative)
+        if (!base_neg) {
+            // Both positive: base - reduction
+            if (base_mag >= red_mag) {
+                signed::from_parts(base_mag - red_mag, false)
+            } else {
+                // Result would be negative
+                signed::from_parts(red_mag - base_mag, true)
+            }
+        } else {
+            // Both negative: -(|base| + |reduction|)
+            signed::from_parts(base_mag + red_mag, true)
+        }
+    } else {
+        // Different signs: base - reduction = base + (-reduction)
+        // Positive - Negative: add magnitudes (more positive)
+        // Negative - Positive: subtract magnitudes (more negative)
+        if (!base_neg) {
+            // Positive base, negative reduction: base - (-red) = base + red
+            signed::from_parts(base_mag + red_mag, false)
+        } else {
+            // Negative base, positive reduction: -|base| - red = -(|base| + red)
+            signed::from_parts(base_mag + red_mag, true)
+        }
+    }
+}
+
 #[test_only]
 /// Simplified test helper: creates a REAL proposal with sensible defaults
 /// Can configure state (FINALIZED), outcome_count, and winning_outcome for testing
@@ -1949,6 +2064,8 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
         liquidity_provider: _,
         withdraw_only_mode: _,
         used_quota: _,
+        sponsored_by: _,
+        sponsor_threshold_reduction: _,
         escrow_id: _,
         market_state_id: _,
         conditional_treasury_caps,

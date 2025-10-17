@@ -18,6 +18,8 @@ use futarchy_actions::config_actions::{
     QueueParamsUpdateAction,
     StorageConfigUpdateAction,
     ConditionalMetadataUpdateAction,
+    EarlyResolveConfigUpdateAction,
+    SponsorshipConfigUpdateAction,
     ConfigAction
 };
 use futarchy_actions::quota_decoder;
@@ -87,6 +89,16 @@ public struct StorageConfigUpdateActionDecoder has key, store {
 
 /// Decoder for ConditionalMetadataUpdateAction
 public struct ConditionalMetadataUpdateActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for EarlyResolveConfigUpdateAction
+public struct EarlyResolveConfigUpdateActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for SponsorshipConfigUpdateAction
+public struct SponsorshipConfigUpdateActionDecoder has key, store {
     id: UID,
 }
 
@@ -735,6 +747,147 @@ public fun decode_conditional_metadata_update_action(
     fields
 }
 
+/// Decode an EarlyResolveConfigUpdateAction
+public fun decode_early_resolve_config_update_action(
+    _decoder: &EarlyResolveConfigUpdateActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    let min_proposal_duration_ms = bcs::peel_u64(&mut bcs_data);
+    let max_proposal_duration_ms = bcs::peel_u64(&mut bcs_data);
+    let min_winner_spread = bcs::peel_u128(&mut bcs_data);
+    let min_time_since_last_flip_ms = bcs::peel_u64(&mut bcs_data);
+    let max_flips_in_window = bcs::peel_u64(&mut bcs_data);
+    let flip_window_duration_ms = bcs::peel_u64(&mut bcs_data);
+    let enable_twap_scaling = bcs::peel_bool(&mut bcs_data);
+    let keeper_reward_bps = bcs::peel_u64(&mut bcs_data);
+
+    // Security: ensure all bytes are consumed
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"min_proposal_duration_ms".to_string(),
+            min_proposal_duration_ms.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"max_proposal_duration_ms".to_string(),
+            max_proposal_duration_ms.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"min_winner_spread".to_string(),
+            min_winner_spread.to_string(),
+            b"u128".to_string(),
+        ),
+        schema::new_field(
+            b"min_time_since_last_flip_ms".to_string(),
+            min_time_since_last_flip_ms.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"max_flips_in_window".to_string(),
+            max_flips_in_window.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"flip_window_duration_ms".to_string(),
+            flip_window_duration_ms.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"enable_twap_scaling".to_string(),
+            if (enable_twap_scaling) { b"true".to_string() } else { b"false".to_string() },
+            b"bool".to_string(),
+        ),
+        schema::new_field(
+            b"keeper_reward_bps".to_string(),
+            keeper_reward_bps.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+/// Decode a SponsorshipConfigUpdateAction
+public fun decode_sponsorship_config_update_action(
+    _decoder: &SponsorshipConfigUpdateActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    let enabled = decode_option_bool(&mut bcs_data);
+    let sponsored_threshold = decode_option_signed_u128(&mut bcs_data);
+    let waive_advancement_fees = decode_option_bool(&mut bcs_data);
+    let default_sponsor_quota_amount = decode_option_u64(&mut bcs_data);
+
+    // Security: ensure all bytes are consumed
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    let mut fields = vector::empty();
+
+    if (enabled.is_some()) {
+        let value = if (enabled.destroy_some()) { b"true".to_string() } else { b"false".to_string() };
+        fields.push_back(
+            schema::new_field(
+                b"enabled".to_string(),
+                value,
+                b"bool".to_string(),
+            ),
+        );
+    } else {
+        enabled.destroy_none();
+    };
+
+    if (sponsored_threshold.is_some()) {
+        let value = sponsored_threshold.destroy_some();
+        fields.push_back(
+            schema::new_field(
+                b"sponsored_threshold_magnitude".to_string(),
+                signed::magnitude(&value).to_string(),
+                b"u128".to_string(),
+            ),
+        );
+        fields.push_back(
+            schema::new_field(
+                b"sponsored_threshold_is_negative".to_string(),
+                if (signed::is_negative(&value)) { b"true".to_string() } else { b"false".to_string() },
+                b"bool".to_string(),
+            ),
+        );
+    } else {
+        sponsored_threshold.destroy_none();
+    };
+
+    if (waive_advancement_fees.is_some()) {
+        let value = if (waive_advancement_fees.destroy_some()) { b"true".to_string() } else { b"false".to_string() };
+        fields.push_back(
+            schema::new_field(
+                b"waive_advancement_fees".to_string(),
+                value,
+                b"bool".to_string(),
+            ),
+        );
+    } else {
+        waive_advancement_fees.destroy_none();
+    };
+
+    if (default_sponsor_quota_amount.is_some()) {
+        fields.push_back(
+            schema::new_field(
+                b"default_sponsor_quota_amount".to_string(),
+                default_sponsor_quota_amount.destroy_some().to_string(),
+                b"u64".to_string(),
+            ),
+        );
+    } else {
+        default_sponsor_quota_amount.destroy_none();
+    };
+
+    fields
+}
+
 // === Registration Functions ===
 
 /// Register all config decoders
@@ -750,6 +903,8 @@ public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxC
     register_queue_params_decoder(registry, ctx);
     register_storage_config_decoder(registry, ctx);
     register_conditional_metadata_decoder(registry, ctx);
+    register_early_resolve_config_decoder(registry, ctx);
+    register_sponsorship_config_decoder(registry, ctx);
     register_config_action_decoder(registry, ctx);
 
     // Register quota decoders
@@ -825,6 +980,18 @@ fun register_conditional_metadata_decoder(
 ) {
     let decoder = ConditionalMetadataUpdateActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<ConditionalMetadataUpdateAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_early_resolve_config_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
+    let decoder = EarlyResolveConfigUpdateActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<EarlyResolveConfigUpdateAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_sponsorship_config_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
+    let decoder = SponsorshipConfigUpdateActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<SponsorshipConfigUpdateAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 

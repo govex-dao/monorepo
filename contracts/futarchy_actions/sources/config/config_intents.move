@@ -34,6 +34,11 @@ use fun intent_interface::process_intent as Account.process_intent;
 // === Single Witness ===
 public struct ConfigIntent has copy, drop {}
 
+/// Get a ConfigIntent witness
+public fun witness(): ConfigIntent {
+    ConfigIntent {}
+}
+
 // === Basic Intent Creation Functions ===
 
 /// Create intent to enable/disable proposals
@@ -393,6 +398,98 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_type_markers::update_conditional_metadata(),
+                action_bytes,
+                iw,
+            );
+        },
+    );
+}
+
+/// Create intent to update sponsorship configuration
+public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
+    params: Params,
+    outcome: Outcome,
+    enabled: Option<bool>,
+    sponsored_threshold: Option<SignedU128>,
+    waive_advancement_fees: Option<bool>,
+    default_sponsor_quota_amount: Option<u64>,
+    ctx: &mut TxContext,
+) {
+    // Enforce decoder exists for this action type
+    schema::assert_decoder_exists(
+        registry,
+        type_name::with_defining_ids<config_actions::SponsorshipConfigUpdateAction>(),
+    );
+
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_sponsorship".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_sponsorship_config_update_action(
+                enabled,
+                sponsored_threshold,
+                waive_advancement_fees,
+                default_sponsor_quota_amount,
+            );
+            let action_bytes = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_type_markers::sponsorship_config_update(),
+                action_bytes,
+                iw,
+            );
+        },
+    );
+}
+
+/// Create intent to update early resolve configuration
+public fun create_update_early_resolve_config_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
+    params: Params,
+    outcome: Outcome,
+    min_proposal_duration_ms: u64,
+    max_proposal_duration_ms: u64,
+    min_winner_spread: u128,
+    min_time_since_last_flip_ms: u64,
+    max_flips_in_window: u64,
+    flip_window_duration_ms: u64,
+    enable_twap_scaling: bool,
+    keeper_reward_bps: u64,
+    ctx: &mut TxContext,
+) {
+    // Enforce decoder exists for this action type
+    schema::assert_decoder_exists(
+        registry,
+        type_name::with_defining_ids<config_actions::EarlyResolveConfigUpdateAction>(),
+    );
+
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_early_resolve".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_early_resolve_config_update_action(
+                min_proposal_duration_ms,
+                max_proposal_duration_ms,
+                min_winner_spread,
+                min_time_since_last_flip_ms,
+                max_flips_in_window,
+                flip_window_duration_ms,
+                enable_twap_scaling,
+                keeper_reward_bps,
+            );
+            let action_bytes = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_type_markers::early_resolve_config_update(),
                 action_bytes,
                 iw,
             );

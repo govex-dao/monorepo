@@ -146,7 +146,7 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
 ///   - none(): Use default (true - 10-day challenge period)
 ///   - some(true): Enable 10-day challenge period for MODE_COUNCIL_ONLY actions
 ///   - some(false): Disable challenge period (instant execution for MODE_COUNCIL_ONLY actions)
-public entry fun create_dao<AssetType: drop, StableType: drop>(
+public fun create_dao<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
     extensions: &Extensions,
     fee_manager: &mut FeeManager,
@@ -201,7 +201,7 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
 }
 
 /// Create a DAO and atomically execute a batch of init intents before sharing.
-public entry fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
+public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
     extensions: &Extensions,
     fee_manager: &mut FeeManager,
@@ -371,6 +371,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
+        dao_config::default_sponsorship_config(),
     );
 
     // Create slash distribution with default values
@@ -506,15 +507,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         idx = idx + 1;
     };
 
-    if (specs_len > 0) {
-        init_actions::execute_init_intents(
-            &mut account,
-            &account_object_id,
-            &init_specs,
-            clock,
-            ctx,
-        );
-    };
+    // Note: Init intents are now executed via PTB after DAO creation
+    // The frontend reads the staged specs and constructs a deterministic PTB
 
     // Get account ID before sharing
     let account_id = object::id_address(&account);
@@ -649,6 +643,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
+        dao_config::default_sponsorship_config(),
     );
 
     // Create slash distribution with default values
@@ -773,15 +768,8 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         idx = idx + 1;
     };
 
-    if (specs_len > 0) {
-        init_actions::execute_init_intents(
-            &mut account,
-            &account_object_id,
-            &init_specs,
-            clock,
-            ctx,
-        );
-    };
+    // Note: Init intents are now executed via PTB after DAO creation
+    // The frontend reads the staged specs and constructs a deterministic PTB
 
     // Get account ID before sharing
     let account_id = object::id_address(&account);
@@ -879,6 +867,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
+        dao_config::default_sponsorship_config(),
     );
 
     // Create slash distribution with default values

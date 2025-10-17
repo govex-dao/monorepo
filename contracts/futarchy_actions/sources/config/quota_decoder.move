@@ -44,6 +44,7 @@ public fun decode_set_quotas_action(
     let quota_amount = bcs::peel_u64(&mut bcs_data);
     let quota_period_ms = bcs::peel_u64(&mut bcs_data);
     let reduced_fee = bcs::peel_u64(&mut bcs_data);
+    let sponsor_quota_amount = bcs::peel_u64(&mut bcs_data);
 
     // Security: ensure all bytes are consumed to prevent trailing data attacks
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -67,6 +68,11 @@ public fun decode_set_quotas_action(
         schema::new_field(
             b"reduced_fee".to_string(),
             reduced_fee.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"sponsor_quota_amount".to_string(),
+            sponsor_quota_amount.to_string(),
             b"u64".to_string(),
         ),
     ]

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// ============================================================================
-/// PASS THROUGH PERCENT-CAPPED WINDOWED TWAP ORACLE
+/// PERCENT-CAPPED WINDOWED TWAP ORACLE
 /// ============================================================================
 ///
 /// PURPOSE: Provide manipulation-resistant TWAP for oracle grants

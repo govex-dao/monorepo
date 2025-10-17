@@ -28,6 +28,12 @@ public struct QuotaInfo has copy, drop, store {
     period_start_ms: u64,
     /// Usage in current period
     used_in_period: u64,
+    /// Number of sponsorships allowed per period
+    sponsor_quota_amount: u64,
+    /// Sponsorships used in current period
+    sponsor_quota_used: u64,
+    /// Sponsorship period start (aligned to boundaries, not drift)
+    sponsor_period_start_ms: u64,
 }
 
 /// Registry for a specific DAO's proposal quotas
@@ -66,6 +72,30 @@ public struct QuotaUsed has copy, drop {
 public struct QuotaRefunded has copy, drop {
     dao_id: ID,
     user: address,
+    remaining: u64,
+    timestamp: u64,
+    reason: String,
+}
+
+public struct SponsorQuotasSet has copy, drop {
+    dao_id: ID,
+    users: vector<address>,
+    sponsor_quota_amount: u64,
+    timestamp: u64,
+}
+
+public struct SponsorQuotaUsed has copy, drop {
+    dao_id: ID,
+    sponsor: address,
+    proposal_id: ID,
+    remaining: u64,
+    timestamp: u64,
+}
+
+public struct SponsorQuotaRefunded has copy, drop {
+    dao_id: ID,
+    sponsor: address,
+    proposal_id: ID,
     remaining: u64,
     timestamp: u64,
     reason: String,
@@ -121,6 +151,9 @@ public fun set_quotas(
                 reduced_fee,
                 period_start_ms: now,
                 used_in_period: 0,
+                sponsor_quota_amount: 0, // Default: no sponsorship quota
+                sponsor_quota_used: 0,
+                sponsor_period_start_ms: now,
             };
 
             if (registry.quotas.contains(user)) {
@@ -274,6 +307,189 @@ public fun refund_quota(
     };
 }
 
+// === Sponsorship Quota Functions ===
+
+/// Set sponsorship quotas for multiple users (batch operation)
+/// Pass 0 to disable sponsorship quota for users
+public fun set_sponsor_quotas(
+    registry: &mut ProposalQuotaRegistry,
+    dao_id: ID,
+    users: vector<address>,
+    sponsor_quota_amount: u64,
+    clock: &Clock,
+) {
+    // Verify DAO ownership
+    assert!(registry.dao_id == dao_id, EWrongDao);
+
+    let now = clock.timestamp_ms();
+    let mut i = 0;
+    let len = users.length();
+
+    while (i < len) {
+        let user = *users.borrow(i);
+
+        // Only update if user has existing quota info
+        if (registry.quotas.contains(user)) {
+            let info = registry.quotas.borrow_mut(user);
+            info.sponsor_quota_amount = sponsor_quota_amount;
+            info.sponsor_quota_used = 0; // Reset usage
+            info.sponsor_period_start_ms = now; // Reset period
+        };
+
+        i = i + 1;
+    };
+
+    // Emit event
+    event::emit(SponsorQuotasSet {
+        dao_id,
+        users,
+        sponsor_quota_amount,
+        timestamp: now,
+    });
+}
+
+/// Check sponsorship quota availability (read-only, no state mutation)
+/// Returns (has_quota, remaining)
+public fun check_sponsor_quota_available(
+    registry: &ProposalQuotaRegistry,
+    dao_id: ID,
+    sponsor: address,
+    clock: &Clock,
+): (bool, u64) {
+    // Verify DAO ownership
+    assert!(registry.dao_id == dao_id, EWrongDao);
+
+    if (!registry.quotas.contains(sponsor)) {
+        return (false, 0)
+    };
+
+    let info = registry.quotas.borrow(sponsor);
+    let now = clock.timestamp_ms();
+
+    // If no sponsor quota configured, return false
+    if (info.sponsor_quota_amount == 0) {
+        return (false, 0)
+    };
+
+    // Calculate periods elapsed for alignment (no drift)
+    let periods_elapsed = (now - info.sponsor_period_start_ms) / info.quota_period_ms;
+
+    // If period expired, quota resets
+    let used = if (periods_elapsed > 0) {
+        0
+    } else {
+        info.sponsor_quota_used
+    };
+
+    let remaining = info.sponsor_quota_amount - used;
+    let has_quota = remaining > 0;
+    (has_quota, remaining)
+}
+
+/// Use one sponsorship quota slot (called AFTER sponsorship succeeds)
+public fun use_sponsor_quota(
+    registry: &mut ProposalQuotaRegistry,
+    dao_id: ID,
+    sponsor: address,
+    proposal_id: ID,
+    clock: &Clock,
+) {
+    // Verify DAO ownership
+    assert!(registry.dao_id == dao_id, EWrongDao);
+
+    if (!registry.quotas.contains(sponsor)) {
+        return
+    };
+
+    let info = registry.quotas.borrow_mut(sponsor);
+    let now = clock.timestamp_ms();
+
+    // Skip if no sponsor quota configured
+    if (info.sponsor_quota_amount == 0) {
+        return
+    };
+
+    // Reset period if expired (aligned to boundaries)
+    let periods_elapsed = (now - info.sponsor_period_start_ms) / info.quota_period_ms;
+    if (periods_elapsed > 0) {
+        info.sponsor_period_start_ms = info.sponsor_period_start_ms + (periods_elapsed * info.quota_period_ms);
+        info.sponsor_quota_used = 0;
+    };
+
+    // Use one slot (should always have quota here, but safe increment)
+    if (info.sponsor_quota_used < info.sponsor_quota_amount) {
+        info.sponsor_quota_used = info.sponsor_quota_used + 1;
+
+        event::emit(SponsorQuotaUsed {
+            dao_id: registry.dao_id,
+            sponsor,
+            proposal_id,
+            remaining: info.sponsor_quota_amount - info.sponsor_quota_used,
+            timestamp: now,
+        });
+    };
+}
+
+/// Refund one sponsorship quota slot (called when sponsored proposal is evicted/cancelled)
+/// Only decrements if sponsor has used quota in current period
+public fun refund_sponsor_quota(
+    registry: &mut ProposalQuotaRegistry,
+    dao_id: ID,
+    sponsor: address,
+    proposal_id: ID,
+    clock: &Clock,
+) {
+    use std::string;
+
+    // Verify DAO ownership
+    assert!(registry.dao_id == dao_id, EWrongDao);
+
+    if (!registry.quotas.contains(sponsor)) {
+        return
+    };
+
+    let info = registry.quotas.borrow_mut(sponsor);
+    let now = clock.timestamp_ms();
+
+    // Skip if no sponsor quota configured
+    if (info.sponsor_quota_amount == 0) {
+        return
+    };
+
+    // Reset period if expired (aligned to boundaries)
+    let periods_elapsed = (now - info.sponsor_period_start_ms) / info.quota_period_ms;
+    if (periods_elapsed > 0) {
+        info.sponsor_period_start_ms = info.sponsor_period_start_ms + (periods_elapsed * info.quota_period_ms);
+        info.sponsor_quota_used = 0;
+
+        // Emit event for period reset (no refund needed)
+        event::emit(SponsorQuotaRefunded {
+            dao_id: registry.dao_id,
+            sponsor,
+            proposal_id,
+            remaining: info.sponsor_quota_amount, // Full quota available in new period
+            timestamp: now,
+            reason: string::utf8(b"period_expired"),
+        });
+        return
+    };
+
+    // Decrement usage if any quota was used
+    if (info.sponsor_quota_used > 0) {
+        info.sponsor_quota_used = info.sponsor_quota_used - 1;
+
+        // Emit refund event
+        event::emit(SponsorQuotaRefunded {
+            dao_id: registry.dao_id,
+            sponsor,
+            proposal_id,
+            remaining: info.sponsor_quota_amount - info.sponsor_quota_used,
+            timestamp: now,
+            reason: string::utf8(b"proposal_evicted_or_cancelled"),
+        });
+    };
+}
+
 // === View Functions ===
 
 /// Get quota info with remaining count
@@ -318,3 +534,9 @@ public fun reduced_fee(info: &QuotaInfo): u64 { info.reduced_fee }
 public fun period_start_ms(info: &QuotaInfo): u64 { info.period_start_ms }
 
 public fun used_in_period(info: &QuotaInfo): u64 { info.used_in_period }
+
+public fun sponsor_quota_amount(info: &QuotaInfo): u64 { info.sponsor_quota_amount }
+
+public fun sponsor_quota_used(info: &QuotaInfo): u64 { info.sponsor_quota_used }
+
+public fun sponsor_period_start_ms(info: &QuotaInfo): u64 { info.sponsor_period_start_ms }

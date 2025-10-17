@@ -29,15 +29,39 @@ const DAO_STATE_DISSOLVING: u8 = 1;
 const DAO_STATE_PAUSED: u8 = 2;
 const DAO_STATE_DISSOLVED: u8 = 3;
 
+// TWAP scale factor (prices are in 1e12 scale)
+const TWAP_SCALE: u128 = 1_000_000_000_000; // 1e12
+
+// Protocol-level threshold bounds: ±5% maximum
+// This prevents DAOs from setting extreme thresholds that could break markets
+const PROTOCOL_MAX_THRESHOLD_POSITIVE: u128 = 50_000_000_000; // +5% (0.05 * 1e12)
+const PROTOCOL_MAX_THRESHOLD_NEGATIVE: u128 = 50_000_000_000; // -5% (stored as magnitude)
+
 /// Public getter for the dissolving state code
 public fun state_dissolving(): u8 {
     DAO_STATE_DISSOLVING
+}
+
+/// Get the TWAP scale factor (1e12)
+public fun twap_scale(): u128 {
+    TWAP_SCALE
+}
+
+/// Get the protocol maximum positive threshold (+5%)
+public fun protocol_max_threshold_positive(): u128 {
+    PROTOCOL_MAX_THRESHOLD_POSITIVE
+}
+
+/// Get the protocol maximum negative threshold magnitude (5%)
+public fun protocol_max_threshold_negative(): u128 {
+    PROTOCOL_MAX_THRESHOLD_NEGATIVE
 }
 
 // === Errors ===
 
 const EInvalidSlashDistribution: u64 = 0;
 const ELaunchpadPriceAlreadySet: u64 = 101;
+const EThresholdExceedsProtocolMax: u64 = 102;
 
 // === Structs ===
 
@@ -757,6 +781,12 @@ public fun set_amm_twap_initial_observation(config: &mut FutarchyConfig, obs: u1
 }
 
 public fun set_twap_threshold(config: &mut FutarchyConfig, threshold: SignedU128) {
+    use futarchy_types::signed;
+
+    // Protocol-level validation: threshold must be within ±5%
+    let magnitude = signed::magnitude(&threshold);
+    assert!(magnitude <= PROTOCOL_MAX_THRESHOLD_POSITIVE, EThresholdExceedsProtocolMax);
+
     let twap_cfg = dao_config::twap_config_mut(&mut config.config);
     dao_config::set_threshold(twap_cfg, threshold);
 }

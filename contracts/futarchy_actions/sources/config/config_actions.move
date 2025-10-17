@@ -133,6 +133,14 @@ public struct EarlyResolveConfigChanged has copy, drop {
     timestamp: u64,
 }
 
+/// Emitted when sponsorship config is updated
+public struct SponsorshipConfigChanged has copy, drop {
+    account_id: ID,
+    enabled: bool,
+    waive_advancement_fees: bool,
+    timestamp: u64,
+}
+
 // === Basic Action Structs ===
 
 /// Action to enable or disable proposals
@@ -233,6 +241,14 @@ public struct EarlyResolveConfigUpdateAction has store, drop, copy {
     flip_window_duration_ms: u64,
     enable_twap_scaling: bool,
     keeper_reward_bps: u64,
+}
+
+/// Sponsorship configuration update action
+public struct SponsorshipConfigUpdateAction has store, drop, copy {
+    enabled: Option<bool>,
+    sponsored_threshold: Option<SignedU128>,
+    waive_advancement_fees: Option<bool>,
+    default_sponsor_quota_amount: Option<u64>,
 }
 
 /// Wrapper for different config action types (for batch operations)
@@ -1153,6 +1169,81 @@ public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
+/// Execute a sponsorship config update action
+public fun do_update_sponsorship_config<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_type_markers::SponsorshipConfigUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let enabled = reader.peel_option_bool();
+    let sponsored_threshold = bcs::peel_option!(&mut reader, |r| {
+        let magnitude = r.peel_u128();
+        let is_negative = r.peel_bool();
+        signed::from_parts(magnitude, is_negative)
+    });
+    let waive_advancement_fees = reader.peel_option_bool();
+    let default_sponsor_quota_amount = reader.peel_option_u64();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Get account ID first before taking mutable borrows
+    let account_id = object::id(account);
+
+    // Get mutable config through Account protocol with witness
+    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let dao_cfg = futarchy_config::dao_config_mut(config);
+    let sponsorship_cfg = dao_config::sponsorship_config_mut(dao_cfg);
+
+    // Apply updates if provided
+    if (enabled.is_some()) {
+        dao_config::set_sponsorship_enabled(sponsorship_cfg, enabled.destroy_some());
+    };
+    if (sponsored_threshold.is_some()) {
+        dao_config::set_sponsored_threshold(sponsorship_cfg, sponsored_threshold.destroy_some());
+    };
+    if (waive_advancement_fees.is_some()) {
+        dao_config::set_waive_advancement_fees(sponsorship_cfg, waive_advancement_fees.destroy_some());
+    };
+    if (default_sponsor_quota_amount.is_some()) {
+        dao_config::set_default_sponsor_quota_amount(sponsorship_cfg, default_sponsor_quota_amount.destroy_some());
+    };
+
+    // Get final values after updates
+    let final_enabled = dao_config::sponsorship_enabled(sponsorship_cfg);
+    let final_waive_fees = dao_config::waive_advancement_fees(sponsorship_cfg);
+
+    // Emit event
+    event::emit(SponsorshipConfigChanged {
+        account_id,
+        enabled: final_enabled,
+        waive_advancement_fees: final_waive_fees,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
 /// Execute a batch config action that can contain any type of config update
 /// This delegates to the appropriate handler based on config_type
 public fun do_batch_config<Outcome: store, IW: drop>(
@@ -1302,6 +1393,16 @@ public fun destroy_early_resolve_config_update(action: EarlyResolveConfigUpdateA
         flip_window_duration_ms: _,
         enable_twap_scaling: _,
         keeper_reward_bps: _,
+    } = action;
+}
+
+/// Destroy a SponsorshipConfigUpdateAction
+public fun destroy_sponsorship_config_update(action: SponsorshipConfigUpdateAction) {
+    let SponsorshipConfigUpdateAction {
+        enabled: _,
+        sponsored_threshold: _,
+        waive_advancement_fees: _,
+        default_sponsor_quota_amount: _,
     } = action;
 }
 
@@ -1456,6 +1557,22 @@ public fun delete_early_resolve_config_update<Config>(expired: &mut Expired) {
     reader.peel_u64();
     reader.peel_bool();
     reader.peel_u64();
+    let _ = reader.into_remainder_bytes();
+}
+
+/// Delete a sponsorship config update action from an expired intent
+public fun delete_sponsorship_config_update<Config>(expired: &mut Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    let mut reader = bcs::new(action_data);
+    reader.peel_option_bool();
+    // Peel Option<SignedU128> - magnitude: u128, is_negative: bool
+    let _ = bcs::peel_option!(&mut reader, |r| {
+        r.peel_u128();
+        r.peel_bool()
+    });
+    reader.peel_option_bool();
+    reader.peel_option_u64();
     let _ = reader.into_remainder_bytes();
 }
 
@@ -1623,6 +1740,44 @@ public fun new_conditional_metadata_update_action(
     ConditionalMetadataUpdateAction {
         use_outcome_index,
         conditional_metadata,
+    }
+}
+
+/// Create a sponsorship config update action
+public fun new_sponsorship_config_update_action(
+    enabled: Option<bool>,
+    sponsored_threshold: Option<SignedU128>,
+    waive_advancement_fees: Option<bool>,
+    default_sponsor_quota_amount: Option<u64>,
+): SponsorshipConfigUpdateAction {
+    SponsorshipConfigUpdateAction {
+        enabled,
+        sponsored_threshold,
+        waive_advancement_fees,
+        default_sponsor_quota_amount,
+    }
+}
+
+/// Create an early resolve config update action
+public fun new_early_resolve_config_update_action(
+    min_proposal_duration_ms: u64,
+    max_proposal_duration_ms: u64,
+    min_winner_spread: u128,
+    min_time_since_last_flip_ms: u64,
+    max_flips_in_window: u64,
+    flip_window_duration_ms: u64,
+    enable_twap_scaling: bool,
+    keeper_reward_bps: u64,
+): EarlyResolveConfigUpdateAction {
+    EarlyResolveConfigUpdateAction {
+        min_proposal_duration_ms,
+        max_proposal_duration_ms,
+        min_winner_spread,
+        min_time_since_last_flip_ms,
+        max_flips_in_window,
+        flip_window_duration_ms,
+        enable_twap_scaling,
+        keeper_reward_bps,
     }
 }
 
@@ -2323,6 +2478,21 @@ public(package) fun early_resolve_config_update_action_from_bytes(bytes: vector<
         flip_window_duration_ms: bcs.peel_u64(),
         enable_twap_scaling: bcs.peel_bool(),
         keeper_reward_bps: bcs.peel_u64(),
+    }
+}
+
+/// Deserialize SponsorshipConfigUpdateAction from bytes
+public(package) fun sponsorship_config_update_action_from_bytes(bytes: vector<u8>): SponsorshipConfigUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    SponsorshipConfigUpdateAction {
+        enabled: bcs.peel_option_bool(),
+        sponsored_threshold: bcs::peel_option!(&mut bcs, |r| {
+            let magnitude = r.peel_u128();
+            let is_negative = r.peel_bool();
+            signed::from_parts(magnitude, is_negative)
+        }),
+        waive_advancement_fees: bcs.peel_option_bool(),
+        default_sponsor_quota_amount: bcs.peel_option_u64(),
     }
 }
 

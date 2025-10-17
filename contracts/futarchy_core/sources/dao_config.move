@@ -28,6 +28,8 @@ const EMaxActionsExceedsProtocol: u64 = 11; // Max actions exceeds protocol limi
 const EStateInconsistent: u64 = 12; // State would become inconsistent with this change
 const EInvalidQuotaParams: u64 = 14; // Invalid quota parameters
 const ENoConditionalMetadata: u64 = 15; // No conditional metadata available (neither CoinMetadata nor fallback config)
+const ESponsoredThresholdMustBeNonPositive: u64 = 17; // Sponsored threshold must be ≤ 0
+const ESponsoredThresholdExceedsProtocolMax: u64 = 18; // Sponsored threshold magnitude exceeds ±5%
 
 // === Constants ===
 // Most constants are now in futarchy_utils::constants
@@ -44,6 +46,9 @@ const ENoConditionalMetadata: u64 = 15; // No conditional metadata available (ne
 // - 8 decimals (BTC-style): 100,000 = 0.001 tokens
 // - 9 decimals (Sui): 100,000 = 0.0001 tokens (basically free)
 const PROTOCOL_MIN_LIQUIDITY_AMOUNT: u64 = 100000;
+
+// Protocol-level threshold bounds: ±5% maximum (duplicated here to avoid circular dependency)
+const PROTOCOL_MAX_THRESHOLD_NEGATIVE: u128 = 50_000_000_000; // -5% (stored as magnitude, 0.05 * 1e12)
 
 // === Structs ===
 
@@ -136,6 +141,15 @@ public struct QuotaConfig has copy, drop, store {
     default_reduced_fee: u64, // Default reduced fee (0 for free)
 }
 
+/// Sponsorship system configuration
+/// Allows team members to sponsor external proposals by setting a fixed threshold
+public struct SponsorshipConfig has copy, drop, store {
+    enabled: bool, // If true, sponsorship system is active
+    sponsored_threshold: SignedU128, // Fixed threshold for sponsored proposals (must be ≤ 0, e.g., 0 or -2%)
+    waive_advancement_fees: bool, // Does sponsorship also waive advancement fees?
+    default_sponsor_quota_amount: u64, // Default sponsorships per period
+}
+
 /// Complete DAO configuration
 public struct DaoConfig has copy, drop, store {
     trading_params: TradingParams,
@@ -146,6 +160,7 @@ public struct DaoConfig has copy, drop, store {
     storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
+    sponsorship_config: SponsorshipConfig,
 }
 
 // === Constructor Functions ===
@@ -353,6 +368,37 @@ public fun new_quota_config(
     }
 }
 
+/// Create a new sponsorship configuration
+public fun new_sponsorship_config(
+    enabled: bool,
+    sponsored_threshold: SignedU128,
+    waive_advancement_fees: bool,
+    default_sponsor_quota_amount: u64,
+): SponsorshipConfig {
+    if (enabled) {
+        assert!(default_sponsor_quota_amount > 0, EInvalidQuotaParams);
+
+        // Protocol-level validation: sponsored_threshold must be ≤ 0 and magnitude ≤ 5%
+        let magnitude = signed::magnitude(&sponsored_threshold);
+        let is_negative = signed::is_negative(&sponsored_threshold);
+
+        // Must be zero or negative
+        assert!(is_negative || magnitude == 0, ESponsoredThresholdMustBeNonPositive);
+
+        // If negative, magnitude must be ≤ 5%
+        if (is_negative) {
+            assert!(magnitude <= PROTOCOL_MAX_THRESHOLD_NEGATIVE, ESponsoredThresholdExceedsProtocolMax);
+        };
+    };
+
+    SponsorshipConfig {
+        enabled,
+        sponsored_threshold,
+        waive_advancement_fees,
+        default_sponsor_quota_amount,
+    }
+}
+
 
 /// Create a complete DAO configuration
 public fun new_dao_config(
@@ -364,6 +410,7 @@ public fun new_dao_config(
     storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
+    sponsorship_config: SponsorshipConfig,
 ): DaoConfig {
     DaoConfig {
         trading_params,
@@ -374,6 +421,7 @@ public fun new_dao_config(
         storage_config,
         conditional_coin_config,
         quota_config,
+        sponsorship_config,
     }
 }
 
@@ -584,6 +632,21 @@ public fun default_quota_amount(quota: &QuotaConfig): u64 { quota.default_quota_
 public fun default_quota_period_ms(quota: &QuotaConfig): u64 { quota.default_quota_period_ms }
 
 public fun default_reduced_fee(quota: &QuotaConfig): u64 { quota.default_reduced_fee }
+
+// Sponsorship config getters
+public fun sponsorship_config(config: &DaoConfig): &SponsorshipConfig { &config.sponsorship_config }
+
+public fun sponsorship_config_mut(config: &mut DaoConfig): &mut SponsorshipConfig {
+    &mut config.sponsorship_config
+}
+
+public fun sponsorship_enabled(sponsorship: &SponsorshipConfig): bool { sponsorship.enabled }
+
+public fun sponsored_threshold(sponsorship: &SponsorshipConfig): SignedU128 { sponsorship.sponsored_threshold }
+
+public fun waive_advancement_fees(sponsorship: &SponsorshipConfig): bool { sponsorship.waive_advancement_fees }
+
+public fun default_sponsor_quota_amount(sponsorship: &SponsorshipConfig): u64 { sponsorship.default_sponsor_quota_amount }
 
 // === Update Functions ===
 
@@ -857,6 +920,39 @@ public(package) fun set_default_reduced_fee(quota: &mut QuotaConfig, fee: u64) {
     quota.default_reduced_fee = fee;
 }
 
+// Sponsorship config direct setters
+
+public fun set_sponsorship_enabled(sponsorship: &mut SponsorshipConfig, enabled: bool) {
+    sponsorship.enabled = enabled;
+}
+
+public fun set_sponsored_threshold(sponsorship: &mut SponsorshipConfig, threshold: SignedU128) {
+    // Protocol-level validation: sponsored_threshold must be ≤ 0 and magnitude ≤ 5%
+    let magnitude = signed::magnitude(&threshold);
+    let is_negative = signed::is_negative(&threshold);
+
+    // Must be zero or negative
+    assert!(is_negative || magnitude == 0, ESponsoredThresholdMustBeNonPositive);
+
+    // If negative, magnitude must be ≤ 5%
+    if (is_negative) {
+        assert!(magnitude <= PROTOCOL_MAX_THRESHOLD_NEGATIVE, ESponsoredThresholdExceedsProtocolMax);
+    };
+
+    sponsorship.sponsored_threshold = threshold;
+}
+
+public fun set_waive_advancement_fees(sponsorship: &mut SponsorshipConfig, waive: bool) {
+    sponsorship.waive_advancement_fees = waive;
+}
+
+public fun set_default_sponsor_quota_amount(sponsorship: &mut SponsorshipConfig, amount: u64) {
+    if (sponsorship.enabled) {
+        assert!(amount > 0, EInvalidQuotaParams);
+    };
+    sponsorship.default_sponsor_quota_amount = amount;
+}
+
 // === String conversion wrapper functions ===
 
 /// Set DAO name from String (converts to AsciiString)
@@ -881,6 +977,7 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        sponsorship_config: config.sponsorship_config,
     }
 }
 
@@ -895,6 +992,7 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        sponsorship_config: config.sponsorship_config,
     }
 }
 
@@ -909,6 +1007,7 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        sponsorship_config: config.sponsorship_config,
     }
 }
 
@@ -923,6 +1022,7 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        sponsorship_config: config.sponsorship_config,
     }
 }
 
@@ -937,6 +1037,7 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        sponsorship_config: config.sponsorship_config,
     }
 }
 
@@ -951,6 +1052,7 @@ public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig)
         storage_config: new_storage,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        sponsorship_config: config.sponsorship_config,
     }
 }
 
@@ -968,6 +1070,7 @@ public fun update_conditional_coin_config(
         storage_config: config.storage_config,
         conditional_coin_config: new_coin_config,
         quota_config: config.quota_config,
+        sponsorship_config: config.sponsorship_config,
     }
 }
 
@@ -982,6 +1085,22 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: new_quota,
+        sponsorship_config: config.sponsorship_config,
+    }
+}
+
+/// Update sponsorship configuration (returns new config)
+public fun update_sponsorship_config(config: &DaoConfig, new_sponsorship: SponsorshipConfig): DaoConfig {
+    DaoConfig {
+        trading_params: config.trading_params,
+        twap_config: config.twap_config,
+        governance_config: config.governance_config,
+        metadata_config: config.metadata_config,
+        security_config: config.security_config,
+        storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        sponsorship_config: new_sponsorship,
     }
 }
 
@@ -1061,6 +1180,16 @@ public fun default_quota_config(): QuotaConfig {
         default_quota_amount: 1, // 1 proposal per period by default
         default_quota_period_ms: 2_592_000_000, // 30 days
         default_reduced_fee: 0, // Free by default
+    }
+}
+
+/// Get default sponsorship configuration
+public fun default_sponsorship_config(): SponsorshipConfig {
+    SponsorshipConfig {
+        enabled: false, // Opt-in feature
+        sponsored_threshold: signed::from_u64(0), // Zero threshold by default
+        waive_advancement_fees: false, // Don't waive fees by default
+        default_sponsor_quota_amount: 1, // 1 sponsorship per period by default
     }
 }
 
