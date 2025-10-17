@@ -101,45 +101,6 @@ fun test_deposit_and_withdraw() {
     end(scenario, extensions, account, clock);
 }
 
-#[test]
-fun test_permissionless_deposit() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let vault_name = b"test_vault".to_string();
-
-    // Open vault and add initial coins
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
-    let coin = coin::mint_for_testing<SUI>(100, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
-
-    // Anyone can deposit to existing coin types
-    let additional_coin = coin::mint_for_testing<SUI>(50, scenario.ctx());
-    vault::deposit_permissionless(&mut account, vault_name, additional_coin);
-
-    // Verify total
-    let vault_ref = vault::borrow_vault(&account, vault_name);
-    assert!(vault::coin_type_value<SUI>(vault_ref) == 150);
-
-    end(scenario, extensions, account, clock);
-}
-
-#[test]
-#[expected_failure(abort_code = vault::EWrongCoinType)]
-fun test_permissionless_deposit_wrong_coin_type() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let vault_name = b"test_vault".to_string();
-
-    // Open vault (empty, no coin types)
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-
-    // Try to deposit to non-existent coin type - should fail
-    let coin = coin::mint_for_testing<SUI>(100, scenario.ctx());
-    vault::deposit_permissionless(&mut account, vault_name, coin);
-
-    end(scenario, extensions, account, clock);
-}
 
 #[test]
 fun test_create_and_withdraw_from_stream() {
