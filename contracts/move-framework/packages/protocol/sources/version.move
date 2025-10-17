@@ -1,3 +1,9 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// This module tracks the version of the package by implementing the version_witness type.
 /// A new version type should be defined for each new version of the package.
 

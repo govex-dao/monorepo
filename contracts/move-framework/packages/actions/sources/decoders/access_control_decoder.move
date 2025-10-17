@@ -1,19 +1,5 @@
-// ============================================================================
-// FORK ADDITION - Access Control Action Decoder
-// ============================================================================
-// NEW FILE added to the fork for on-chain action decoding.
-//
-// PURPOSE:
-// Provides human-readable decoding of access control actions for transparency.
-// Part of the mandatory decoder system that ensures all actions can be
-// decoded and displayed to users before execution.
-//
-// IMPLEMENTATION:
-// - Handles BorrowAction and ReturnAction (empty structs)
-// - Minimal decoder as these actions have no fields
-// - Still validates BCS consumption for security
-// - Returns action type information for display
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
 /// Decoder for access control actions - tightly coupled with access control action definitions
 module account_actions::access_control_decoder;

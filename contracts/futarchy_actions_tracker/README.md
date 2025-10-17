@@ -89,7 +89,7 @@ find \
     contracts/futarchy_legal_actions/sources \
     contracts/futarchy_governance_actions/sources \
     contracts/futarchy_actions/sources \
-    contracts/futarchy_dao/sources \
+    contracts/futarchy_governance/sources \
     -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_19_packages.txt
 ```
 

@@ -1,19 +1,5 @@
-// ============================================================================
-// FORK ADDITION - Vesting Action Decoder
-// ============================================================================
-// NEW FILE added to the fork for on-chain action decoding.
-//
-// PURPOSE:
-// Provides human-readable decoding of vesting actions for transparency.
-// Part of the mandatory decoder system that ensures all actions can be
-// decoded and displayed to users before execution.
-//
-// IMPLEMENTATION:
-// - Uses BCS deserialization with peel_* functions
-// - Security validation via validate_all_bytes_consumed()
-// - Returns vector<HumanReadableField> for universal display
-// - Handles CreateVestingAction and CancelVestingAction
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
 /// Decoder for vesting actions - tightly coupled with vesting action definitions
 module account_actions::vesting_decoder;

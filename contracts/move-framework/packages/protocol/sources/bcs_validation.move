@@ -1,28 +1,7 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - BCS Validation Security Module
-// ============================================================================
-// NEW FILE added to the fork for BCS deserialization security.
-//
-// CHANGES IN THIS FORK (2025-01-14):
-// - Added validate_all_bytes_consumed() function
-// - Prevents trailing data attacks in action deserialization
-// - Required by all decoder modules for security
-//
-// PURPOSE:
-// - Ensures all BCS bytes are consumed when deserializing actions
-// - Prevents attacks where extra data is appended to action payloads
-// - Critical for security of the typed Intent system
-//
-// SECURITY CONSIDERATIONS:
-// Without this validation, attackers could append extra bytes to actions that
-// would be ignored during deserialization but could potentially affect
-// execution if the bytes were passed to other functions.
-//
-// USAGE:
-// Called after deserializing any action from BCS to ensure no trailing data.
-// Example: After bcs::peel_vec_u8(&mut reader), call validate_all_bytes_consumed(reader)
-// ============================================================================
-/// BCS validation helpers to ensure complete consumption of serialized data
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+/// BCS validation helpers to ensure complete consumption of serialized data.
 module account_protocol::bcs_validation;
 
 use sui::bcs::BCS;

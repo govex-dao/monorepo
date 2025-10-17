@@ -9,7 +9,7 @@ module futarchy_stream_actions::stream_intents;
 use account_actions::vault;
 use account_extensions::framework_action_types;
 use account_protocol::intents::Intent;
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 use futarchy_stream_actions::stream_actions;
 use std::bcs;
 use std::option::Option;

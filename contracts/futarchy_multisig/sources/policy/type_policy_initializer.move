@@ -5,7 +5,7 @@
 module futarchy_multisig::type_policy_initializer;
 
 use account_extensions::framework_action_types;
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
 use std::option::{Self, Option};
 use sui::object::ID;
@@ -79,7 +79,7 @@ public fun init_governance_policies(
     create_proposal_delay_ms: u64,
 ) {
     // Most governance changes are DAO-only
-    policy_registry::set_type_policy<action_types::UpdateName>(
+    policy_registry::set_type_policy<action_type_markers::UpdateName>(
         registry,
         dao_id,
         option::none(),
@@ -89,7 +89,7 @@ public fun init_governance_policies(
         update_name_delay_ms,
     );
 
-    policy_registry::set_type_policy<action_types::MetadataUpdate>(
+    policy_registry::set_type_policy<action_type_markers::MetadataUpdate>(
         registry,
         dao_id,
         option::none(),
@@ -99,7 +99,7 @@ public fun init_governance_policies(
         metadata_update_delay_ms,
     );
 
-    policy_registry::set_type_policy<action_types::TradingParamsUpdate>(
+    policy_registry::set_type_policy<action_type_markers::TradingParamsUpdate>(
         registry,
         dao_id,
         option::none(),
@@ -109,7 +109,7 @@ public fun init_governance_policies(
         trading_params_delay_ms,
     );
 
-    policy_registry::set_type_policy<action_types::GovernanceUpdate>(
+    policy_registry::set_type_policy<action_type_markers::GovernanceUpdate>(
         registry,
         dao_id,
         option::none(),
@@ -120,7 +120,7 @@ public fun init_governance_policies(
     );
 
     // Proposal creation is DAO-only
-    policy_registry::set_type_policy<action_types::CreateProposal>(
+    policy_registry::set_type_policy<action_type_markers::CreateProposal>(
         registry,
         dao_id,
         option::none(),
@@ -143,7 +143,7 @@ public fun init_security_policies(
 ) {
     // NOTE: The DAO should decide through governance whether to allow
     // the security council to set policies on objects. This would be done by:
-    // policy_registry::set_type_policy<action_types::SetObjectPolicy>(
+    // policy_registry::set_type_policy<action_type_markers::SetObjectPolicy>(
     //     registry, option::some(security_council), policy_registry::MODE_DAO_OR_COUNCIL()
     // );
 
@@ -180,7 +180,7 @@ public fun init_security_policies(
     );
 
     // Emergency dissolution requires both
-    policy_registry::set_type_policy<action_types::InitiateDissolution>(
+    policy_registry::set_type_policy<action_type_markers::InitiateDissolution>(
         registry,
         dao_id,
         option::some(security_council),
@@ -202,7 +202,7 @@ public fun init_protocol_admin_policies(
     monthly_dao_fee_delay_ms: u64,
 ) {
     // Factory management requires admin council
-    policy_registry::set_type_policy<action_types::SetFactoryPaused>(
+    policy_registry::set_type_policy<action_type_markers::SetFactoryPaused>(
         registry,
         dao_id,
         option::some(admin_council),
@@ -213,7 +213,7 @@ public fun init_protocol_admin_policies(
     );
 
     // Fee updates require both DAO and admin
-    policy_registry::set_type_policy<action_types::UpdateDaoCreationFee>(
+    policy_registry::set_type_policy<action_type_markers::UpdateDaoCreationFee>(
         registry,
         dao_id,
         option::some(admin_council),
@@ -223,7 +223,7 @@ public fun init_protocol_admin_policies(
         dao_creation_fee_delay_ms,
     );
 
-    policy_registry::set_type_policy<action_types::UpdateProposalFee>(
+    policy_registry::set_type_policy<action_type_markers::UpdateProposalFee>(
         registry,
         dao_id,
         option::some(admin_council),
@@ -244,7 +244,7 @@ public fun init_liquidity_policies(
     remove_liquidity_delay_ms: u64,
 ) {
     // Pool creation requires treasury council
-    policy_registry::set_type_policy<action_types::CreatePool>(
+    policy_registry::set_type_policy<action_type_markers::CreatePool>(
         registry,
         dao_id,
         option::some(treasury_council),
@@ -255,7 +255,7 @@ public fun init_liquidity_policies(
     );
 
     // Adding/removing liquidity requires treasury council
-    policy_registry::set_type_policy<action_types::AddLiquidity>(
+    policy_registry::set_type_policy<action_type_markers::AddLiquidity>(
         registry,
         dao_id,
         option::some(treasury_council),
@@ -265,7 +265,7 @@ public fun init_liquidity_policies(
         add_liquidity_delay_ms,
     );
 
-    policy_registry::set_type_policy<action_types::RemoveLiquidity>(
+    policy_registry::set_type_policy<action_type_markers::RemoveLiquidity>(
         registry,
         dao_id,
         option::some(treasury_council),

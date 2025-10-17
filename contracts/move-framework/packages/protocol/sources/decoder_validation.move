@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Decoder validation helper module
 /// Provides functions to check if decoders exist for action types
 module account_protocol::decoder_validation;

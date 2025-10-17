@@ -634,11 +634,6 @@ fun test_error_new_inner_add_addr_already_exists() {
     destroy(extensions);
     ts::end(scenario);
 }
-
-// ============================================================================
-// FORK TESTS - VecSet Optimization Performance and Edge Cases
-// ============================================================================
-
 #[test]
 /// Test that we can handle many dependencies efficiently (10+ deps scenario)
 fun test_deps_scalability_many_deps() {

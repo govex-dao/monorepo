@@ -4,7 +4,7 @@
 /// Public cleanup functions for expired intents
 /// Sui's storage rebate system naturally incentivizes cleanup -
 /// cleaners get the storage deposit back when deleting objects
-module futarchy_actions::intent_janitor;
+module futarchy_governance::intent_janitor;
 
 use account_protocol::account::{Self, Account};
 use account_protocol::intents::{Self, Expired};

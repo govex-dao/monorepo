@@ -1,27 +1,8 @@
-/// === FORK MODIFICATIONS ===
-/// VECSET OPTIMIZATION FOR DUPLICATE DETECTION:
-/// - Optimized to handle future growth to 10-20+ dependencies
-/// - Dependencies may include: Cetus CLMM, Scallop, custom DAO packages, etc.
-///
-/// Changes in this fork:
-/// - new(), new_latest_extensions(), new_inner(): Use VecSet for O(N log N)
-///   duplicate detection during construction instead of O(N²) nested loops
-/// - Storage remains vector-based to maintain `copy` + `drop` abilities
-/// - Lookups remain O(N) which is acceptable for N≤20
-///
-/// TYPE-BASED ACTION SYSTEM:
-/// - No direct changes, but deps are used with type-based action routing
-///
-/// Why not VecMap: VecMap's get() method has borrow checker issues - the key
-/// must remain borrowed while the reference is in use, incompatible with our API
-/// Why not Table: Tables don't support `copy` or `drop` abilities which Deps requires
-//
-// Performance impact:
-// - Before: N=20 required 190 comparisons during construction
-// - After: N=20 requires ~86 operations (N log N with VecSet)
-//
-// All fork modifications are licensed under BSL 1.1
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
 
 /// Dependencies are the packages that an Account object can call.
 /// They are stored in a vector and can be modified through an intent.

@@ -1,10 +1,10 @@
-/// === FORK MODIFICATIONS ===
-/// TYPE-BASED ACTION SYSTEM:
-/// - Updated to use type_name::with_defining_ids for better type safety
-/// - No other structural changes, user module works with type-based intents
-///
-/// NOTE: The reorder_accounts function uses the original simple approach
-/// as duplicates are already prevented during add_account operations
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
+/// User account support utilities.
 
 /// Users have a non-transferable User account object used to track Accounts in which they are a member.
 /// Each account type can define a way to send on-chain invites to Users.

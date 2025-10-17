@@ -1,22 +1,8 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Account with Hot Potato Execution
-// ============================================================================
-// Core module managing Account<Config> with intent-based action execution.
-//
-// CHANGES IN THIS FORK:
-// - REMOVED: lock_object() function - no longer needed
-// - REMOVED: unlock_object() function - no longer needed
-// - ADDED: cancel_intent() function - allows config-authorized intent cancellation
-// - REMOVED ExecutionContext - PTBs handle object flow naturally
-// - Type safety through compile-time checks
-// - Removed ~100 lines of object locking code
-//
-// RATIONALE:
-// In DAO governance, multiple proposals competing for the same resources is
-// natural and desirable. The blockchain's ownership model already provides
-// necessary conflict resolution. Removal prevents the critical footgun where
-// objects could become permanently locked if cleanup wasn't performed correctly.
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
 
 /// This is the core module managing the account Account<Config>.
 /// It provides the apis to create, approve and execute intents with actions.
@@ -1189,14 +1175,6 @@ public fun set_max_objects_for_testing<Config>(account: &mut Account<Config>, ma
 
 /// Share an account - can only be called by this module
 /// Used during DAO/account initialization after setup is complete
-///
-/// ## FORK NOTE
-/// **Added**: `share_account()` function for atomic DAO initialization
-/// **Reason**: Sui requires that `share_object()` be called from the module that defines
-/// the type. This function enables the hot potato pattern: factory creates unshared Account,
-/// PTB performs initialization actions, then factory calls this to share Account publicly.
-/// **Pattern**: Part of create_unshared → init → share_account flow
-/// **Safety**: Public visibility is safe - only works on unshared Accounts owned by caller
 public fun share_account<Config: store>(account: Account<Config>) {
     transfer::share_object(account);
 }

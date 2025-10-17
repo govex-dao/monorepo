@@ -1,16 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Transfer with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module defines APIs to transfer assets owned or managed by Account.
-//
-// CHANGES IN THIS FORK:
-// - TransferAction uses TransferObject type marker from framework_action_types
-// - Implemented serialize-then-destroy pattern for resource safety
-// - Added destroy_transfer_action function for explicit destruction
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Enhanced BCS validation: version checks + validate_all_bytes_consumed
-// - Type-safe action validation through compile-time TypeName comparison
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// This module defines apis to transfer assets owned or managed by the account.
 /// The intents can implement transfers for any action type (e.g. see owned or vault).
 
@@ -118,13 +111,6 @@ public fun do_transfer<Outcome: store, T: key + store, IW: drop>(
 
 /// Transfer object during initialization - works on unshared Accounts
 /// Directly transfers an object to a recipient during DAO creation.
-///
-/// ## FORK NOTE
-/// **Added**: `do_transfer_unshared()` for init-time object transfers
-/// **Reason**: Allow transferring objects created during DAO setup (e.g., ClaimCaps
-/// from vesting, or other initialization artifacts) to intended recipients atomically.
-/// **Safety**: Public visibility is safe - function doesn't access Account state
-///
 /// SAFETY: This function can be called during initialization to transfer
 /// objects that were created as part of the DAO setup.
 public fun do_transfer_unshared<T: key + store>(
@@ -195,4 +181,3 @@ public fun delete_transfer_to_sender(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, automatically cleaned up
 }
-

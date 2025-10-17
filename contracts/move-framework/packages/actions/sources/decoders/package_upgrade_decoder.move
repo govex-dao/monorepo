@@ -1,18 +1,5 @@
-// ============================================================================
-// FORK ADDITION - Package Upgrade Action Decoder
-// ============================================================================
-// NEW FILE added to the fork for on-chain action decoding.
-//
-// PURPOSE:
-// Provides human-readable decoding of package upgrade actions for transparency.
-// Critical for DAO governance to understand contract upgrade proposals.
-//
-// IMPLEMENTATION:
-// - Handles UpgradeAction and RestrictAction for package management
-// - Decodes digest (32 bytes) and policy fields
-// - Uses BCS deserialization with security validation
-// - Returns vector<HumanReadableField> for universal display
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
 /// Decoder for package upgrade actions
 module account_actions::package_upgrade_decoder;

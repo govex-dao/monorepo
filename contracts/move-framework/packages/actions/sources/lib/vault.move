@@ -1,54 +1,8 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Vault Management with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module manages multi-vault treasury operations with streaming support.
-//
-// CHANGES IN THIS FORK:
-// - Actions use type markers: VaultDeposit, VaultSpend
-// - Implemented serialize-then-destroy pattern for resource safety
-// - Added destruction functions for all action structs
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Enhanced BCS validation: version checks + validate_all_bytes_consumed
-// - Type-safe action validation through compile-time TypeName comparison
-// - REMOVED ExecutionContext - PTBs handle object flow naturally
-// ============================================================================
-/// Members can create multiple vaults with different balances and managers (using roles).
-/// This allows for a more flexible and granular way to manage funds.
-///
-/// === Fork Modifications (BSL 1.1 Licensed) ===
-/// Enhanced vault module with comprehensive streaming functionality:
-/// - Added generic stream management capabilities:
-///   * Multiple beneficiaries support (primary + additional)
-///   * Pause/resume functionality with duration tracking
-///   * Stream metadata for extensibility
-///   * Transferability and cancellability settings
-///   * Beneficiary management (add/remove/transfer)
-///   * Amount reduction capability
-/// - Maintains backward compatibility with existing vault operations
-/// - Enables other modules to build on top without duplicating stream state
-/// - VaultStream: Time-based streaming with rate limiting for controlled treasury withdrawals
-/// - Permissionless deposits: Anyone can add to existing coin types (enables revenue/donations)
-/// - Stream management: Create, withdraw from, and cancel streams with proper vesting math
-/// - All funds remain in vault until withdrawn (no separate vesting objects)
-///
-/// === Integration with Shared Utilities ===
-/// As of the latest refactor, vault streams now use the shared stream_utils module
-/// for all vesting calculations. This ensures:
-/// - Consistent math with standalone vesting module
-/// - Reduced code duplication and maintenance burden
-/// - Unified approach to time-based fund releases
-/// - Shared security validations and overflow protection
-///
-/// Note: The vesting.move module has been restored and enhanced to provide
-/// standalone vesting functionality. Vault streams are for treasury-managed
-/// streaming payments, while vestings are for independent token locks.
-///
-/// These changes enable DAOs to:
-/// 1. Grant time-limited treasury access without full custody
-/// 2. Implement salary/grant payments that vest over time
-/// 3. Accept permissionless revenue deposits from protocols
-/// 4. Enforce withdrawal limits and cooling periods for security
-/// 5. Choose between vault-managed streams or standalone vestings
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
 
 module account_actions::vault;
 
@@ -102,7 +56,7 @@ const EWithdrawalTooSoon: u64 = 7;
 const EInsufficientVestedAmount: u64 = 8;
 const EInvalidStreamParameters: u64 = 9;
 const EIntentAmountMismatch: u64 = 10;
-// === Fork additions ===
+// Additional error codes
 const EStreamPaused: u64 = 11;
 const EAmountMustBeGreaterThanZero: u64 = 20;
 const EVaultDoesNotExist: u64 = 21;
@@ -136,8 +90,8 @@ public struct Vault has store {
 }
 
 /// Stream for time-based vesting from vault
-/// === Fork Enhancement ===
-/// Added generic stream management features:
+/// Stream enhancements:
+/// Added features include:
 /// - Multiple beneficiaries support
 /// - Stream pausing/resuming
 /// - Metadata for extensibility
@@ -156,7 +110,7 @@ public struct VaultStream has store, drop {
     max_per_withdrawal: u64,
     min_interval_ms: u64,
     last_withdrawal_time: u64,
-    // === Fork additions for generic stream management ===
+    // Additional data for stream management
     // Multiple beneficiaries support
     additional_beneficiaries: vector<address>,
     max_beneficiaries: u64,  // Configurable per stream
@@ -175,7 +129,7 @@ public struct VaultStream has store, drop {
     is_cancellable: bool,
 }
 
-// === Fork: Event Structs for Stream Operations ===
+// Event structures for stream operations
 
 /// Emitted when a stream is created
 public struct StreamCreated has copy, drop {
@@ -419,12 +373,6 @@ public fun is_coin_type_approved<Config, CoinType>(
 /// Withdraws coins from a vault with authorization.
 /// This is the Auth-based counterpart to `deposit`, used for direct withdrawals
 /// outside of intent execution (e.g., for liquidity subsidy escrow funding).
-///
-/// ## FORK NOTE
-/// **Added**: `spend()` for Auth-based vault withdrawals
-/// **Reason**: Enable direct coin withdrawal from vault for subsidy integration and other
-/// use cases that need vault access outside intent execution flow.
-/// **Complements**: Existing `deposit()` function for symmetric Auth-based vault API
 public fun spend<Config, CoinType: drop>(
     auth: Auth,
     account: &mut Account<Config>,
@@ -456,11 +404,6 @@ public fun spend<Config, CoinType: drop>(
 
 /// Returns the balance of a specific coin type in a vault.
 /// Convenience function that combines vault existence check with balance lookup.
-///
-/// ## FORK NOTE
-/// **Added**: `balance()` for checking vault coin balances
-/// **Reason**: Simplify balance checks before withdrawing (e.g., for subsidy funding)
-/// **Returns**: Balance amount, or 0 if vault doesn't exist or doesn't have the coin type
 public fun balance<Config, CoinType: drop>(
     account: &Account<Config>,
     name: String,
@@ -479,10 +422,6 @@ public fun balance<Config, CoinType: drop>(
 }
 
 /// Default vault name for standard operations
-///
-/// ## FORK NOTE
-/// **Added**: Helper function for consistent vault naming
-/// **Reason**: Standardize default vault name across init and runtime operations
 public fun default_vault_name(): String {
     std::string::utf8(b"Main Vault")
 }
@@ -490,13 +429,6 @@ public fun default_vault_name(): String {
 /// Deposit during initialization - works on unshared Accounts
 /// This function is for use during account creation, before the account is shared.
 /// It follows the same pattern as Futarchy init actions.
-///
-/// ## FORK NOTE
-/// **Added**: `do_deposit_unshared()` for init-time vault deposits
-/// **Reason**: Enable initial treasury funding during DAO creation without Auth checks.
-/// Creates vault on-demand if it doesn't exist, then deposits coins.
-/// **Safety**: `public(package)` visibility ensures only callable during init
-///
 /// SAFETY: This function MUST only be called on unshared Accounts.
 /// Calling this on a shared Account bypasses Auth checks.
 /// The package(package) visibility helps enforce this constraint.
@@ -543,7 +475,7 @@ public fun close<Config>(
 ) {
     account.verify(auth);
 
-    let Vault { bag, streams } =
+    let Vault { bag, streams, approved_types: _ } =
         account.remove_managed_data(VaultKey(name), version::current());
     assert!(bag.is_empty(), EVaultNotEmpty);
     assert!(streams.is_empty(), EVaultNotEmpty);
@@ -1097,7 +1029,7 @@ public fun create_stream<Config, CoinType: drop>(
         max_per_withdrawal,
         min_interval_ms,
         last_withdrawal_time: 0,
-        // Fork additions
+        // additional checks
         additional_beneficiaries: vector::empty(),
         max_beneficiaries,
         is_paused: false,
@@ -1334,13 +1266,6 @@ public fun has_stream<Config>(
 
 /// Create a stream during initialization - works on unshared Accounts.
 /// Directly creates a stream without requiring Auth during DAO creation.
-///
-/// ## FORK NOTE
-/// **Added**: `create_stream_unshared()` for init-time payment stream creation
-/// **Reason**: Allow DAOs to set up recurring payment streams (salaries, grants)
-/// during atomic initialization from vault funds. Validates parameters and balance.
-/// **Safety**: `public(package)` visibility ensures only callable during init
-///
 /// SAFETY: This function MUST only be called on unshared Accounts
 /// during the initialization phase before the Account is shared.
 /// Once an Account is shared, this function will fail as it bypasses
@@ -1647,4 +1572,3 @@ public fun stream_next_vest_time(
 }
 
 // NOTE: Expiry management removed - doesn't make sense for beneficiary to set their own expiry
-

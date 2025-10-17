@@ -3,7 +3,7 @@
 
 /// Type markers for all Futarchy actions
 /// These types are used for compile-time type safety in action routing
-module futarchy_core::action_type_markers;
+module futarchy_types::action_type_markers;
 
 use std::type_name::{Self, TypeName};
 

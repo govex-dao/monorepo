@@ -10,7 +10,7 @@ use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 use futarchy_actions::quota_actions;
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
 use std::bcs;
@@ -62,7 +62,7 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_types::set_quotas(),
+                action_type_markers::set_quotas(),
                 action_bytes,
                 iw,
             );

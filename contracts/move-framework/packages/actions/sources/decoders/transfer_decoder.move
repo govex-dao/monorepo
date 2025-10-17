@@ -1,18 +1,5 @@
-// ============================================================================
-// FORK ADDITION - Transfer Action Decoder
-// ============================================================================
-// NEW FILE added to the fork for on-chain action decoding.
-//
-// PURPOSE:
-// Provides human-readable decoding of transfer actions for transparency.
-// Part of the mandatory decoder system that ensures all actions can be
-// decoded and displayed to users before execution.
-//
-// IMPLEMENTATION:
-// - Simple single-field decoder for TransferAction
-// - Uses BCS deserialization with security validation
-// - Returns vector<HumanReadableField> for universal display
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
 /// Decoder for transfer actions - tightly coupled with transfer action definitions
 module account_actions::transfer_decoder;

@@ -38,9 +38,10 @@ use account_protocol::{
     intents::{Self, Intent},
 };
 use account_actions::vault;
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     action_validation,
-    action_types,
+    // action_types moved to futarchy_types
     version,
     futarchy_config::FutarchyConfig,
 };

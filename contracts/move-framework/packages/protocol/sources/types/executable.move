@@ -1,18 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Simplified Executable without ExecutionContext
-// ============================================================================
-// Hot potato ensuring actions are executed as intended (can't be stored).
-//
-// CHANGES IN THIS FORK (2025-09-16):
-// - Added type_name imports for type-based action routing
-// - Added current_action_type() to get the TypeName of current action
-// - Added is_current_action<T>() to check if current action matches type T
-// - REMOVED ExecutionContext - PTBs handle object flow naturally
-//
-// RATIONALE:
-// PTBs (Programmable Transaction Blocks) handle object flow between actions
-// naturally through direct parameter passing. No hidden context needed.
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// The Executable struct is hot potato constructed from an Intent that has been resolved.
 /// It ensures that the actions are executed as intended as it can't be stored.
 /// Action index is tracked to ensure each action is executed exactly once.

@@ -25,9 +25,10 @@ use account_protocol::{
     intents::{Self, Expired, Intent},
     bcs_validation,
 };
+use futarchy_types::action_type_markers;
 use futarchy_core::{
     action_validation,
-    action_types,
+    // action_types moved to futarchy_types
 };
 
 // === Aliases ===
@@ -102,7 +103,7 @@ public fun do_emit_memo<Config: store, Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::Memo>(spec);
+    action_validation::assert_action_type<action_type_markers::Memo>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -149,7 +150,7 @@ public fun do_emit_decision<Config: store, Outcome: store, IW: drop>(
 
     // CRITICAL - Type check BEFORE deserialization
     // Note: Using Memo type since EmitDecision is not in action_types
-    action_validation::assert_action_type<action_types::Memo>(spec);
+    action_validation::assert_action_type<action_type_markers::Memo>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -267,7 +268,7 @@ public fun new_emit_memo<Outcome, IW: drop>(
     let action = EmitMemoAction { memo };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::memo(),
+        action_type_markers::memo(),
         action_data,
         intent_witness
     );
@@ -284,7 +285,7 @@ public fun new_emit_decision<Outcome, IW: drop>(
     let action = EmitDecisionAction { accept, reference_id };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::memo(), // Using memo type since EmitDecision not in action_types
+        action_type_markers::memo(), // Using memo type since EmitDecision not in action_types
         action_data,
         intent_witness
     );

@@ -5,7 +5,7 @@
 module futarchy_oracle::oracle_intents;
 
 use account_protocol::intents::{Self, Intent};
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 use futarchy_oracle::oracle_actions;
 use std::string::String;
 use sui::bcs;

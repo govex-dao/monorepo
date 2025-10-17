@@ -1,5 +1,5 @@
 #[test_only]
-module futarchy_dao::gc_tests;
+module futarchy_actions_tracker::gc_tests;
 
 use account_protocol::account::{Self, Account};
 use account_protocol::executable::Executable;
@@ -8,9 +8,9 @@ use futarchy_actions::config_actions;
 use futarchy_actions::memo_actions;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_core::version;
-use futarchy_dao::execute;
-use futarchy_dao::gc_janitor;
-use futarchy_dao::gc_registry;
+use futarchy_actions_tracker::execute;
+use futarchy_actions_tracker::gc_janitor;
+use futarchy_actions_tracker::gc_registry;
 use futarchy_legal_actions::operating_agreement_actions;
 use futarchy_lifecycle::stream_actions;
 use futarchy_markets::conditional_token::{YES, NO};

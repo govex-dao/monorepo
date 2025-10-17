@@ -1,19 +1,5 @@
-// ============================================================================
-// FORK ADDITION - Vault Action Decoder
-// ============================================================================
-// NEW FILE added to the fork for on-chain action decoding.
-//
-// PURPOSE:
-// Provides human-readable decoding of vault actions (treasury operations)
-// for transparency. Part of the mandatory decoder system that ensures all
-// actions can be decoded and displayed to users before execution.
-//
-// IMPLEMENTATION:
-// - Handles SpendAction and DepositAction for treasury management
-// - Uses BCS deserialization with peel_* functions
-// - Security validation via validate_all_bytes_consumed()
-// - Returns vector<HumanReadableField> for universal display
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
 /// Decoder for vault actions - tightly coupled with vault action definitions
 /// This module knows exactly how to decode SpendAction and DepositAction

@@ -1,21 +1,7 @@
-/// === FORK MODIFICATIONS ===
-/// This file defines type markers for ALL Move Framework actions.
-///
-/// PURPOSE:
-/// - Provides compile-time type safety for action routing
-/// - Replaces string-based action identification
-/// - Avoids circular dependencies by defining types in extensions layer
-/// - Each action in protocol/actions packages has a corresponding type here
-///
-/// DESIGN:
-/// - Empty structs with `drop` ability serve as type tags
-/// - Constructor functions enable cross-module instantiation
-/// - No logic, just pure type definitions
-/// - Used by intents system for type-based action routing
-///
-/// Pure type definitions for Move Framework action types
-/// This module has NO dependencies and defines ONLY types (no logic)
-/// Can be imported by both protocol layer and application layer
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+/// Type markers for Move Framework actions.
 module account_extensions::framework_action_types;
 
 // NO IMPORTS - This is critical to avoid circular dependencies

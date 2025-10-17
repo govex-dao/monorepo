@@ -1,16 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Package Upgrade with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module manages UpgradeCap operations with timelock for Account.
-//
-// CHANGES IN THIS FORK:
-// - Actions use type markers: PackageUpgrade, PackageCommit, PackageRestrict
-// - Implemented serialize-then-destroy pattern for all 3 action types
-// - Added destruction functions: destroy_upgrade_action, destroy_commit_action, destroy_restrict_action
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Enhanced BCS validation: version checks + validate_all_bytes_consumed
-// - Type-safe action validation through compile-time TypeName comparison
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// Package managers can lock UpgradeCaps in the account. Caps can't be unlocked, this is to enforce the policies.
 /// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
 /// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
@@ -116,12 +109,6 @@ public fun lock_cap<Config>(
 
 /// Lock upgrade cap during initialization - works on unshared Accounts
 /// This function is for use during account creation, before the account is shared.
-///
-/// ## FORK NOTE
-/// **Added**: `do_lock_cap_unshared()` for init-time UpgradeCap management
-/// **Reason**: Allow DAOs to lock package UpgradeCaps during atomic initialization,
-/// establishing controlled upgrade governance from creation. Sets upgrade delay rules.
-/// **Safety**: `public(package)` visibility ensures only callable during init
 public(package) fun do_lock_cap_unshared<Config>(
     account: &mut Account<Config>,
     cap: UpgradeCap,

@@ -1,17 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Currency Management with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module manages TreasuryCap and CoinMetadata operations for Account.
-//
-// CHANGES IN THIS FORK:
-// - Actions use type markers: CurrencyMint, CurrencyBurn, CurrencyUpdate, CurrencyDisable
-// - Implemented serialize-then-destroy pattern for all 4 action types
-// - Added destruction functions: destroy_mint_action, destroy_burn_action, etc.
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Enhanced BCS validation: version checks + validate_all_bytes_consumed
-// - Type-safe action validation through compile-time TypeName comparison
-// - REMOVED ExecutionContext - PTBs handle object flow naturally
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// Authenticated users can lock a TreasuryCap in the Account to restrict minting and burning operations,
 /// as well as modifying the CoinMetadata.
 
@@ -136,13 +128,6 @@ public fun lock_cap<Config, CoinType>(
 
 /// Lock treasury cap during initialization - works on unshared Accounts
 /// This function is for use during account creation, before the account is shared.
-///
-/// ## FORK NOTE
-/// **Added**: `do_lock_cap_unshared()` for init-time TreasuryCap locking
-/// **Reason**: Enable DAOs to lock their TreasuryCap during atomic initialization
-/// without Auth checks. Sets default CurrencyRules permissively to allow minting.
-/// **Safety**: `public(package)` visibility + naming convention enforces unshared-only usage
-///
 /// SAFETY: This function MUST only be called on unshared Accounts.
 /// Calling this on a shared Account bypasses Auth checks.
 public(package) fun do_lock_cap_unshared<Config, CoinType>(
@@ -168,13 +153,6 @@ public(package) fun do_lock_cap_unshared<Config, CoinType>(
 
 /// Mint coins during initialization - works on unshared Accounts
 /// Transfers minted coins directly to recipient
-///
-/// ## FORK NOTE
-/// **Added**: `do_mint_unshared()` for init-time minting
-/// **Reason**: Allow initial token distribution during DAO creation (founders, team, treasury)
-/// without requiring Auth or proposal approval. Validates against CurrencyRules.
-/// **Safety**: `public(package)` visibility ensures only callable during init
-///
 /// SAFETY: This function MUST only be called on unshared Accounts.
 /// Calling this on a shared Account bypasses Auth checks.
 public(package) fun do_mint_unshared<Config, CoinType>(
@@ -204,12 +182,6 @@ public(package) fun do_mint_unshared<Config, CoinType>(
 
 /// Mint coins to Coin object during initialization - works on unshared Accounts
 /// Returns Coin for further use in the same transaction
-///
-/// ## FORK NOTE
-/// **Added**: `do_mint_to_coin_unshared()` for composable init-time minting
-/// **Reason**: Mint coins and return Coin object for immediate use in same PTB
-/// (e.g., mint then deposit to vault, or mint then add to liquidity pool)
-/// **Safety**: `public(package)` visibility ensures only callable during init
 public(package) fun do_mint_to_coin_unshared<Config, CoinType>(
     account: &mut Account<Config>,
     amount: u64,
@@ -698,4 +670,3 @@ public fun delete_burn<CoinType>(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, so it's automatically cleaned up
 }
-

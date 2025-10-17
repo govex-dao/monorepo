@@ -19,7 +19,7 @@ use sui::clock::Clock;
 use sui::coin::{Coin, TreasuryCap, CoinMetadata};
 use sui::event;
 use sui::bag::{Self, Bag};
-use futarchy_types::init_action_specs::{Self, InitActionSpecs};
+use futarchy_types::init_action_specs::{Self as action_specs, InitActionSpecs};
 use futarchy_core::dao_config::{Self, ConditionalCoinConfig};
 
 // === Introduction ===
@@ -1948,15 +1948,16 @@ fun u64_to_ascii(mut num: u64): AsciiString {
 // === LP Preferences Dynamic Field Management ===
 
 /// Get mutable reference to proposal's UID for dynamic field operations
-/// Package-visible to allow other futarchy_markets modules to use dynamic fields
-public(package) fun borrow_uid_mut<AssetType, StableType>(
+/// Public to allow other packages (e.g., futarchy_governance) to use dynamic fields
+public fun borrow_uid_mut<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>
 ): &mut UID {
     &mut proposal.id
 }
 
 /// Get immutable reference to proposal's UID for dynamic field reads
-public(package) fun borrow_uid<AssetType, StableType>(
+/// Public to allow other packages (e.g., futarchy_governance) to use dynamic fields
+public fun borrow_uid<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>
 ): &UID {
     &proposal.id

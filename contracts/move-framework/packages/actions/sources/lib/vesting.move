@@ -1,23 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Vesting with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module provides comprehensive vesting functionality with streaming.
-//
-// CHANGES IN THIS FORK:
-// - Actions use type markers: VestingCreate, VestingCancel
-// - Implemented serialize-then-destroy pattern for both action types
-// - Added destruction functions: destroy_create_vesting_action, destroy_cancel_vesting_action
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Comprehensive vesting features: cliff periods, multiple beneficiaries, pausable
-// - Type-safe action validation through compile-time TypeName comparison
-//
-// COMPOSABILITY IMPROVEMENTS (2025-09-14):
-// - claim_vesting() now returns Coin<CoinType> for PTB composability
-// - Added claim_vesting_to() for direct transfers to recipients
-// - Added claim_vesting_to_self() convenience function
-// - Fixed design flaw: separated authorization from payment destination
-// - Note: Batch claims removed - PTBs handle this natively
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// This module provides comprehensive vesting functionality similar to vault streams.
 /// A vesting has configurable parameters for maximum flexibility:
 /// - Multiple beneficiaries support
@@ -25,33 +11,6 @@
 /// - Metadata for extensibility
 /// - Transfer and cancellation settings
 /// - Cliff periods and rate limiting
-///
-/// === Fork Enhancement (BSL 1.1 Licensed) ===
-/// Originally deleted from the Move framework, this module was restored and
-/// significantly enhanced to provide feature parity with vault streams.
-///
-/// Major improvements from original:
-/// 1. **Cancellability Control**: Added `is_cancelable` flag to create uncancelable vestings
-/// 2. **Multiple Beneficiaries**: Support for primary + additional beneficiaries (up to 100)
-/// 3. **Pause/Resume**: Vestings can be paused, extending the vesting period appropriately
-/// 4. **Transfer Support**: Primary beneficiary role can be transferred if enabled
-/// 5. **Rate Limiting**: Configurable withdrawal limits and minimum intervals
-/// 6. **Cliff Periods**: Optional cliff before any vesting begins
-/// 7. **Metadata**: Extensible metadata field for additional context
-/// 8. **Shared Utilities**: Uses stream_utils module for consistent calculations
-/// 9. **Action Descriptors**: Integrated with governance approval system
-/// 10. **Comprehensive Events**: Full audit trail of all vesting operations
-///
-/// This refactor ensures DAOs can:
-/// - Create employee vesting schedules that cannot be cancelled
-/// - Implement investor token locks with cliff periods
-/// - Pause vestings during disputes or investigations
-/// - Support team vestings with multiple recipients
-/// - Enforce withdrawal limits to prevent dumps
-///
-/// All calculations now use the shared stream_utils module to ensure
-/// consistency with vault streams and prevent calculation divergence.
-
 module account_actions::vesting;
 
 // === Imports ===
@@ -449,14 +408,6 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
 /// This simplified version creates a vesting directly during DAO initialization.
 /// The vesting is shared immediately, and ClaimCap is transferred to recipient.
 /// Returns the vesting ID for reference.
-///
-/// ## FORK NOTE
-/// **Added**: `do_create_vesting_unshared()` for init-time vesting creation (NEW pattern)
-/// **Reason**: Enable DAOs to create token vesting schedules during initialization
-/// (for founders, team, advisors) without requiring Account context or Auth.
-/// Shares Vesting object and transfers ClaimCap to recipient. This is part of the
-/// complete init actions pattern - original framework had no bootstrapping mechanism.
-/// **Safety**: `public(package)` visibility ensures only callable during init
 public(package) fun do_create_vesting_unshared<CoinType>(
     coin: Coin<CoinType>,
     recipient: address,

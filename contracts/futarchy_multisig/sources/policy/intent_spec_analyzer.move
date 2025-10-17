@@ -19,9 +19,9 @@ use std::string::String;
 use std::type_name::TypeName;
 use std::vector;
 use sui::{object::{Self, ID}, bcs};
-use futarchy_types::init_action_specs::{Self, InitActionSpecs};
+use futarchy_types::init_action_specs::{Self as action_specs, InitActionSpecs};
 use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 use account_extensions::framework_action_types;
 
 /// Approval requirement result (same as descriptor_analyzer)
@@ -409,11 +409,11 @@ fun try_extract_object_id(spec: &action_specs::ActionSpec): Option<ID> {
 
     // === STREAM ACTIONS (all have stream_id as first field) ===
 
-    if (action_type == std::type_name::get<action_types::CancelStream>() ||
-        action_type == std::type_name::get<action_types::WithdrawStream>() ||
-        action_type == std::type_name::get<action_types::UpdateStream>() ||
-        action_type == std::type_name::get<action_types::PauseStream>() ||
-        action_type == std::type_name::get<action_types::ResumeStream>()) {
+    if (action_type == std::type_name::get<action_type_markers::CancelStream>() ||
+        action_type == std::type_name::get<action_type_markers::WithdrawStream>() ||
+        action_type == std::type_name::get<action_type_markers::UpdateStream>() ||
+        action_type == std::type_name::get<action_type_markers::PauseStream>() ||
+        action_type == std::type_name::get<action_type_markers::ResumeStream>()) {
         // ID type is serialized as address in BCS
         let stream_id = object::id_from_address(bcs::peel_address(&mut reader));
         return option::some(stream_id)
@@ -421,8 +421,8 @@ fun try_extract_object_id(spec: &action_specs::ActionSpec): Option<ID> {
 
     // === LIQUIDITY ACTIONS (all have pool_id as first field) ===
 
-    if (action_type == std::type_name::get<action_types::UpdatePoolParams>() ||
-        action_type == std::type_name::get<action_types::SetPoolStatus>()) {
+    if (action_type == std::type_name::get<action_type_markers::UpdatePoolParams>() ||
+        action_type == std::type_name::get<action_type_markers::SetPoolStatus>()) {
         // ID type is serialized as address in BCS
         let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
         return option::some(pool_id)
@@ -450,18 +450,18 @@ fun try_extract_object_id(spec: &action_specs::ActionSpec): Option<ID> {
 /// - `SetFileImmutable`: Make entire document immutable
 ///
 /// # Important
-/// If adding new file action types to futarchy_core::action_type_markers, they MUST be
+/// If adding new file action types to futarchy_types::action_type_markers, they MUST be
 /// added to this function's type checks to ensure policies are enforced.
 fun try_extract_file_id(spec: &action_specs::ActionSpec): Option<ID> {
     let action_type = action_specs::action_type(spec);
 
     // Check if this is a file modification action
     // IMPORTANT: All file action types must be listed here for policy enforcement
-    if (action_type == std::type_name::get<action_types::AddChunk>() ||
-        action_type == std::type_name::get<action_types::UpdateChunk>() ||
-        action_type == std::type_name::get<action_types::RemoveChunk>() ||
-        action_type == std::type_name::get<action_types::SetChunkImmutable>() ||
-        action_type == std::type_name::get<action_types::SetFileImmutable>()) {
+    if (action_type == std::type_name::get<action_type_markers::AddChunk>() ||
+        action_type == std::type_name::get<action_type_markers::UpdateChunk>() ||
+        action_type == std::type_name::get<action_type_markers::RemoveChunk>() ||
+        action_type == std::type_name::get<action_type_markers::SetChunkImmutable>() ||
+        action_type == std::type_name::get<action_type_markers::SetFileImmutable>()) {
 
         // Deserialize the first field (doc_id) from BCS data
         // This will abort if data is malformed (security: prevent corrupted file operations)

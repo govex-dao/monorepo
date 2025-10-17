@@ -52,9 +52,10 @@ use sui::{
     tx_context::TxContext,
     bcs::{Self, BCS},
 };
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     action_validation,
-    action_types,
+    // action_types moved to futarchy_types
     version,
     futarchy_config::{Self, FutarchyConfig},
 };

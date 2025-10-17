@@ -1,20 +1,6 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Decoder Registry Initialization
-// ============================================================================
-// NEW FILE added to the fork for decoder system initialization.
-//
-// CHANGES IN THIS FORK (2025-01-14):
-// - Added RegistryInfo shared object to store registry ID dynamically
-// - Added RegistryCreated event emission for off-chain indexing
-// - Added DECODER_REGISTRY_INIT one-time witness pattern
-// - Removed hardcoded REGISTRY_ID constant - now discoverable at runtime
-// - Single transaction deployment - no manual ID updates needed
-//
-// PURPOSE:
-// Central initialization point for all action decoders. Creates and shares
-// the global ActionDecoderRegistry during protocol deployment.
-//
-// BENEFITS:
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 // - Deploy once, fully configured
 // - No constants to update post-deployment
 // - Registry ID discoverable through multiple methods

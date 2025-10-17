@@ -23,13 +23,14 @@ use account_protocol::{
     version_witness::VersionWitness,
     bcs_validation,
 };
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     action_validation,
-    action_types,
+    // action_types moved to futarchy_types
     resource_requests::{Self as resource_requests, ResourceReceipt, ResourceRequest},
 };
-use futarchy_actions::lp_token_custody;
+use futarchy_markets_operations::lp_token_custody;
 use futarchy_stream_actions::stream_actions;
 use futarchy_lifecycle::dissolution_auction;
 use account_actions::vault;

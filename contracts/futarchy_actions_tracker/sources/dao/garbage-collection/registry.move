@@ -1,7 +1,7 @@
 // Copyright (c) Govex DAO LLC
 // SPDX-License-Identifier: BUSL-1.1
 
-module futarchy_dao::gc_registry;
+module futarchy_actions_tracker::gc_registry;
 
 use account_actions::access_control;
 use account_actions::currency;

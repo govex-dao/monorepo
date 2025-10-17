@@ -4,7 +4,7 @@
 /// Optimistic Proposal System
 /// Proposals execute automatically after a delay unless challenged
 /// Challenges trigger futarchy markets using standard proposal fees
-module futarchy_actions::optimistic_proposal;
+module futarchy_governance::optimistic_proposal;
 
 use account_protocol::account::{Self, Account};
 use account_protocol::executable::{Self, Executable};

@@ -1,20 +1,9 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Common utilities for time-based streaming/vesting functionality.
 /// Shared between vault streams and vesting modules to avoid duplication.
-///
-/// === Fork Addition (BSL 1.1 Licensed) ===
-/// Created to consolidate common logic for streaming/vesting calculations.
-/// This module was added to the original Move framework to:
-/// 1. Eliminate code duplication between vault.move and vesting.move
-/// 2. Provide consistent vesting math across all time-based payment features
-/// 3. Enable future modules to leverage tested streaming calculations
-/// 4. Support advanced features like cliff periods, pausing, and rate limiting
-///
-/// Key shared functionality:
-/// - Linear vesting calculations with overflow protection
-/// - Cliff period support for delayed vesting starts
-/// - Pause duration tracking for accurate vesting adjustments
-/// - Rate limiting checks for withdrawal protection
-/// - Effective time calculations accounting for pauses
+/// Provides reusable math helpers for vesting and stream modules.
 /// - Vested/unvested split calculations for cancellations
 ///
 /// This enables both vault streams and standalone vestings to have:

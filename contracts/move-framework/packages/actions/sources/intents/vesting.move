@@ -1,12 +1,5 @@
-// ============================================================================
-// FORK ADDITION - Vesting Intents
-// ============================================================================
-// Intent helper module for vesting operations.
-//
-// CHANGES IN THIS FORK:
-// - PTBs handle object flow naturally - no ExecutionContext needed
-// - Provides high-level request functions for vesting toggle actions
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
 module account_actions::vesting_intents;
 

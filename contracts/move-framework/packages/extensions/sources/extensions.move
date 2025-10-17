@@ -1,3 +1,9 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// The Extensions shared object tracks a list of verified and whitelisted packages.
 /// These are the only packages that can be added as dependencies to an account if it disallows unverified packages.
 

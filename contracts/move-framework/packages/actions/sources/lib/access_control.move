@@ -1,16 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Access Control with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module manages capability-based access control for Account actions.
-//
-// CHANGES IN THIS FORK:
-// - Actions use type markers: AccessControlBorrow, AccessControlReturn
-// - Implemented serialize-then-destroy pattern for resource safety
-// - Added destruction functions: destroy_borrow_action, destroy_return_action
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Enforces matching ReturnAction for every BorrowAction in intent
-// - Type-safe action validation through compile-time TypeName comparison
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// Developers can restrict access to functions in their own package with a Cap that can be locked into an Account. 
 /// The Cap can be borrowed upon approval and used in other move calls within the same ptb before being returned.
 /// 
@@ -75,13 +68,6 @@ public fun lock_cap<Config, Cap: key + store>(
 
 /// Lock capability during initialization - works on unshared Accounts
 /// Store any capability in the Account during creation
-///
-/// ## FORK NOTE
-/// **Added**: `do_lock_cap_unshared()` function for init-time capability storage
-/// **Reason**: Allow capabilities to be locked in unshared Accounts during initialization
-/// without requiring Auth, enabling atomic DAO setup with PTBs. Bypasses Auth checks
-/// which are unnecessary before Account is shared.
-/// **Safety**: `public(package)` visibility ensures only init_actions can call
 public(package) fun do_lock_cap_unshared<Config, Cap: key + store>(
     account: &mut Account<Config>,
     cap: Cap,

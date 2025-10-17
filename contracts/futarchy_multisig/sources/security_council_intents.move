@@ -34,7 +34,7 @@ use futarchy_multisig::{
 use futarchy_multisig::policy_registry;
 use account_actions::package_upgrade;
 use account_extensions::extensions::Extensions;
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
@@ -550,6 +550,7 @@ public fun cleanup_expired_council_intents(
     auth_from_member: Auth,
     intent_keys: vector<String>,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     // Verify the caller is a council member
     security_council.verify(auth_from_member);
@@ -575,7 +576,8 @@ public fun cleanup_expired_council_intents(
                 let mut expired = account::delete_expired_intent<WeightedMultisig, Approvals>(
                     security_council,
                     key,
-                    clock
+                    clock,
+                    ctx
                 );
 
                 // Drain the expired intent's actions
@@ -656,6 +658,7 @@ public fun execute_sweep_expired_intents(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     // Get action spec and deserialize
     let specs = executable::intent(&executable).action_specs();
@@ -679,7 +682,7 @@ public fun execute_sweep_expired_intents(
     executable::increment_action_idx(&mut executable);
 
     // Clean up the specified expired intents
-    cleanup_expired_council_intents_internal(security_council, &intent_keys, clock);
+    cleanup_expired_council_intents_internal(security_council, &intent_keys, clock, ctx);
 
     security_council.confirm_execution(executable);
 }
@@ -689,6 +692,7 @@ fun cleanup_expired_council_intents_internal(
     security_council: &mut Account<WeightedMultisig>,
     intent_keys: &vector<String>,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     // Process each intent key
     let mut i = 0;
@@ -707,7 +711,8 @@ fun cleanup_expired_council_intents_internal(
                 let mut expired = account::delete_expired_intent<WeightedMultisig, Approvals>(
                     security_council,
                     key,
-                    clock
+                    clock,
+                    ctx
                 );
 
                 // Drain the expired intent's actions

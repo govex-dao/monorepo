@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// Handles the complete lifecycle of proposals from queue activation to intent execution
-module futarchy_dao::proposal_lifecycle;
+module futarchy_governance::proposal_lifecycle;
 
 use account_actions::vault;
 use account_protocol::account::{Self, Account};
@@ -12,7 +12,7 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_core::priority_queue::{Self, ProposalQueue, QueuedProposal};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use futarchy_core::version;
-use futarchy_dao::gc_janitor;
+use futarchy_actions_tracker::gc_janitor;
 use futarchy_governance_actions::governance_intents;
 use futarchy_markets_core::coin_escrow;
 use futarchy_markets_core::conditional_amm;
@@ -85,7 +85,7 @@ public struct ProposalEarlyResolvedEvent has copy, drop {
 }
 
 /// Convenience wrapper that returns the governance executable for PTB composition.
-/// Prefer calling `futarchy_dao::ptb_executor::begin_execution` directly.
+/// Prefer calling `futarchy_governance::ptb_executor::begin_execution` directly.
 public entry fun execute_approved_proposal_with_fee<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     proposal: &mut Proposal<AssetType, StableType>,
@@ -95,7 +95,7 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) -> Executable<FutarchyOutcome> {
-    futarchy_dao::ptb_executor::begin_execution(
+    futarchy_governance::ptb_executor::begin_execution(
         account,
         proposal,
         market,

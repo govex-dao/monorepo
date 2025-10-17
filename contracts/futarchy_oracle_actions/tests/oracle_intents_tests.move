@@ -4,7 +4,7 @@ module futarchy_oracle::oracle_intents_tests;
 
 use account_protocol::intents::{Self, Intent};
 use account_protocol::version_witness;
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 use futarchy_oracle::oracle_intents;
 use std::string;
 use sui::clock::{Self, Clock};

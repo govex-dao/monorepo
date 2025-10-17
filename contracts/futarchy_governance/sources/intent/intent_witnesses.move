@@ -3,7 +3,7 @@
 
 /// Common witness types for intents
 /// This module provides reusable witness types for various intent operations
-module futarchy_actions::intent_witnesses;
+module futarchy_governance::intent_witnesses;
 
 // === Witness Types ===
 

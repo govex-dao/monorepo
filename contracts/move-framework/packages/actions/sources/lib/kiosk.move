@@ -1,16 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Kiosk Management with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module manages NFT operations in Kiosks for Account.
-//
-// CHANGES IN THIS FORK:
-// - Actions use type markers: KioskTake, KioskList
-// - Implemented serialize-then-destroy pattern for both action types
-// - Added destruction functions: destroy_take_action, destroy_list_action
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Returns TransferRequest hot potato for completing NFT transfers
-// - Type-safe action validation through compile-time TypeName comparison
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// Authenticated users can place nfts from their kiosk into the account's without passing through the intent process.
 /// Nfts can be transferred into any other Kiosk. Upon resolution, the recipient must execute the transfer.
 /// The functions take the caller's kiosk and the account's kiosk to execute.
@@ -94,12 +87,6 @@ public fun open<Config>(
 /// Open kiosk during initialization - works on unshared Accounts
 /// Creates a kiosk for NFT management during DAO creation
 /// Returns the kiosk ID for subsequent operations
-///
-/// ## FORK NOTE
-/// **Added**: `do_open_unshared()` for init-time kiosk creation
-/// **Reason**: Allow DAOs to create NFT kiosks during atomic initialization.
-/// Shares the Kiosk publicly while storing KioskOwnerCap in Account.
-/// **Safety**: `public(package)` visibility ensures only callable during init
 #[allow(lint(share_owned))]
 public(package) fun do_open_unshared<Config>(
     account: &mut Account<Config>,
@@ -390,4 +377,3 @@ public fun delete_list(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, automatically cleaned up
 }
-

@@ -11,7 +11,7 @@
 /// 3. Makes the relationship between Account and LP tokens explicit and enforceable
 /// 4. Integrates with Account's permission system for access control
 /// 5. Provides better tracking and audit capabilities
-module futarchy_actions::lp_token_custody;
+module futarchy_markets_operations::lp_token_custody;
 
 use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::FutarchyConfig;

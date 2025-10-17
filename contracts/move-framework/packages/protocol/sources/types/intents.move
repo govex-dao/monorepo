@@ -1,33 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Intents with Serialize-Then-Destroy Pattern
-// ============================================================================
-// Core module managing Intents with type-safe action execution.
-//
-// MAJOR CHANGES IN THIS FORK:
-//
-// 1. REMOVED OBJECT LOCKING:
-//    - No locking - multiple intents can reference same objects
-//    - Conflicts resolved naturally by blockchain (first to execute wins)
-//
-// 2. SERIALIZE-THEN-DESTROY PATTERN:
-//    - add_typed_action() now accepts pre-serialized bytes instead of action structs
-//    - Enables explicit destruction of action structs after serialization
-//    - Maintains BCS compatibility while improving resource safety
-//
-// 3. TYPE-BASED ACTION SYSTEM:
-//    Original: Used action_descriptors with string categories (b"treasury")
-//    New: Uses action_types: vector<TypeName> for compile-time safety
-//    - Removed dependency on action_descriptor module
-//    - Added add_typed_action<Outcome, Action, T, IW>() with compile-time types
-//    - Type names captured using type_name::with_defining_ids<T>() for zero-overhead routing
-//
-// BENEFITS:
-// - Eliminates risk of permanently locked objects from incomplete cleanup
-// - Compile-time type safety for all actions
-// - Better gas efficiency (no string comparisons)
-// - Simplifies codebase by ~100 lines
-// - Better suits DAO governance where competing proposals are natural
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// This is the core module managing Intents.
 /// It provides the interface to create and execute intents which is used in the `account` module.
 /// In the new design, there is no locking - multiple intents can reference the same objects.

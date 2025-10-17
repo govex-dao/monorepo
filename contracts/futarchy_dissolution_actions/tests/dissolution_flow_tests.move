@@ -6,7 +6,7 @@ use account_protocol::account::{Self, Account};
 use account_protocol::executable::{Self, Executable};
 use account_protocol::intents;
 use account_protocol::version_witness;
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_lifecycle::dissolution_actions;
 use futarchy_lifecycle::dissolution_auction;

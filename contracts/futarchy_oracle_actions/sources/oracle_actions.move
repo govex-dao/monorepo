@@ -40,9 +40,10 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use account_actions::{stream_utils, currency};
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     action_validation,
-    action_types,
+    // action_types moved to futarchy_types
     futarchy_config::FutarchyConfig,
     resource_requests,
 };

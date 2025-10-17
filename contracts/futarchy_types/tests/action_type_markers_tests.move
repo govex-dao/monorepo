@@ -1,7 +1,7 @@
 #[test_only]
-module futarchy_core::action_type_markers_tests;
+module futarchy_types::action_type_markers_tests;
 
-use futarchy_core::action_type_markers;
+use futarchy_types::action_type_markers as action_types;
 use std::type_name;
 
 // === Constructor Tests (Struct Instantiation) ===

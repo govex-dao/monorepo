@@ -439,6 +439,11 @@ public fun get_skip_intervals(bucket: &RecipientBucket): &vector<SkipNode> {
     &bucket.skip_intervals
 }
 
+/// Get unclaimed count from a SkipNode
+public fun skip_node_unclaimed_count(node: &SkipNode): u64 {
+    node.unclaimed_count
+}
+
 // === Helper Functions ===
 
 /// Check if address starts with given prefix

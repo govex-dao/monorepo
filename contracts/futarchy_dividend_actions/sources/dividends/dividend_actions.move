@@ -48,9 +48,10 @@ use sui::{
     bcs::{Self, BCS},
     table,
 };
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     action_validation,
-    action_types,
+    // action_types moved to futarchy_types
     version,
     futarchy_config::FutarchyConfig,
 };
@@ -511,7 +512,7 @@ public fun crank_dividend<Config: store, CoinType: drop>(
 
                 // Check if this interval is fully claimed (unclaimed_count = 0)
                 let interval = skip_intervals.borrow(interval_idx);
-                if (interval.unclaimed_count == 0) {
+                if (dividend_tree::skip_node_unclaimed_count(interval) == 0) {
                     // Skip entire interval - jump to start of next interval
                     let next_interval_start = (interval_idx + 1) * skip_interval_size;
                     if (next_interval_start < addresses.length()) {

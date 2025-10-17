@@ -1,5 +1,5 @@
 [package]
-name = "futarchy_dao"
+name = "futarchy_actions_tracker"
 edition = "2024.beta"
 published-at  = "0x0"
 
@@ -22,7 +22,7 @@ futarchy_dividend_actions = { local = "../futarchy_dividend_actions" }
 Walrus = { local = "../walrus_walrus" }
 WAL = { local = "../walrus_wal" }
 [addresses]
-futarchy_dao = "0xa3ba8c617ed6abf839080b6c1490e1ca68bb61a242f43800661871aa3a2c6791"
+futarchy_actions_tracker = "0xa3ba8c617ed6abf839080b6c1490e1ca68bb61a242f43800661871aa3a2c6791"
 futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
 futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"
 futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"

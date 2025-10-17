@@ -38,7 +38,8 @@ use futarchy_markets_core::{
     fee::{Self, FeeManager, FeeAdminCap},
 };
 // futarchy_dao dependency removed - use ConfigWitness instead
-use futarchy_core::{action_types, action_validation};
+use futarchy_types::action_type_markers as action_types;
+use futarchy_core::action_validation;
 
 // === Errors ===
 const EInvalidAdminCap: u64 = 1;

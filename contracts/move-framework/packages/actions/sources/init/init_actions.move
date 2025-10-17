@@ -1,13 +1,8 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Init actions for Move framework - mirrors Futarchy pattern
 /// These work on unshared Accounts during initialization
-///
-/// ## FORK NOTE
-/// **Added**: Complete init_actions module for atomic DAO initialization
-/// **Reason**: Allow intents (vault deposits, minting, vesting, etc.) to be called
-/// during the init process of unshared Accounts before they are publicly shared.
-/// This enables atomic DAO bootstrapping via PTBs without requiring proposal approval.
-/// **Pattern**: Entry functions call `do_*_unshared()` functions in action modules
-/// **Safety**: Functions use `public(package)` visibility to prevent misuse on shared Accounts
 module account_actions::init_actions;
 
 use account_actions::access_control;

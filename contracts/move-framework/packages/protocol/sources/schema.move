@@ -1,32 +1,7 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - On-Chain Schema System
-// ============================================================================
-// NEW FILE added to the fork for self-describing actions.
-//
-// CHANGES IN THIS FORK (2025-01-14):
-// - Created ActionDecoderRegistry as global shared object
-// - Added HumanReadableField for standardized decoded output
-// - Added assert_decoder_exists for mandatory validation
-// - Decoders attached as dynamic object fields keyed by TypeName
-//
-// PURPOSE:
-// Provides the foundation for on-chain action decoding, ensuring all actions
-// can be transparently decoded and displayed to users before execution.
-//
-// ARCHITECTURE:
-// - ActionDecoderRegistry: Global shared object holding all decoders
-// - HumanReadableField: Standard format for decoded field display
-// - Decoder objects attached as dynamic fields keyed by TypeName
-//
-// KEY DESIGN PRINCIPLES:
-// - Protocol layer provides structure, application layer provides decoders
-// - Mandatory validation at application boundary (entry functions)
-// - Clean separation - protocol remains unaware of specific decoders
-// - Universal transparency through self-describing actions
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
-/// Simple, elegant schema system with active decoder objects
-/// Each action module provides its own decoder that knows how to decode its actions
+/// Registry and types for action decoder schemas.
 module account_protocol::schema;
 
 use std::string::String;

@@ -1,3 +1,9 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 module account_actions::owned_intents;
 
 use account_actions::transfer as acc_transfer;

@@ -1,12 +1,12 @@
 // Copyright (c) Govex DAO LLC
 // SPDX-License-Identifier: BUSL-1.1
 
-module futarchy_dao::gc_janitor;
+module futarchy_actions_tracker::gc_janitor;
 
 use account_protocol::account::{Self, Account};
 use account_protocol::intents::{Self, Expired};
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
-use futarchy_dao::gc_registry;
+use futarchy_actions_tracker::gc_registry;
 use std::string::String;
 use std::vector;
 use sui::clock::Clock;

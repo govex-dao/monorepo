@@ -22,7 +22,7 @@
 /// 4. When outcome wins, retrieve receipt and withdraw
 /// 5. Losing outcomes can't access winning outcome's escrow (keying prevents theft)
 
-module futarchy_actions::proposal_escrow;
+module futarchy_governance::proposal_escrow;
 
 use std::option::{Self, Option};
 use sui::balance::{Self, Balance};

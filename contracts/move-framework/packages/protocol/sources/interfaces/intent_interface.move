@@ -1,3 +1,9 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// [Intent Interface] - Functions to create intents and add actions to them.
 ///
 /// 1. Build an intent by stacking actions into it.

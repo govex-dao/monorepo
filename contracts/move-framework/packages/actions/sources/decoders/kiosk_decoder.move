@@ -1,19 +1,5 @@
-// ============================================================================
-// FORK ADDITION - Kiosk Action Decoder
-// ============================================================================
-// NEW FILE added to the fork for on-chain action decoding.
-//
-// PURPOSE:
-// Provides human-readable decoding of kiosk (NFT) actions for transparency.
-// Part of the mandatory decoder system that ensures all actions can be
-// decoded and displayed to users before execution.
-//
-// IMPLEMENTATION:
-// - Handles TakeAction and ListAction for NFT operations
-// - Uses object::id_from_bytes() for ID deserialization
-// - Converts IDs to addresses for string representation
-// - Returns vector<HumanReadableField> for universal display
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
 
 /// Decoder for kiosk actions - tightly coupled with kiosk action definitions
 module account_actions::kiosk_decoder;

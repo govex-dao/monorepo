@@ -1,14 +1,9 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Enhanced Account Interface
-// ============================================================================
-// High-level functions to create Account "methods" with specific configs.
-//
-// CHANGES IN THIS FORK:
-// - Enhanced interface to support typed Intent system
-// - Integration with new BCS-based action validation
-// - Support for hot potato pattern with Executable
-// - Improved type safety through compile-time checks
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
+
 /// [Account Interface] - High level functions to create required "methods" for the account.
 ///
 /// 1. Define a new Account type with a specific config and default dependencies.

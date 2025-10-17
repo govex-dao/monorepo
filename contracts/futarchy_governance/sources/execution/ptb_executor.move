@@ -10,19 +10,19 @@
 ///
 /// This keeps execution logic flexible while guaranteeing on-chain sequencing with the
 /// executable's action counter.
-module futarchy_dao::ptb_executor;
+module futarchy_governance::ptb_executor;
 
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
     intents,
 };
-use futarchy_actions::intent_janitor;
+use futarchy_governance::intent_janitor;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     proposal_fee_manager::{Self, ProposalFeeManager},
 };
-use futarchy_dao::proposal_lifecycle;
+use futarchy_governance::proposal_lifecycle;
 use futarchy_governance_actions::governance_intents;
 use futarchy_markets_core::{
     market_state::{Self, MarketState},

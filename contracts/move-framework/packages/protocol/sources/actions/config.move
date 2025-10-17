@@ -1,21 +1,8 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Config with Serialize-Then-Destroy Pattern
-// ============================================================================
-// This module manages Account settings and configuration updates.
-//
-// CHANGES IN THIS FORK:
-// - Config actions use type markers: ConfigUpdateDeps, ConfigToggleUnverified,
-//   ConfigUpdateDeposits, ConfigManageWhitelist
-// - Implemented serialize-then-destroy pattern for all 4 action types
-// - Added destruction functions for explicit resource management
-// - Actions serialize to bytes before adding to intent via add_typed_action()
-// - Better separation between config, deps, and metadata updates
-// - Type-safe action validation through compile-time TypeName comparison
-//
-// RATIONALE:
-// Ensures DAOs can safely update configuration without risking inconsistent
-// states during multi-step governance processes.
-// ============================================================================
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
+// Portions of this file are derived from the account.tech Move Framework project.
+// Those portions remain licensed under the Apache License, Version 2.0.
 
 /// This module allows to manage Account settings.
 /// The actions are related to the modifications of all the fields of the Account (except Intents and Config).
@@ -513,4 +500,3 @@ public fun delete_manage_whitelist(expired: &mut Expired) {
         remove_types: peel_vector_string(&mut reader)
     };
 }
-
