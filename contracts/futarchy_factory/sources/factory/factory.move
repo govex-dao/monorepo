@@ -23,11 +23,14 @@ use futarchy_core::version;
 use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_multisig::policy_registry;
+use futarchy_factory::init_actions;
+use futarchy_types::init_action_specs::InitActionSpecs;
 use futarchy_types::signed::{Self as signed, SignedU128};
 use std::ascii::String as AsciiString;
 use std::option::Option;
 use std::string::String as UTF8String;
 use std::type_name::{Self, TypeName};
+use std::vector;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin, TreasuryCap};
 use sui::event;
@@ -192,6 +195,64 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
         _agreement_difficulties,
         optimistic_intent_challenge_enabled,
         option::none(),
+        vector::empty<InitActionSpecs>(),
+        clock,
+        ctx,
+    );
+}
+
+/// Create a DAO and atomically execute a batch of init intents before sharing.
+public entry fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
+    factory: &mut Factory,
+    extensions: &Extensions,
+    fee_manager: &mut FeeManager,
+    payment: Coin<SUI>,
+    affiliate_id: UTF8String,
+    min_asset_amount: u64,
+    min_stable_amount: u64,
+    dao_name: AsciiString,
+    icon_url_string: AsciiString,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    twap_start_delay: u64,
+    twap_step_max: u64,
+    twap_initial_observation: u128,
+    twap_threshold: SignedU128,
+    amm_total_fee_bps: u64,
+    description: UTF8String,
+    max_outcomes: u64,
+    _agreement_lines: vector<UTF8String>,
+    _agreement_difficulties: vector<u64>,
+    optimistic_intent_challenge_enabled: Option<bool>,
+    treasury_cap: Option<TreasuryCap<AssetType>>,
+    init_specs: vector<InitActionSpecs>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    create_dao_internal_with_extensions<AssetType, StableType>(
+        factory,
+        extensions,
+        fee_manager,
+        payment,
+        affiliate_id,
+        min_asset_amount,
+        min_stable_amount,
+        dao_name,
+        icon_url_string,
+        review_period_ms,
+        trading_period_ms,
+        twap_start_delay,
+        twap_step_max,
+        twap_initial_observation,
+        twap_threshold,
+        amm_total_fee_bps,
+        description,
+        max_outcomes,
+        _agreement_lines,
+        _agreement_difficulties,
+        optimistic_intent_challenge_enabled,
+        treasury_cap,
+        init_specs,
         clock,
         ctx,
     );
@@ -226,6 +287,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     _agreement_difficulties: vector<u64>,
     optimistic_intent_challenge_enabled: Option<bool>,
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -439,6 +501,31 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Destroy the empty option
     treasury_cap.destroy_none();
 
+    let account_object_id = object::id(&account);
+    let specs_len = vector::length(&init_specs);
+    let mut idx = 0;
+    while (idx < specs_len) {
+        init_actions::stage_init_intent(
+            &mut account,
+            &account_object_id,
+            idx,
+            vector::borrow(&init_specs, idx),
+            clock,
+            ctx,
+        );
+        idx = idx + 1;
+    };
+
+    if (specs_len > 0) {
+        init_actions::execute_init_intents(
+            &mut account,
+            &account_object_id,
+            &init_specs,
+            clock,
+            ctx,
+        );
+    };
+
     // Get account ID before sharing
     let account_id = object::id_address(&account);
 
@@ -488,6 +575,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -501,8 +589,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
 
-    // DoS protection: limit affiliate_id length (UUID is 36 chars, leave room for custom IDs)
-    assert!(affiliate_id.length() <= 64, EInvalidStateForAction);
+    let affiliate_id = b"".to_string();
 
     // Validate parameters
     assert!(twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELowTwapWindowCap);
@@ -687,6 +774,31 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // Destroy the empty option
     treasury_cap.destroy_none();
 
+    let account_object_id = object::id(&account);
+    let specs_len = vector::length(&init_specs);
+    let mut idx = 0;
+    while (idx < specs_len) {
+        init_actions::stage_init_intent(
+            &mut account,
+            &account_object_id,
+            idx,
+            vector::borrow(&init_specs, idx),
+            clock,
+            ctx,
+        );
+        idx = idx + 1;
+    };
+
+    if (specs_len > 0) {
+        init_actions::execute_init_intents(
+            &mut account,
+            &account_object_id,
+            &init_specs,
+            clock,
+            ctx,
+        );
+    };
+
     // Get account ID before sharing
     let account_id = object::id_address(&account);
 
@@ -709,7 +821,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         asset_type: get_type_string<AssetType>(),
         stable_type: get_type_string<StableType>(),
         creator: ctx.sender(),
-        affiliate_id: b"".to_string(), // Test function uses empty string
+        affiliate_id,
         timestamp: clock.timestamp_ms(),
     });
 }
@@ -1040,6 +1152,7 @@ public entry fun create_dao_test<AssetType: drop, StableType>(
         _agreement_lines,
         _agreement_difficulties,
         option::none(),
+        vector::empty(),
         clock,
         ctx,
     );

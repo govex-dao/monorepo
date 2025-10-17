@@ -1,23 +1,21 @@
 // Copyright (c) Govex DAO LLC
 // SPDX-License-Identifier: BUSL-1.1
 
-/// Init Actions - Launchpad initialization executor
+/// Init intent helpers shared by factory and launchpad.
 ///
-/// Launchpad raises stage configuration changes as `InitActionSpecs`.
-/// When the raise finalizes successfully, this module converts those specs
-/// into a temporary governance intent and replays the actions atomically
-/// against the unshared DAO account before it is shared.
+/// Callers stage `InitActionSpecs` against the unshared DAO account
+/// before the raise completes. During activation we deterministically
+/// reconstruct the intent keys, fetch the stored executables, and replay the
+/// actions atomically so a finalizer cannot change parameters.
 module futarchy_factory::init_actions;
 
-use account_protocol::account::{Self, Account};
-use account_protocol::executable::{Self, Executable};
-use account_protocol::intents::{Self, Intent};
+use account_protocol::account::{self as account, Account};
+use account_protocol::executable::{self as executable, Executable};
+use account_protocol::intents::{self as intents, Intent};
 use futarchy_actions::config_actions;
 use futarchy_actions::config_intents;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_core::priority_queue::{Self, ProposalQueue};
 use futarchy_core::version;
-use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_types::action_type_markers;
 use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use std::string::{Self, String};
@@ -25,32 +23,41 @@ use std::type_name::{Self, TypeName};
 use std::vector;
 use sui::clock::Clock;
 use sui::event;
-use sui::object;
+use sui::object::{self as object, ID};
 use sui::tx_context::TxContext;
 
-/// Outcome placeholder for launchpad initialization intents
-public struct InitExecutionOutcome has copy, drop, store {}
-
-/// Event emitted for each init action attempted (for launchpad tracking)
-public struct InitActionAttempted has copy, drop {
-    dao_id: address,
-    action_type: String, // TypeName as string
-    action_index: u64,
-    success: bool,
+/// Outcome stored on launchpad init intents (mainly for observability).
+public struct InitIntentOutcome has copy, drop, store {
+    key: String,
+    index: u64,
 }
 
-/// Event for init batch completion
-public struct InitBatchCompleted has copy, drop {
+/// Event for each init action executed during launchpad activation.
+public struct InitIntentActionAttempted has copy, drop {
+    dao_id: address,
+    action_type: String,
+    action_index: u64,
+}
+
+/// Event emitted after all staged init actions complete successfully.
+public struct InitIntentBatchCompleted has copy, drop {
     dao_id: address,
     total_actions: u64,
     successful_actions: u64,
-    failed_actions: u64,
 }
 
-// === Constants ===
-const MAX_INIT_ACTIONS: u64 = 50; // Reasonable limit to prevent gas issues
+// Local guard in case launchpad forgets to enforce per-raise action limits.
+const MAX_INIT_ACTIONS: u64 = 50;
 
-// === Helpers ===
+// === Helper functions ===
+
+fun build_init_intent_key(owner: &ID, index: u64): String {
+    let mut key = b"init_intent_".to_string();
+    key.append(owner.id_to_address().to_string());
+    key.append(b"_".to_string());
+    key.append(index.to_string());
+    key
+}
 
 fun action_type_label(action_type: TypeName): String {
     let mut label = action_type.module_string();
@@ -60,7 +67,7 @@ fun action_type_label(action_type: TypeName): String {
 }
 
 fun append_action_to_intent(
-    intent: &mut Intent<InitExecutionOutcome>,
+    intent: &mut Intent<InitIntentOutcome>,
     action_type: TypeName,
     action_data: vector<u8>,
 ) {
@@ -153,15 +160,33 @@ fun append_action_to_intent(
     };
 }
 
+fun add_actions_to_intent(
+    intent: &mut Intent<InitIntentOutcome>,
+    spec: &InitActionSpecs,
+) {
+    let actions = init_action_specs::actions(spec);
+    let mut i = 0;
+    let len = vector::length(actions);
+    while (i < len) {
+        let action = vector::borrow(actions, i);
+        append_action_to_intent(
+            intent,
+            init_action_specs::action_type(action),
+            *init_action_specs::action_data(action),
+        );
+        i = i + 1;
+    };
+}
+
 fun execute_config_action(
-    executable: &mut Executable<InitExecutionOutcome>,
+    executable: &mut Executable<InitIntentOutcome>,
     account: &mut Account<FutarchyConfig>,
     action_type: TypeName,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     if (action_type == type_name::with_defining_ids<action_type_markers::SetProposalsEnabled>()) {
-        config_actions::do_set_proposals_enabled<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_set_proposals_enabled<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -170,7 +195,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::UpdateName>()) {
-        config_actions::do_update_name<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_name<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -179,7 +204,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::TradingParamsUpdate>()) {
-        config_actions::do_update_trading_params<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_trading_params<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -188,7 +213,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::MetadataUpdate>()) {
-        config_actions::do_update_metadata<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_metadata<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -197,7 +222,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::TwapConfigUpdate>()) {
-        config_actions::do_update_twap_config<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_twap_config<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -206,7 +231,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::GovernanceUpdate>()) {
-        config_actions::do_update_governance<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_governance<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -215,7 +240,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::MetadataTableUpdate>()) {
-        config_actions::do_update_metadata_table<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_metadata_table<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -224,7 +249,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::QueueParamsUpdate>()) {
-        config_actions::do_update_queue_params<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_queue_params<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -233,7 +258,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::SlashDistributionUpdate>()) {
-        config_actions::do_update_slash_distribution<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_slash_distribution<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -242,7 +267,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::StorageConfigUpdate>()) {
-        config_actions::do_update_storage_config<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_storage_config<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -251,7 +276,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::UpdateConditionalMetadata>()) {
-        config_actions::do_update_conditional_metadata<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_conditional_metadata<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -260,7 +285,7 @@ fun execute_config_action(
             ctx,
         );
     } else if (action_type == type_name::with_defining_ids<action_type_markers::EarlyResolveConfigUpdate>()) {
-        config_actions::do_update_early_resolve_config<InitExecutionOutcome, config_intents::ConfigIntent>(
+        config_actions::do_update_early_resolve_config<InitIntentOutcome, config_intents::ConfigIntent>(
             executable,
             account,
             version::current(),
@@ -273,110 +298,145 @@ fun execute_config_action(
     };
 }
 
-// === Main Execution Function ===
+// === Public helpers ===
 
-/// Execute init actions with resources during launchpad finalization
-/// This function processes all init actions in the specs and applies them to the DAO
-/// before it becomes public. All actions must succeed or the entire transaction reverts.
-public fun execute_init_intent_with_resources<RaiseToken, StableCoin>(
+/// Create and store an init intent with deterministic key derived from
+/// `(owner_id, staged_index)`.
+public fun stage_init_intent(
     account: &mut Account<FutarchyConfig>,
-    specs: InitActionSpecs,
-    _queue: &mut ProposalQueue<StableCoin>,
-    _spot_pool: &mut UnifiedSpotPool<RaiseToken, StableCoin>,
+    owner_id: &ID,
+    staged_index: u64,
+    spec: &InitActionSpecs,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let dao_id = object::id_address(account);
-    let action_count = init_action_specs::action_count(&specs);
-    assert!(action_count <= MAX_INIT_ACTIONS, ETooManyInitActions);
-
-    if (action_count == 0) {
-        event::emit(InitBatchCompleted {
-            dao_id,
-            total_actions: 0,
-            successful_actions: 0,
-            failed_actions: 0,
-        });
-        return
-    };
-
-    let mut intent_key = b"launchpad_init_".to_string();
-    intent_key.append(clock.timestamp_ms().to_string());
-    intent_key.append(b"_".to_string());
-    intent_key.append(object::id_address(account).to_string());
+    let key = build_init_intent_key(owner_id, staged_index);
 
     let params = intents::new_params(
-        intent_key.clone(),
-        b"Launchpad Init Actions".to_string(),
+        key.clone(),
+        b"Init Intent Batch".to_string(),
         vector[clock.timestamp_ms()],
-        clock.timestamp_ms() + 60_000,
+        clock.timestamp_ms() + 3_600_000,
         clock,
         ctx,
     );
+
+    let outcome = InitIntentOutcome {
+        key: key.clone(),
+        index: staged_index,
+    };
 
     let mut intent = account::create_intent(
         account,
         params,
-        InitExecutionOutcome {},
-        b"LaunchpadInit".to_string(),
+        outcome,
+        b"InitIntent".to_string(),
         version::current(),
         config_intents::ConfigIntent {},
         ctx,
     );
 
-    let actions = init_action_specs::actions(&specs);
-    let mut i = 0;
-    let len = vector::length(actions);
-    while (i < len) {
-        let action = vector::borrow(actions, i);
-        let action_type = init_action_specs::action_type(action);
-        let action_data = *init_action_specs::action_data(action);
-        append_action_to_intent(&mut intent, action_type, action_data);
-        i = i + 1;
-    };
+    add_actions_to_intent(&mut intent, spec);
 
     account::insert_intent(account, intent, version::current(), config_intents::ConfigIntent {});
+}
 
-    let (_, mut executable) = account::create_executable<
-        FutarchyConfig,
-        InitExecutionOutcome,
-        config_intents::ConfigIntent
-    >(
-        account,
-        intent_key.clone(),
-        clock,
-        version::current(),
-        config_intents::ConfigIntent {},
-        ctx,
-    );
+/// Execute all staged init intents in order.
+public fun execute_init_intents(
+    account: &mut Account<FutarchyConfig>,
+    owner_id: &ID,
+    specs: &vector<InitActionSpecs>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let mut total_actions = 0u64;
+    let len = vector::length(specs);
+    let mut idx = 0;
 
-    let mut processed = 0u64;
-    loop {
-        let current_idx = executable::action_idx(&executable);
-        if (current_idx >= len) {
-            break
+    // Enforce an upper bound to protect against DoS.
+    let mut count_check = 0u64;
+    while (idx < len) {
+        count_check = count_check + action_specs::action_count(vector::borrow(specs, idx));
+        idx = idx + 1;
+    };
+    assert!(count_check <= MAX_INIT_ACTIONS, ETooManyInitActions);
+
+    idx = 0;
+    while (idx < len) {
+        let key = build_init_intent_key(owner_id, idx);
+        let (_outcome, mut executable) = account::create_executable<
+            FutarchyConfig,
+            InitIntentOutcome,
+            config_intents::ConfigIntent
+        >(
+            account,
+            key.clone(),
+            clock,
+            version::current(),
+            config_intents::ConfigIntent {},
+            ctx,
+        );
+
+        let spec = vector::borrow(specs, idx);
+        let action_count = action_specs::action_count(spec);
+        let mut processed = 0u64;
+        while (processed < action_count) {
+            let action_type = executable::current_action_type(&executable);
+            execute_config_action(&mut executable, account, action_type, clock, ctx);
+
+            event::emit(InitIntentActionAttempted {
+                dao_id: owner_id.id_to_address(),
+                action_type: action_type_label(action_type),
+                action_index: total_actions + processed,
+            });
+
+            processed = processed + 1;
         };
 
-        let action_type = executable::current_action_type(&executable);
-        execute_config_action(&mut executable, account, action_type, clock, ctx);
+        account::confirm_execution(account, executable);
 
-        event::emit(InitActionAttempted {
-            dao_id,
-            action_type: action_type_label(action_type),
-            action_index: current_idx,
-            success: true,
-        });
+        let mut expired = account::destroy_empty_intent<
+            FutarchyConfig,
+            InitIntentOutcome
+        >(
+            account,
+            key,
+            ctx,
+        );
+        while (intents::expired_action_count(&expired) > 0) {
+            let _ = intents::remove_action_spec(&mut expired);
+        };
+        intents::destroy_empty_expired(expired);
 
-        processed = processed + 1;
+        total_actions = total_actions + action_count;
+        idx = idx + 1;
     };
 
-    assert!(processed == len, EInitActionFailed);
+    event::emit(InitIntentBatchCompleted {
+        dao_id: owner_id.id_to_address(),
+        total_actions,
+        successful_actions: total_actions,
+    });
+}
 
-    account::confirm_execution(account, executable);
+fun cancel_init_intent_internal(
+    account: &mut Account<FutarchyConfig>,
+    key: String,
+    ctx: &mut TxContext,
+) {
+    if (!intents::contains(account::intents(account), key.clone())) {
+        return
+    };
 
-    let mut expired = account::destroy_empty_intent<FutarchyConfig, InitExecutionOutcome>(
+    let mut expired = account::cancel_intent<
+        FutarchyConfig,
+        InitIntentOutcome,
+        futarchy_core::futarchy_config::ConfigWitness
+    >(
         account,
-        intent_key,
+        key,
+        version::current(),
+        futarchy_core::futarchy_config::ConfigWitness {},
         ctx,
     );
 
@@ -384,17 +444,35 @@ public fun execute_init_intent_with_resources<RaiseToken, StableCoin>(
         let _ = intents::remove_action_spec(&mut expired);
     };
     intents::destroy_empty_expired(expired);
+}
 
-    event::emit(InitBatchCompleted {
-        dao_id,
-        total_actions: len,
-        successful_actions: processed,
-        failed_actions: 0,
-    });
+/// Cancel a single staged launchpad init intent.
+public fun cancel_init_intent(
+    account: &mut Account<FutarchyConfig>,
+    owner_id: &ID,
+    index: u64,
+    ctx: &mut TxContext,
+) {
+    let key = build_init_intent_key(owner_id, index);
+    cancel_init_intent_internal(account, key, ctx);
+}
+
+/// Remove any staged init intents (used when a workflow aborts).
+public fun cleanup_init_intents(
+    account: &mut Account<FutarchyConfig>,
+    owner_id: &ID,
+    specs: &vector<InitActionSpecs>,
+    ctx: &mut TxContext,
+) {
+    let len = vector::length(specs);
+    let mut idx = 0;
+    while (idx < len) {
+        let key = build_init_intent_key(owner_id, idx);
+        cancel_init_intent_internal(account, key, ctx);
+        idx = idx + 1;
+    };
 }
 
 // === Errors ===
 const EUnhandledAction: u64 = 1;
-const EActionNotAllowedAtInit: u64 = 2;
-const EInitActionFailed: u64 = 3;
 const ETooManyInitActions: u64 = 4;

@@ -5,7 +5,7 @@ module futarchy_factory::launchpad;
 
 use account_actions::init_actions as account_init_actions;
 use account_extensions::extensions::Extensions;
-use account_protocol::account::{Self, Account};
+use account_protocol::account::{self as account, Account};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::priority_queue::ProposalQueue;
 use futarchy_core::version;
@@ -15,8 +15,8 @@ use futarchy_markets_core::fee;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_one_shot_utils::constants;
 use futarchy_one_shot_utils::math;
-use futarchy_types::init_action_specs;
-use std::option::{Self as option, Option};
+use futarchy_types::init_action_specs::{Self as action_specs, InitActionSpecs};
+use std::option::{self as option, Option};
 use std::string::{Self, String};
 use std::type_name;
 use std::vector;
@@ -26,9 +26,9 @@ use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
 use sui::display::{Self, Display};
 use sui::dynamic_field as df;
 use sui::event;
-use sui::object::{Self, UID, ID};
+use sui::object::{self as object, UID, ID};
 use sui::package::{Self, Publisher};
-use sui::transfer;
+use sui::transfer as sui_transfer;
 use sui::tx_context::TxContext;
 
 // === Witnesses ===
@@ -70,7 +70,6 @@ const EDaoNotPreCreated: u64 = 111;
 const EDaoAlreadyPreCreated: u64 = 112;
 const EIntentsAlreadyLocked: u64 = 113;
 const EResourcesNotFound: u64 = 114;
-const EInitActionsFailed: u64 = 115;
 const EInvalidMaxRaise: u64 = 116;
 const EInvalidCapValue: u64 = 120;
 const EAllowedCapsNotSorted: u64 = 121;
@@ -133,7 +132,7 @@ public struct DaoPoolKey has copy, drop, store {}
 public struct DaoMetadataKey has copy, drop, store {}
 public struct CoinMetadataKey has copy, drop, store {}
 
-// Key for tracking pending intent specs removed - using init_action_specs field instead
+// Key for tracking pending intent specs removed - using staged_init_specs field instead
 
 /// 2D Auction Bid: price cap + quantity FOK + raise interval
 /// This is the NEW recommended bid type for variable-supply auctions
@@ -281,8 +280,8 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     /// Number of unique contributors (contributions stored as dynamic fields)
     contributor_count: u64,
     description: String,
-    /// Staged init action specifications for DAO configuration
-    init_action_specs: Option<action_specs::InitActionSpecs>,
+    /// Staged init action specifications for DAO configuration (ordered)
+    staged_init_specs: vector<InitActionSpecs>,
     /// TreasuryCap stored until DAO creation (used to mint Q* at settlement)
     treasury_cap: Option<TreasuryCap<RaiseToken>>,
     /// === Auction Parameters ===
@@ -317,17 +316,15 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
 // DAOParameters removed - all DAO config is done via init actions
 // Use stage_init_actions() to configure the DAO before raise completes
 
-// === Events ===
-
-public struct InitActionsStaged has copy, drop {
+public struct InitIntentStaged has copy, drop {
     raise_id: ID,
+    staged_index: u64,
     action_count: u64,
 }
 
-public struct InitActionsFailed has copy, drop {
+public struct InitIntentRemoved has copy, drop {
     raise_id: ID,
-    action_count: u64,
-    timestamp: u64,
+    staged_index: u64,
 }
 
 public struct FailedRaiseCleanup has copy, drop {
@@ -453,11 +450,11 @@ fun init(otw: LAUNCHPAD, ctx: &mut TxContext) {
         id: object::new(ctx),
         image_url: string::utf8(DEFAULT_CLAIM_NFT_IMAGE),
     };
-    transfer::share_object(config);
+    sui_transfer::share_object(config);
 
     // Create and transfer publisher for Display setup
     let publisher = package::claim(otw, ctx);
-    transfer::public_transfer(publisher, ctx.sender());
+    sui_transfer::public_transfer(publisher, ctx.sender());
 }
 
 // === Public Functions ===
@@ -503,47 +500,95 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     df::add(&mut raise.id, DaoQueueKey {}, queue);
     df::add(&mut raise.id, DaoPoolKey {}, spot_pool);
 
-    // Init action specs stored in raise.init_action_specs field
+    // Launchpad init intents will be staged via raise.staged_init_specs
 }
 
 /// Stage initialization actions that will run when the raise activates the DAO.
-/// Multiple calls append actions until intents are locked.
-public entry fun stage_init_actions<RaiseToken, StableCoin>(
+/// Multiple calls append specs until intents are locked.
+public entry fun stage_launchpad_init_intent<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
-    specs: init_action_specs::InitActionSpecs,
-    _ctx: &mut TxContext,
+    spec: InitActionSpecs,
+    clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
     assert!(!raise.intents_locked, EIntentsAlreadyLocked);
+    assert!(raise.dao_id.is_some(), EDaoNotPreCreated);
+    assert!(df::exists_(&raise.id, DaoAccountKey {}), EResourcesNotFound);
 
-    let new_count = init_action_specs::action_count(&specs);
-    assert!(new_count <= constants::launchpad_max_init_actions(), ETooManyInitActions);
+    let action_count = action_specs::action_count(&spec);
+    assert!(action_count > 0, EInvalidActionData);
 
-    let total_actions = if (raise.init_action_specs.is_some()) {
-        let mut existing = raise.init_action_specs.extract();
-        let existing_count = init_action_specs::action_count(&existing);
-        assert!(
-            existing_count + new_count <= constants::launchpad_max_init_actions(),
-            ETooManyInitActions
+    let mut total = 0u64;
+    let staged = &raise.staged_init_specs;
+    let staged_len = vector::length(staged);
+    let mut i = 0;
+    while (i < staged_len) {
+        total = total + action_specs::action_count(vector::borrow(staged, i));
+        i = i + 1;
+    };
+    assert!(
+        total + action_count <= constants::launchpad_max_init_actions(),
+        ETooManyInitActions
+    );
+
+    let staged_index = staged_len;
+    let raise_id = object::id(raise);
+
+    {
+        let account_ref: &mut Account<FutarchyConfig> = df::borrow_mut(&mut raise.id, DaoAccountKey {});
+        init_actions::stage_init_intent(
+            account_ref,
+            &raise_id,
+            staged_index,
+            &spec,
+            clock,
+            ctx,
         );
-
-        let init_action_specs::InitActionSpecs { actions: mut existing_actions } = existing;
-        let init_action_specs::InitActionSpecs { actions: new_actions } = specs;
-        vector::append(&mut existing_actions, new_actions);
-        raise.init_action_specs = option::some(init_action_specs::InitActionSpecs {
-            actions: existing_actions,
-        });
-        existing_count + new_count
-    } else {
-        raise.init_action_specs = option::some(specs);
-        new_count
     };
 
-    event::emit(InitActionsStaged {
-        raise_id: object::id(raise),
-        action_count: total_actions,
+    vector::push_back(&mut raise.staged_init_specs, spec);
+
+    event::emit(InitIntentStaged {
+        raise_id,
+        staged_index,
+        action_count,
+    });
+}
+
+/// Remove the most recently staged init intent (before intents are locked).
+public entry fun unstage_last_launchpad_init_intent<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    creator_cap: &CreatorCap,
+    ctx: &mut TxContext,
+) {
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    assert!(!raise.intents_locked, EIntentsAlreadyLocked);
+    assert!(df::exists_(&raise.id, DaoAccountKey {}), EResourcesNotFound);
+
+    let staged_len = vector::length(&raise.staged_init_specs);
+    assert!(staged_len > 0, EInvalidStateForAction);
+    let staged_index = staged_len - 1;
+    let raise_id = object::id(raise);
+
+    {
+        let account_ref: &mut Account<FutarchyConfig> = df::borrow_mut(&mut raise.id, DaoAccountKey {});
+        init_actions::cancel_init_intent(
+            account_ref,
+            &raise_id,
+            staged_index,
+            ctx,
+        );
+    };
+
+    let _removed = vector::pop_back(&mut raise.staged_init_specs);
+
+    event::emit(InitIntentRemoved {
+        raise_id,
+        staged_index,
     });
 }
 
@@ -1168,7 +1213,7 @@ public entry fun crank_settlement_2d<RT, SC>(
 
         if (actual_reward > 0) {
             let reward = coin::from_balance(raise.crank_pool.split(actual_reward), ctx);
-            transfer::public_transfer(reward, ctx.sender());
+            sui_transfer::public_transfer(reward, ctx.sender());
         };
     };
 
@@ -1241,7 +1286,7 @@ public fun finalize_settlement_2d<RaiseToken: drop + store, StableCoin: drop + s
                 raise.crank_pool.split(initiator_share),
                 ctx,
             );
-            transfer::public_transfer(initiator_reward, s.initiator);
+            sui_transfer::public_transfer(initiator_reward, s.initiator);
         };
 
         let finalizer_share = raise.crank_pool.value();
@@ -1250,7 +1295,7 @@ public fun finalize_settlement_2d<RaiseToken: drop + store, StableCoin: drop + s
                 raise.crank_pool.split(finalizer_share),
                 ctx,
             );
-            transfer::public_transfer(finalizer_reward, s.finalizer);
+            sui_transfer::public_transfer(finalizer_reward, s.finalizer);
         };
     };
 
@@ -1267,7 +1312,7 @@ public entry fun start_settlement_2d<RT, SC>(
     ctx: &mut TxContext,
 ) {
     let settlement = begin_settlement_2d(raise, clock, ctx);
-    transfer::public_share_object(settlement);
+    sui_transfer::public_share_object(settlement);
 }
 
 /// Entry function to finalize 2D settlement
@@ -1540,27 +1585,17 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
         raise_price,
     );
 
-    // Check if there are staged init actions
-    if (raise.init_action_specs.is_some()) {
-        let specs = raise.init_action_specs.extract();
-
-        // ATOMIC EXECUTION: Execute all init actions as a batch
-        // If ANY action fails, this function will abort and the entire transaction reverts
-        // This means:
-        // 1. The raise remains in STATE_FUNDING (not marked successful)
-        // 2. The DAO components remain unshared
-        // 3. Contributors can claim refunds after deadline
-        // 4. The launchpad automatically takes the fail path
-        //
-        // This is enforced by Move's transaction atomicity - no partial state changes
-        init_actions::execute_init_intent_with_resources<RaiseToken, StableCoin>(
+    // Execute staged init intents (computed earlier in the raise lifecycle)
+    if (!vector::is_empty(&raise.staged_init_specs)) {
+        let raise_id = object::id(raise);
+        init_actions::execute_init_intents(
             &mut account,
-            specs,
-            &mut queue,
-            &mut spot_pool,
+            &raise_id,
+            &raise.staged_init_specs,
             clock,
             ctx,
         );
+        raise.staged_init_specs = vector::empty();
     };
 
     // Deposit the capped raise amount into the DAO treasury vault.
@@ -1578,8 +1613,8 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     raise.state = STATE_SUCCESSFUL;
 
     // Share all objects now that everything succeeded
-    transfer::public_share_object(account);
-    transfer::public_share_object(queue);
+    sui_transfer::public_share_object(account);
+    sui_transfer::public_share_object(queue);
     unified_spot_pool::share(spot_pool);
 
     event::emit(RaiseSuccessful {
@@ -1631,7 +1666,7 @@ public entry fun claim_tokens_2d<RaiseToken: drop + store, StableCoin: drop + st
         // LOSER: Full refund
         let escrow_amount = math::mul_div_to_64(bid.price_cap, bid.min_tokens, 1);
         let refund_coin = coin::from_balance(raise.stable_coin_vault.split(escrow_amount), ctx);
-        transfer::public_transfer(refund_coin, recipient);
+        sui_transfer::public_transfer(refund_coin, recipient);
 
         event::emit(RefundClaimed {
             raise_id: object::id(raise),
@@ -1647,7 +1682,7 @@ public entry fun claim_tokens_2d<RaiseToken: drop + store, StableCoin: drop + st
         // LOSER: Didn't get allocation (marginal loser or lost on price/interval)
         let escrow_amount = math::mul_div_to_64(bid.price_cap, bid.min_tokens, 1);
         let refund_coin = coin::from_balance(raise.stable_coin_vault.split(escrow_amount), ctx);
-        transfer::public_transfer(refund_coin, recipient);
+        sui_transfer::public_transfer(refund_coin, recipient);
 
         event::emit(RefundClaimed {
             raise_id: object::id(raise),
@@ -1664,7 +1699,7 @@ public entry fun claim_tokens_2d<RaiseToken: drop + store, StableCoin: drop + st
 
     // Transfer tokens (exactly tokens_allocated - FOK semantics enforced at allocation time)
     let tokens = coin::from_balance(raise.raise_token_vault.split(bid.tokens_allocated), ctx);
-    transfer::public_transfer(tokens, recipient);
+    sui_transfer::public_transfer(tokens, recipient);
 
     event::emit(TokensClaimed {
         raise_id: object::id(raise),
@@ -1774,7 +1809,7 @@ public entry fun mint_claim_nfts_2d<RaiseToken, StableCoin>(
             let nft_id = object::id(&nft);
 
             // Transfer NFT to bidder
-            transfer::public_transfer(nft, addr);
+            sui_transfer::public_transfer(nft, addr);
 
             // Emit event
             event::emit(ClaimNFTMinted {
@@ -1824,7 +1859,7 @@ public entry fun claim_with_nft_2d<RaiseToken: drop + store, StableCoin: drop + 
             raise.raise_token_vault.split(tokens_claimable),
             ctx,
         );
-        transfer::public_transfer(tokens, contributor);
+        sui_transfer::public_transfer(tokens, contributor);
 
         event::emit(TokensClaimed {
             raise_id: object::id(raise),
@@ -1840,7 +1875,7 @@ public entry fun claim_with_nft_2d<RaiseToken: drop + store, StableCoin: drop + 
             raise.stable_coin_vault.split(stable_refund),
             ctx,
         );
-        transfer::public_transfer(refund, contributor);
+        sui_transfer::public_transfer(refund, contributor);
 
         event::emit(RefundClaimed {
             raise_id: object::id(raise),
@@ -1892,7 +1927,7 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
             coin::burn(&mut cap, tokens_to_burn);
         };
         // Return treasury cap to creator so they can reuse it
-        transfer::public_transfer(cap, raise.creator);
+        sui_transfer::public_transfer(cap, raise.creator);
 
         // Emit event for tracking
         event::emit(TreasuryCapReturned {
@@ -1910,18 +1945,35 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
         // This cleanup is only needed if DAO was pre-created but raise failed
         // for other reasons (e.g., didn't meet min raise amount)
 
+        if (
+            !vector::is_empty(&raise.staged_init_specs) &&
+            df::exists_(&raise.id, DaoAccountKey {})
+        ) {
+            let raise_id = object::id(raise);
+            {
+                let account_ref: &mut Account<FutarchyConfig> = df::borrow_mut(&mut raise.id, DaoAccountKey {});
+                init_actions::cleanup_init_intents(
+                    account_ref,
+                    &raise_id,
+                    &raise.staged_init_specs,
+                    ctx,
+                );
+            };
+            raise.staged_init_specs = vector::empty();
+        };
+
         // Properly handle objects with UID - they need to be shared or transferred
         if (df::exists_(&raise.id, DaoAccountKey {})) {
             let account: Account<FutarchyConfig> = df::remove(&mut raise.id, DaoAccountKey {});
             // Share the account so it can be cleaned up later by admin
             // This is safe because the raise failed and DAO won't be used
-            transfer::public_share_object(account);
+            sui_transfer::public_share_object(account);
         };
 
         if (df::exists_(&raise.id, DaoQueueKey {})) {
             let queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
             // Share the queue for cleanup
-            transfer::public_share_object(queue);
+            sui_transfer::public_share_object(queue);
         };
 
         if (df::exists_(&raise.id, DaoPoolKey {})) {
@@ -1931,11 +1983,6 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
             );
             // Use the module's share function for proper handling
             unified_spot_pool::share(pool);
-        };
-
-        // Clean up init action specs if they exist
-        if (raise.init_action_specs.is_some()) {
-            raise.init_action_specs = option::none();
         };
 
         // Save DAO ID before clearing
@@ -1958,7 +2005,7 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
 
     if (df::exists_(&raise.id, CoinMetadataKey {})) {
         let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
-        transfer::public_transfer(metadata, raise.creator);
+        sui_transfer::public_transfer(metadata, raise.creator);
     };
 }
 
@@ -1981,7 +2028,7 @@ public entry fun claim_hard_cap_refund<RaiseToken: drop + store, StableCoin: dro
 
     // Create refund coin
     let refund_coin = coin::from_balance(raise.stable_coin_vault.split(refund_rec.amount), ctx);
-    transfer::public_transfer(refund_coin, who);
+    sui_transfer::public_transfer(refund_coin, who);
 
     event::emit(RefundClaimed {
         raise_id: object::id(raise),
@@ -2035,7 +2082,7 @@ public entry fun claim_refund<RaiseToken: drop + store, StableCoin: drop + store
     // Calculate escrow amount (price_cap × min_tokens)
     let escrow_amount = math::mul_div_to_64(bid.price_cap, bid.min_tokens, 1);
     let refund_coin = coin::from_balance(raise.stable_coin_vault.split(escrow_amount), ctx);
-    transfer::public_transfer(refund_coin, contributor);
+    sui_transfer::public_transfer(refund_coin, contributor);
 
     event::emit(RefundClaimed {
         raise_id: object::id(raise),
@@ -2076,7 +2123,7 @@ public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
             raise.raise_token_vault.split(remaining_token_balance),
             ctx,
         );
-        transfer::public_transfer(dust_tokens, raise.creator);
+        sui_transfer::public_transfer(dust_tokens, raise.creator);
     };
 
     // Sweep remaining stablecoins (from refund/hard-cap rounding)
@@ -2161,7 +2208,7 @@ fun init_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
         crank_pool: balance::zero(),
         contributor_count: 0,
         description,
-        init_action_specs: option::none(),
+        staged_init_specs: vector::empty(),
         treasury_cap: option::some(treasury_cap), // Held until settlement
         // 1D AUCTION (not used)
         allowed_caps: vector::empty<u64>(),
@@ -2208,9 +2255,9 @@ fun init_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
         id: object::new(ctx),
         raise_id,
     };
-    transfer::public_transfer(creator_cap, raise.creator);
+    sui_transfer::public_transfer(creator_cap, raise.creator);
 
-    transfer::public_share_object(raise);
+    sui_transfer::public_share_object(raise);
 }
 
 // === Helper Functions ===
