@@ -3,6 +3,7 @@ module futarchy_core::dao_config_tests;
 
 use futarchy_core::dao_config::{Self, DaoConfig, TradingParams, TwapConfig, GovernanceConfig};
 use futarchy_one_shot_utils::constants;
+use futarchy_types::signed::{Self as signed, SignedU128};
 use std::ascii;
 use std::string;
 use sui::test_scenario;
@@ -185,13 +186,15 @@ fun test_new_twap_config_basic() {
         300000, // start_delay (5 min)
         300000, // step_max (5 min)
         1000000000000, // initial_observation
-        10, // threshold (10%)
+        signed::from_u64(10), // threshold (10%)
     );
 
     assert!(dao_config::start_delay(&twap) == 300000, 0);
     assert!(dao_config::step_max(&twap) == 300000, 1);
     assert!(dao_config::initial_observation(&twap) == 1000000000000, 2);
-    assert!(dao_config::threshold(&twap) == 10, 3);
+    let threshold = dao_config::threshold(&twap);
+    assert!(!signed::is_negative(threshold), 3);
+    assert!(signed::magnitude(threshold) == 10, 4);
 }
 
 #[test]
@@ -200,7 +203,7 @@ fun test_new_twap_config_zero_start_delay_allowed() {
         0, // Zero is valid for immediate TWAP
         300000,
         1000000000000,
-        10,
+        signed::from_u64(10),
     );
 
     assert!(dao_config::start_delay(&twap) == 0, 0);
@@ -213,7 +216,7 @@ fun test_new_twap_config_zero_step_max() {
         300000,
         0, // Invalid!
         1000000000000,
-        10,
+        signed::from_u64(10),
     );
 }
 
@@ -224,19 +227,22 @@ fun test_new_twap_config_zero_initial_observation() {
         300000,
         300000,
         0, // Invalid!
-        10,
+        signed::from_u64(10),
     );
 }
 
 #[test]
-#[expected_failure(abort_code = dao_config::EInvalidTwapThreshold)]
-fun test_new_twap_config_zero_threshold() {
-    dao_config::new_twap_config(
+fun test_new_twap_config_zero_threshold_allowed() {
+    let twap = dao_config::new_twap_config(
         300000,
         300000,
         1000000000000,
-        0, // Invalid!
+        signed::from_u64(0),
     );
+
+    let threshold = dao_config::threshold(&twap);
+    assert!(signed::magnitude(threshold) == 0, 0);
+    assert!(!signed::is_negative(threshold), 1);
 }
 
 // === Governance Config Tests ===

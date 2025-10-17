@@ -506,6 +506,47 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     // Init action specs stored in raise.init_action_specs field
 }
 
+/// Stage initialization actions that will run when the raise activates the DAO.
+/// Multiple calls append actions until intents are locked.
+public entry fun stage_init_actions<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    creator_cap: &CreatorCap,
+    specs: init_action_specs::InitActionSpecs,
+    _ctx: &mut TxContext,
+) {
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    assert!(!raise.intents_locked, EIntentsAlreadyLocked);
+
+    let new_count = init_action_specs::action_count(&specs);
+    assert!(new_count <= constants::launchpad_max_init_actions(), ETooManyInitActions);
+
+    let total_actions = if (raise.init_action_specs.is_some()) {
+        let mut existing = raise.init_action_specs.extract();
+        let existing_count = init_action_specs::action_count(&existing);
+        assert!(
+            existing_count + new_count <= constants::launchpad_max_init_actions(),
+            ETooManyInitActions
+        );
+
+        let init_action_specs::InitActionSpecs { actions: mut existing_actions } = existing;
+        let init_action_specs::InitActionSpecs { actions: new_actions } = specs;
+        vector::append(&mut existing_actions, new_actions);
+        raise.init_action_specs = option::some(init_action_specs::InitActionSpecs {
+            actions: existing_actions,
+        });
+        existing_count + new_count
+    } else {
+        raise.init_action_specs = option::some(specs);
+        new_count
+    };
+
+    event::emit(InitActionsStaged {
+        raise_id: object::id(raise),
+        action_count: total_actions,
+    });
+}
+
 /// Lock intents - no more can be added after this
 public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,

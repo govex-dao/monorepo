@@ -8,6 +8,7 @@ use futarchy_markets_primitives::market_state;
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
 use futarchy_types::init_action_specs::{Self, InitActionSpecs};
+use futarchy_types::signed::{Self as signed, SignedU128};
 use std::option;
 use std::string::{Self, String};
 use sui::balance;
@@ -29,7 +30,7 @@ const MIN_STABLE_LIQUIDITY: u64 = 10_000_000; // 10 USDC (6 decimals)
 const TWAP_START_DELAY: u64 = 60 * 1000; // 1 minute
 const TWAP_INITIAL_OBSERVATION: u128 = 1_000_000_000_000_000_000u128; // 1.0 in Q64.64
 const TWAP_STEP_MAX: u64 = 100;
-const TWAP_THRESHOLD: u64 = 500_000_000_000_000_000u64; // 0.5 in Q64.64
+const TWAP_THRESHOLD_VALUE: u128 = 500_000_000_000_000_000u128; // 0.5 in Q64.64
 const AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3%
 const CONDITIONAL_LIQUIDITY_RATIO_PERCENT: u64 = 50; // 50% (base 100, not BPS!)
 const MAX_OUTCOMES: u64 = 10;
@@ -136,7 +137,7 @@ fun test_initialize_market_basic_two_outcomes() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -202,7 +203,7 @@ fun test_initialize_market_three_outcomes() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -265,7 +266,7 @@ fun test_initialize_market_zero_liquidity_fails() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -327,7 +328,7 @@ fun test_initialize_market_insufficient_asset_liquidity() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -388,7 +389,7 @@ fun test_initialize_market_insufficient_stable_liquidity() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -450,7 +451,7 @@ fun test_initialize_market_mismatched_outcome_vectors() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -512,7 +513,7 @@ fun test_initialize_market_too_many_outcomes() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -570,7 +571,7 @@ fun test_new_premarket_basic() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -627,7 +628,7 @@ fun test_new_premarket_too_many_outcomes() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -695,7 +696,7 @@ fun test_proposal_getters() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             option::none<u64>(), // winning_outcome
             fee_escrow,
@@ -713,7 +714,9 @@ fun test_proposal_getters() {
         assert!(!proposal::is_winning_outcome_set(&proposal), 5);
         assert!(proposal::get_review_period_ms(&proposal) == REVIEW_PERIOD_MS, 6);
         assert!(proposal::get_trading_period_ms(&proposal) == TRADING_PERIOD_MS, 7);
-        assert!(proposal::get_twap_threshold(&proposal) == TWAP_THRESHOLD, 8);
+        let threshold = proposal::get_twap_threshold(&proposal);
+        let expected_threshold = signed::from_u128(TWAP_THRESHOLD_VALUE);
+        assert!(signed::compare(&threshold, &expected_threshold) == signed::ordering_equal(), 8);
         assert!(!proposal::uses_dao_liquidity(&proposal), 9);
         assert!(!proposal::get_used_quota(&proposal), 10);
         assert!(!proposal::is_withdraw_only(&proposal), 11);
@@ -760,7 +763,7 @@ fun test_outcome_creator_getters() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             option::none<u64>(),
             fee_escrow,
@@ -823,7 +826,7 @@ fun test_get_outcome_creator_out_of_bounds() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             option::none<u64>(),
             fee_escrow,
@@ -880,7 +883,7 @@ fun test_proposal_with_single_outcome() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -944,7 +947,7 @@ fun test_proposal_with_max_outcomes() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,
@@ -1011,7 +1014,7 @@ fun test_proposal_liquidity_distribution() {
             TWAP_START_DELAY,
             TWAP_INITIAL_OBSERVATION,
             TWAP_STEP_MAX,
-            TWAP_THRESHOLD,
+            signed::from_u128(TWAP_THRESHOLD_VALUE),
             AMM_TOTAL_FEE_BPS,
             CONDITIONAL_LIQUIDITY_RATIO_PERCENT,
             MAX_OUTCOMES,

@@ -20,6 +20,7 @@ use sui::coin::{Coin, TreasuryCap, CoinMetadata};
 use sui::event;
 use sui::bag::{Self, Bag};
 use futarchy_types::init_action_specs::{Self as action_specs, InitActionSpecs};
+use futarchy_types::signed::{Self as signed, SignedU128};
 use futarchy_core::dao_config::{Self, ConditionalCoinConfig};
 
 // === Introduction ===
@@ -88,7 +89,7 @@ public struct TwapConfig has store {
     twap_prices: vector<u128>,
     twap_initial_observation: u128,
     twap_step_max: u64,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
 }
 
 /// Outcome-related data
@@ -236,7 +237,7 @@ public fun initialize_market<AssetType, StableType>(
     twap_start_delay: u64,
     twap_initial_observation: u128,
     twap_step_max: u64,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
     amm_total_fee_bps: u64,
     conditional_liquidity_ratio_percent: u64,  // Percentage of spot liquidity to move (1-99%, base 100)
     max_outcomes: u64, // DAO's configured max outcomes
@@ -514,7 +515,7 @@ public fun new_premarket<AssetType, StableType>(
     twap_start_delay: u64,
     twap_initial_observation: u128,
     twap_step_max: u64,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
     amm_total_fee_bps: u64,
     conditional_liquidity_ratio_percent: u64,  // Percentage of spot liquidity to move (1-99%, base 100)
     max_outcomes: u64, // DAO's configured max outcomes
@@ -1283,7 +1284,7 @@ public fun get_trading_period_ms<AssetType, StableType>(
 
 public fun get_twap_threshold<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
-): u64 {
+): SignedU128 {
     proposal.twap_config.twap_threshold
 }
 
@@ -1445,9 +1446,10 @@ public fun finalize_proposal<AssetType, StableType>(
     let winning_outcome = if (twap_prices.length() >= 2) {
         let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
         let threshold = get_twap_threshold(proposal);
-        
+        let yes_signed = signed::from_u128(yes_twap);
+
         // If YES TWAP exceeds threshold, YES wins
-        if (yes_twap > (threshold as u128)) {
+        if (signed::compare(&yes_signed, &threshold) == signed::ordering_greater()) {
             OUTCOME_ACCEPTED
         } else {
             OUTCOME_REJECTED
@@ -1736,7 +1738,7 @@ public fun new_for_testing<AssetType, StableType>(
     twap_start_delay: u64,
     twap_initial_observation: u128,
     twap_step_max: u64,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
     amm_total_fee_bps: u64,
     winning_outcome: Option<u64>,
     fee_escrow: Balance<StableType>,
@@ -2003,7 +2005,7 @@ public fun create_test_proposal<AssetType, StableType>(
         30000,                      // twap_start_delay
         1000000000000000000u128,    // twap_initial_observation
         10000,                      // twap_step_max
-        500000000000000000u64,      // twap_threshold
+        signed::from_u128(500000000000000000u128),      // twap_threshold
         30,                         // amm_total_fee_bps (0.3%)
         option::some(winning_outcome),
         sui::balance::zero<StableType>(),

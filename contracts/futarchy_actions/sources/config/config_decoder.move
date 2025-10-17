@@ -22,6 +22,7 @@ use futarchy_actions::config_actions::{
 };
 use futarchy_actions::quota_decoder;
 use futarchy_core::dao_config;
+use futarchy_types::signed::{Self as signed, SignedU128};
 use std::ascii;
 use std::string::String;
 use std::type_name;
@@ -112,6 +113,17 @@ fun decode_option_u128(bcs_data: &mut BCS): Option<u128> {
     } else {
         option::none()
     }
+}
+
+fun decode_option_signed_u128(bcs_data: &mut BCS): Option<SignedU128> {
+    let is_some = bcs::peel_bool(bcs_data);
+    if (!is_some) {
+        return option::none()
+    };
+
+    let magnitude = bcs::peel_u128(bcs_data);
+    let is_negative = bcs::peel_bool(bcs_data);
+    option::some(signed::from_parts(magnitude, is_negative))
 }
 
 fun decode_option_bool(bcs_data: &mut BCS): Option<bool> {
@@ -376,7 +388,7 @@ public fun decode_twap_config_update_action(
     let start_delay = decode_option_u64(&mut bcs_data);
     let step_max = decode_option_u64(&mut bcs_data);
     let initial_observation = decode_option_u128(&mut bcs_data);
-    let threshold = decode_option_u64(&mut bcs_data);
+    let threshold = decode_option_signed_u128(&mut bcs_data);
 
     // Security: ensure all bytes are consumed to prevent trailing data attacks
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -420,11 +432,19 @@ public fun decode_twap_config_update_action(
     };
 
     if (threshold.is_some()) {
+        let value = threshold.destroy_some();
         fields.push_back(
             schema::new_field(
-                b"threshold".to_string(),
-                threshold.destroy_some().to_string(),
-                b"u64".to_string(),
+                b"threshold_magnitude".to_string(),
+                signed::magnitude(&value).to_string(),
+                b"u128".to_string(),
+            ),
+        );
+        fields.push_back(
+            schema::new_field(
+                b"threshold_is_negative".to_string(),
+                if (signed::is_negative(&value)) { b"true".to_string() } else { b"false".to_string() },
+                b"bool".to_string(),
             ),
         );
     } else {

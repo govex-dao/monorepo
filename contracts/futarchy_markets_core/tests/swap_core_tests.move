@@ -9,6 +9,7 @@ use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBa
 use futarchy_markets_primitives::market_state::{Self, MarketState};
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
+use futarchy_types::signed::{Self as signed};
 use std::option;
 use std::string;
 use sui::clock::{Self, Clock};
@@ -160,7 +161,7 @@ fun create_test_proposal_trading(
         0, // twap_start_delay
         500000, // twap_initial_observation
         100000, // twap_step_max
-        500000, // twap_threshold
+        signed::from_u64(500000), // twap_threshold
         30, // amm_total_fee_bps
         option::none(), // winning_outcome
         sui::balance::zero(),

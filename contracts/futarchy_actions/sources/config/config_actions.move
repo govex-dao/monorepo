@@ -32,6 +32,7 @@ use futarchy_core::{
     // action_types moved to futarchy_types
     dao_config,
 };
+use futarchy_types::signed::{Self as signed, SignedU128};
 
 // === Friend Modules === (removed - deprecated in 2024 edition)
 
@@ -170,7 +171,7 @@ public struct TwapConfigUpdateAction has store, drop, copy {
     start_delay: Option<u64>,
     step_max: Option<u64>,
     initial_observation: Option<u128>,
-    threshold: Option<u64>,
+    threshold: Option<SignedU128>,
 }
 
 /// Governance settings update action
@@ -591,7 +592,11 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     let start_delay = reader.peel_option_u64();
     let step_max = reader.peel_option_u64();
     let initial_observation = reader.peel_option_u128();
-    let threshold = reader.peel_option_u64();
+    let threshold = bcs::peel_option!(&mut reader, |r| {
+        let magnitude = r.peel_u128();
+        let is_negative = r.peel_bool();
+        signed::from_parts(magnitude, is_negative)
+    });
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -1529,7 +1534,7 @@ public fun new_twap_config_update_action(
     start_delay: Option<u64>,
     step_max: Option<u64>,
     initial_observation: Option<u128>,
-    threshold: Option<u64>,
+    threshold: Option<SignedU128>,
 ): TwapConfigUpdateAction {
     let action = TwapConfigUpdateAction {
         start_delay,
@@ -1709,7 +1714,7 @@ public fun new_twap_config_update<Outcome, IW: drop>(
     start_delay: Option<u64>,
     step_max: Option<u64>,
     initial_observation: Option<u128>,
-    threshold: Option<u64>,
+    threshold: Option<SignedU128>,
     intent_witness: IW,
 ) {
     let action = TwapConfigUpdateAction {

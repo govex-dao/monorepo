@@ -6,6 +6,7 @@
 module futarchy_core::dao_config;
 
 use futarchy_one_shot_utils::constants;
+use futarchy_types::signed::{Self as signed, SignedU128};
 use std::ascii::{Self, String as AsciiString};
 use std::string::{Self, String};
 use sui::url::{Self, Url};
@@ -16,7 +17,7 @@ const EMinAmountTooLow: u64 = 16; // Minimum amount must be at least 100,000 (0.
 const EInvalidPeriod: u64 = 1; // Period must be positive
 const EInvalidFee: u64 = 2; // Fee exceeds maximum (10000 bps = 100%)
 const EInvalidMaxOutcomes: u64 = 3; // Max outcomes must be at least 2
-const EInvalidTwapThreshold: u64 = 4; // TWAP threshold must be positive
+const EInvalidTwapThreshold: u64 = 4; // TWAP threshold must be valid
 const EInvalidProposalFee: u64 = 5; // Proposal fee must be positive
 const EInvalidBondAmount: u64 = 6; // Bond amount must be positive
 const EInvalidTwapParams: u64 = 7; // Invalid TWAP parameters
@@ -73,7 +74,7 @@ public struct TwapConfig has copy, drop, store {
     start_delay: u64,
     step_max: u64,
     initial_observation: u128,
-    threshold: u64,
+    threshold: SignedU128,
 }
 
 /// Governance parameters configuration
@@ -214,13 +215,12 @@ public fun new_twap_config(
     start_delay: u64,
     step_max: u64,
     initial_observation: u128,
-    threshold: u64,
+    threshold: SignedU128,
 ): TwapConfig {
     // Validate inputs - start_delay can be 0 for immediate TWAP start
     // This is a valid use case for certain market configurations
     assert!(step_max > 0, EInvalidTwapParams);
     assert!(initial_observation > 0, EInvalidTwapParams);
-    assert!(threshold > 0, EInvalidTwapThreshold);
 
     TwapConfig {
         start_delay,
@@ -450,7 +450,9 @@ public fun step_max(twap: &TwapConfig): u64 { twap.step_max }
 
 public fun initial_observation(twap: &TwapConfig): u128 { twap.initial_observation }
 
-public fun threshold(twap: &TwapConfig): u64 { twap.threshold }
+public fun threshold(twap: &TwapConfig): &SignedU128 {
+    &twap.threshold
+}
 
 // Governance config getters
 public fun governance_config(config: &DaoConfig): &GovernanceConfig { &config.governance_config }
@@ -753,8 +755,7 @@ public(package) fun set_initial_observation(twap: &mut TwapConfig, obs: u128) {
     twap.initial_observation = obs;
 }
 
-public(package) fun set_threshold(twap: &mut TwapConfig, threshold: u64) {
-    assert!(threshold > 0, EInvalidTwapThreshold);
+public(package) fun set_threshold(twap: &mut TwapConfig, threshold: SignedU128) {
     twap.threshold = threshold;
 }
 
@@ -1100,7 +1101,7 @@ public fun default_twap_config(): TwapConfig {
         start_delay: 300000, // 5 minutes
         step_max: 300000, // 5 minutes
         initial_observation: 1000000000000, // Initial price observation
-        threshold: 10, // 10% threshold
+        threshold: signed::from_u64(10), // 10% threshold
     }
 }
 

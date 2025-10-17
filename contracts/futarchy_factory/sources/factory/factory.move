@@ -23,6 +23,7 @@ use futarchy_core::version;
 use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_multisig::policy_registry;
+use futarchy_types::signed::{Self as signed, SignedU128};
 use std::ascii::String as AsciiString;
 use std::option::Option;
 use std::string::String as UTF8String;
@@ -158,7 +159,7 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
     twap_start_delay: u64,
     twap_step_max: u64,
     twap_initial_observation: u128,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
     amm_total_fee_bps: u64,
     description: UTF8String,
     max_outcomes: u64,
@@ -217,7 +218,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     twap_start_delay: u64,
     twap_step_max: u64,
     twap_initial_observation: u128,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
     amm_total_fee_bps: u64,
     description: UTF8String,
     max_outcomes: u64,
@@ -247,7 +248,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     assert!(trading_period_ms <= MAX_TRADING_TIME, ELongTradingTime);
     assert!(twap_start_delay <= MAX_TWAP_START_DELAY, ELongTwapDelayTime);
     assert!((twap_start_delay + 60_000) < trading_period_ms, EDelayNearTotalTrading);
-    assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHighTwapThreshold);
+    assert!(signed::magnitude(&twap_threshold) <= (MAX_TWAP_THRESHOLD as u128), EHighTwapThreshold);
     assert!(
         twap_initial_observation <= (18446744073709551615u128) * 1_000_000_000_000,
         ETwapInitialTooLarge,
@@ -480,7 +481,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     twap_start_delay: u64,
     twap_step_max: u64,
     twap_initial_observation: u128,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
     amm_total_fee_bps: u64,
     description: UTF8String,
     max_outcomes: u64,
@@ -509,7 +510,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     assert!(trading_period_ms <= MAX_TRADING_TIME, ELongTradingTime);
     assert!(twap_start_delay <= MAX_TWAP_START_DELAY, ELongTwapDelayTime);
     assert!((twap_start_delay + 60_000) < trading_period_ms, EDelayNearTotalTrading);
-    assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHighTwapThreshold);
+    assert!(signed::magnitude(&twap_threshold) <= (MAX_TWAP_THRESHOLD as u128), EHighTwapThreshold);
     assert!(
         twap_initial_observation <= (18446744073709551615u128) * 1_000_000_000_000,
         ETwapInitialTooLarge,
@@ -1006,9 +1007,9 @@ public entry fun create_dao_test<AssetType: drop, StableType>(
     review_period_ms: u64,
     trading_period_ms: u64,
     twap_start_delay: u64,
-    twap_step_max: u64,
-    twap_initial_observation: u128,
-    twap_threshold: u64,
+   twap_step_max: u64,
+   twap_initial_observation: u128,
+    twap_threshold: SignedU128,
     amm_total_fee_bps: u64,
     description: UTF8String,
     max_outcomes: u64,

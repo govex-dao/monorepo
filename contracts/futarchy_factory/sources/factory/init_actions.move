@@ -1,47 +1,35 @@
 // Copyright (c) Govex DAO LLC
 // SPDX-License-Identifier: BUSL-1.1
 
-/// Init Actions - Entry functions for DAO initialization
+/// Init Actions - Launchpad initialization executor
 ///
-/// Each module that needs init actions exposes its own entry functions here.
-/// PTBs call these directly during DAO creation for atomic initialization.
-///
-/// ## Usage Pattern:
-/// ```typescript
-/// // PTB calls these in sequence
-/// tx.moveCall({ target: 'factory::create_dao_unshared', ... });
-/// tx.moveCall({ target: 'init_actions::init_config_update_name', ... });
-/// tx.moveCall({ target: 'init_actions::init_add_liquidity', ... });
-/// tx.moveCall({ target: 'factory::finalize_and_share_dao', ... });
-/// ```
+/// Launchpad raises stage configuration changes as `InitActionSpecs`.
+/// When the raise finalizes successfully, this module converts those specs
+/// into a temporary governance intent and replays the actions atomically
+/// against the unshared DAO account before it is shared.
 module futarchy_factory::init_actions;
 
 use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::{Self, Intent};
+use futarchy_actions::config_actions;
+use futarchy_actions::config_intents;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::priority_queue::{Self, ProposalQueue};
+use futarchy_core::version;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_types::init_action_specs::{Self, ActionSpec, InitActionSpecs};
-use std::option::{Self, Option};
+use futarchy_types::action_type_markers;
+use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use std::string::{Self, String};
+use std::type_name::{Self, TypeName};
+use std::vector;
 use sui::clock::Clock;
-use sui::coin::Coin;
 use sui::event;
 use sui::object;
-use sui::transfer;
 use sui::tx_context::TxContext;
 
-/// Special witness for init actions that bypass voting
-public struct InitWitness has drop {}
-
-/// Result of init action execution with detailed error tracking
-public struct InitResult has drop {
-    total_actions: u64,
-    succeeded: u64,
-    failed: u64,
-    first_error: Option<String>,
-    failed_action_index: Option<u64>,
-    partial_execution_allowed: bool,
-}
+/// Outcome placeholder for launchpad initialization intents
+public struct InitExecutionOutcome has copy, drop, store {}
 
 /// Event emitted for each init action attempted (for launchpad tracking)
 public struct InitActionAttempted has copy, drop {
@@ -59,105 +47,230 @@ public struct InitBatchCompleted has copy, drop {
     failed_actions: u64,
 }
 
-// === PTB Entry Functions for Init Actions ===
-
-/// Initialize config action during DAO creation
-/// Called by PTB to set initial configuration parameters
-public entry fun init_config_update_name(
-    new_name: vector<u8>,
-    account: &mut Account<FutarchyConfig>,
-    ctx: &mut TxContext,
-) {
-    // Update DAO name during initialization
-    let config = futarchy_config::internal_config_mut(account, futarchy_core::version::current());
-    let name_string = std::string::utf8(new_name);
-    futarchy_config::set_dao_name(config, name_string);
-}
-
-/// Initialize trading parameters during DAO creation
-public entry fun init_config_trading_params<StableType>(
-    min_asset_amount: u64,
-    min_stable_amount: u64,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    account: &mut Account<FutarchyConfig>,
-    ctx: &mut TxContext,
-) {
-    let config = futarchy_config::internal_config_mut(account, futarchy_core::version::current());
-    futarchy_config::set_min_asset_amount(config, min_asset_amount);
-    futarchy_config::set_min_stable_amount(config, min_stable_amount);
-    futarchy_config::set_review_period_ms(config, review_period_ms);
-    futarchy_config::set_trading_period_ms(config, trading_period_ms);
-}
-
-/// Initialize liquidity pool during DAO creation
-public entry fun init_create_liquidity_pool<AssetType: drop, StableType: drop>(
-    initial_asset_amount: u64,
-    initial_stable_amount: u64,
-    fee_bps: u64,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
-    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Add initial liquidity to the unshared pool
-    let lp_tokens = unified_spot_pool::add_liquidity_and_return(
-        spot_pool,
-        asset_coin,
-        stable_coin,
-        0, // min_lp_out
-        ctx,
-    );
-
-    // Transfer LP tokens to the pool itself for initial liquidity
-    transfer::public_transfer(lp_tokens, object::id_address(spot_pool));
-}
-
-/// Initialize proposal queue settings during DAO creation
-public entry fun init_queue_settings<StableType>(
-    max_queue_size: u64,
-    proposal_bond: u64,
-    queue: &mut ProposalQueue<StableType>,
-    ctx: &mut TxContext,
-) {}
-
-/// Get witness for init actions
-public fun init_witness(): InitWitness {
-    InitWitness {}
-}
-
-// === Init Action Entry Functions ===
-// Note: Each action module should expose its own init entry functions
-// that can be called directly by the PTB during DAO initialization
-
-/// Example entry function pattern that each action module should implement:
-/// ```
-/// public entry fun execute_init_<action_name>(
-///     params: <ActionParams>,
-///     account: &mut Account<FutarchyConfig>,
-///     <required_resources>,
-///     clock: &Clock,
-///     ctx: &mut TxContext,
-/// )
-/// ```
-
 // === Constants ===
 const MAX_INIT_ACTIONS: u64 = 50; // Reasonable limit to prevent gas issues
 
-// === Public Getters for InitResult ===
-public fun result_succeeded(result: &InitResult): u64 { result.succeeded }
+// === Helpers ===
 
-public fun result_failed(result: &InitResult): u64 { result.failed }
+fun action_type_label(action_type: TypeName): String {
+    let mut label = action_type.module_string();
+    label.append(b"::".to_string());
+    label.append(action_type.name_string());
+    label
+}
 
-public fun result_first_error(result: &InitResult): &Option<String> { &result.first_error }
+fun append_action_to_intent(
+    intent: &mut Intent<InitExecutionOutcome>,
+    action_type: TypeName,
+    action_data: vector<u8>,
+) {
+    if (action_type == type_name::with_defining_ids<action_type_markers::SetProposalsEnabled>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::SetProposalsEnabled {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::UpdateName>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::UpdateName {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::TradingParamsUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::TradingParamsUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::MetadataUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::MetadataUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::TwapConfigUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::TwapConfigUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::GovernanceUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::GovernanceUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::MetadataTableUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::MetadataTableUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::QueueParamsUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::QueueParamsUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::SlashDistributionUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::SlashDistributionUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::StorageConfigUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::StorageConfigUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::UpdateConditionalMetadata>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::UpdateConditionalMetadata {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::EarlyResolveConfigUpdate>()) {
+        intents::add_action_spec(
+            intent,
+            action_type_markers::EarlyResolveConfigUpdate {},
+            action_data,
+            config_intents::ConfigIntent {},
+        );
+    } else {
+        abort EUnhandledAction;
+    };
+}
 
-public fun result_failed_index(result: &InitResult): &Option<u64> { &result.failed_action_index }
-
-public fun result_is_complete_success(result: &InitResult): bool { result.failed == 0 }
-
-public fun result_is_partial_success(result: &InitResult): bool {
-    result.succeeded > 0 && result.failed > 0 && result.partial_execution_allowed
+fun execute_config_action(
+    executable: &mut Executable<InitExecutionOutcome>,
+    account: &mut Account<FutarchyConfig>,
+    action_type: TypeName,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    if (action_type == type_name::with_defining_ids<action_type_markers::SetProposalsEnabled>()) {
+        config_actions::do_set_proposals_enabled<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::UpdateName>()) {
+        config_actions::do_update_name<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::TradingParamsUpdate>()) {
+        config_actions::do_update_trading_params<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::MetadataUpdate>()) {
+        config_actions::do_update_metadata<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::TwapConfigUpdate>()) {
+        config_actions::do_update_twap_config<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::GovernanceUpdate>()) {
+        config_actions::do_update_governance<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::MetadataTableUpdate>()) {
+        config_actions::do_update_metadata_table<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::QueueParamsUpdate>()) {
+        config_actions::do_update_queue_params<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::SlashDistributionUpdate>()) {
+        config_actions::do_update_slash_distribution<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::StorageConfigUpdate>()) {
+        config_actions::do_update_storage_config<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::UpdateConditionalMetadata>()) {
+        config_actions::do_update_conditional_metadata<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else if (action_type == type_name::with_defining_ids<action_type_markers::EarlyResolveConfigUpdate>()) {
+        config_actions::do_update_early_resolve_config<InitExecutionOutcome, config_intents::ConfigIntent>(
+            executable,
+            account,
+            version::current(),
+            config_intents::ConfigIntent {},
+            clock,
+            ctx,
+        );
+    } else {
+        abort EUnhandledAction;
+    };
 }
 
 // === Main Execution Function ===
@@ -168,24 +281,114 @@ public fun result_is_partial_success(result: &InitResult): bool {
 public fun execute_init_intent_with_resources<RaiseToken, StableCoin>(
     account: &mut Account<FutarchyConfig>,
     specs: InitActionSpecs,
-    queue: &mut ProposalQueue<StableCoin>,
-    spot_pool: &mut UnifiedSpotPool<RaiseToken, StableCoin>,
+    _queue: &mut ProposalQueue<StableCoin>,
+    _spot_pool: &mut UnifiedSpotPool<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     let dao_id = object::id_address(account);
-    // For now, just process without the actions since we can't access them directly
-    // The actual init actions would be handled by PTB calling specific functions
-    let total_actions = 0u64;
+    let action_count = init_action_specs::action_count(&specs);
+    assert!(action_count <= MAX_INIT_ACTIONS, ETooManyInitActions);
 
-    // Note: The actual init actions would be handled by PTB calling
-    // specific init functions. This is just a placeholder for now.
+    if (action_count == 0) {
+        event::emit(InitBatchCompleted {
+            dao_id,
+            total_actions: 0,
+            successful_actions: 0,
+            failed_actions: 0,
+        });
+        return
+    };
 
-    // Emit completion event
+    let mut intent_key = b"launchpad_init_".to_string();
+    intent_key.append(clock.timestamp_ms().to_string());
+    intent_key.append(b"_".to_string());
+    intent_key.append(object::id_address(account).to_string());
+
+    let params = intents::new_params(
+        intent_key.clone(),
+        b"Launchpad Init Actions".to_string(),
+        vector[clock.timestamp_ms()],
+        clock.timestamp_ms() + 60_000,
+        clock,
+        ctx,
+    );
+
+    let mut intent = account::create_intent(
+        account,
+        params,
+        InitExecutionOutcome {},
+        b"LaunchpadInit".to_string(),
+        version::current(),
+        config_intents::ConfigIntent {},
+        ctx,
+    );
+
+    let actions = init_action_specs::actions(&specs);
+    let mut i = 0;
+    let len = vector::length(actions);
+    while (i < len) {
+        let action = vector::borrow(actions, i);
+        let action_type = init_action_specs::action_type(action);
+        let action_data = *init_action_specs::action_data(action);
+        append_action_to_intent(&mut intent, action_type, action_data);
+        i = i + 1;
+    };
+
+    account::insert_intent(account, intent, version::current(), config_intents::ConfigIntent {});
+
+    let (_, mut executable) = account::create_executable<
+        FutarchyConfig,
+        InitExecutionOutcome,
+        config_intents::ConfigIntent
+    >(
+        account,
+        intent_key.clone(),
+        clock,
+        version::current(),
+        config_intents::ConfigIntent {},
+        ctx,
+    );
+
+    let mut processed = 0u64;
+    loop {
+        let current_idx = executable::action_idx(&executable);
+        if (current_idx >= len) {
+            break
+        };
+
+        let action_type = executable::current_action_type(&executable);
+        execute_config_action(&mut executable, account, action_type, clock, ctx);
+
+        event::emit(InitActionAttempted {
+            dao_id,
+            action_type: action_type_label(action_type),
+            action_index: current_idx,
+            success: true,
+        });
+
+        processed = processed + 1;
+    };
+
+    assert!(processed == len, EInitActionFailed);
+
+    account::confirm_execution(account, executable);
+
+    let mut expired = account::destroy_empty_intent<FutarchyConfig, InitExecutionOutcome>(
+        account,
+        intent_key,
+        ctx,
+    );
+
+    while (intents::expired_action_count(&expired) > 0) {
+        let _ = intents::remove_action_spec(&mut expired);
+    };
+    intents::destroy_empty_expired(expired);
+
     event::emit(InitBatchCompleted {
         dao_id,
-        total_actions,
-        successful_actions: total_actions,
+        total_actions: len,
+        successful_actions: processed,
         failed_actions: 0,
     });
 }

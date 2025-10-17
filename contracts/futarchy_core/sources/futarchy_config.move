@@ -12,6 +12,7 @@ use account_protocol::deps::{Self, Deps};
 use account_protocol::version_witness::VersionWitness;
 use futarchy_core::dao_config::{Self, DaoConfig};
 use futarchy_core::version;
+use futarchy_types::signed::SignedU128;
 use std::option::{Self, Option};
 use std::string::{Self, String};
 use std::type_name;
@@ -703,7 +704,7 @@ public fun amm_twap_step_max(config: &FutarchyConfig): u64 {
     dao_config::step_max(dao_config::twap_config(&config.config))
 }
 
-public fun twap_threshold(config: &FutarchyConfig): u64 {
+public fun twap_threshold(config: &FutarchyConfig): &SignedU128 {
     dao_config::threshold(dao_config::twap_config(&config.config))
 }
 
@@ -849,7 +850,7 @@ public fun set_amm_twap_initial_observation(config: &mut FutarchyConfig, obs: u1
     dao_config::set_initial_observation(twap_cfg, obs);
 }
 
-public fun set_twap_threshold(config: &mut FutarchyConfig, threshold: u64) {
+public fun set_twap_threshold(config: &mut FutarchyConfig, threshold: SignedU128) {
     let twap_cfg = dao_config::twap_config_mut(&mut config.config);
     dao_config::set_threshold(twap_cfg, threshold);
 }

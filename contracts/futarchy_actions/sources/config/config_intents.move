@@ -15,6 +15,7 @@ use futarchy_types::action_type_markers;
 use futarchy_core::dao_config;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
+use futarchy_types::signed::SignedU128;
 use std::ascii::String as AsciiString;
 use std::bcs;
 use std::option::{Self, Option};
@@ -183,7 +184,7 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
     start_delay: u64,
     step_max: u64,
     initial_observation: u128,
-    threshold: u64,
+    threshold: SignedU128,
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
@@ -409,7 +410,7 @@ public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
     twap_start_delay: u64,
     twap_step_max: u64,
     twap_initial_observation: u128,
-    twap_threshold: u64,
+    twap_threshold: SignedU128,
     ctx: &mut TxContext,
 ) {
     create_update_twap_config_intent(

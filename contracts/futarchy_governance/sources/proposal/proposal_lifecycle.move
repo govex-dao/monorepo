@@ -23,6 +23,7 @@ use futarchy_markets_core::quantum_lp_manager;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_one_shot_utils::strategy;
 use futarchy_types::init_action_specs::InitActionSpecs;
+use futarchy_types::signed::{Self as signed};
 use futarchy_vault::futarchy_vault;
 use std::option;
 use std::string::String;
@@ -202,7 +203,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         futarchy_config::amm_twap_start_delay(config),
         futarchy_config::amm_twap_initial_observation(config),
         futarchy_config::amm_twap_step_max(config),
-        futarchy_config::twap_threshold(config),
+        *futarchy_config::twap_threshold(config),
         futarchy_config::conditional_amm_fee_bps(config),
         conditional_liquidity_ratio_percent, // 50% (base 100)
         futarchy_config::max_outcomes(config), // DAO's configured max outcomes
@@ -612,7 +613,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     let amm_twap_start_delay = futarchy_config::amm_twap_start_delay(cfg);
     let amm_twap_initial_observation = futarchy_config::amm_twap_initial_observation(cfg);
     let amm_twap_step_max = futarchy_config::amm_twap_step_max(cfg);
-    let twap_threshold = futarchy_config::twap_threshold(cfg);
+    let twap_threshold = *futarchy_config::twap_threshold(cfg);
     let amm_total_fee_bps = futarchy_config::amm_total_fee_bps(cfg);
 
     // Read conditional liquidity ratio from DAO config (same as activate_proposal)
@@ -830,9 +831,10 @@ public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
     let winning_outcome = if (twap_prices.length() >= 2) {
         let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
         let threshold = proposal::get_twap_threshold(proposal);
+        let yes_signed = signed::from_u128(yes_twap);
 
         // If YES TWAP exceeds threshold, YES wins
-        if (yes_twap > (threshold as u128)) {
+        if (signed::compare(&yes_signed, &threshold) == signed::ordering_greater()) {
             OUTCOME_ACCEPTED
         } else {
             OUTCOME_REJECTED
