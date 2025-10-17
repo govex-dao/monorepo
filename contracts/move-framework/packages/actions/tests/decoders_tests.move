@@ -3,7 +3,6 @@ module account_actions::decoders_tests;
 
 use account_actions::access_control_decoder;
 use account_actions::currency_decoder;
-use account_actions::kiosk_decoder;
 use account_actions::package_upgrade_decoder;
 use account_actions::transfer_decoder;
 use account_actions::vault_decoder;
@@ -174,19 +173,6 @@ fun test_vesting_decoder_registration() {
     end(scenario, registry);
 }
 
-// === Kiosk Decoder Tests ===
-
-#[test]
-fun test_kiosk_decoder_registration() {
-    let (mut scenario, mut registry) = start();
-
-    // Register kiosk decoders
-    kiosk_decoder::register_decoders(&mut registry, scenario.ctx());
-
-    // Test passes if registration doesn't abort
-    end(scenario, registry);
-}
-
 // === Package Upgrade Decoder Tests ===
 
 #[test]
@@ -231,7 +217,6 @@ fun test_register_all_decoders() {
     transfer_decoder::register_decoders(&mut registry, scenario.ctx());
     vault_decoder::register_decoders(&mut registry, scenario.ctx());
     vesting_decoder::register_decoders(&mut registry, scenario.ctx());
-    kiosk_decoder::register_decoders(&mut registry, scenario.ctx());
     package_upgrade_decoder::register_decoders(&mut registry, scenario.ctx());
 
     // All registrations should succeed

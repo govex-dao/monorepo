@@ -22,7 +22,6 @@ use futarchy_core::priority_queue::{Self, ProposalQueue};
 use futarchy_core::version;
 use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_multisig::policy_registry;
 use futarchy_factory::init_actions;
 use futarchy_types::init_action_specs::InitActionSpecs;
 use futarchy_types::signed::{Self as signed, SignedU128};
@@ -374,7 +373,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
-        dao_config::default_multisig_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
@@ -445,9 +443,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     futarchy_config::set_proposal_queue_id(&mut account, option::some(priority_queue_id));
 
     // Action registry removed - using statically-typed pattern
-
-    // Initialize the policy registry
-    policy_registry::initialize(&mut account, version::current(), ctx);
 
     // Initialize the default treasury vault using base vault module
     let auth = account::new_auth(
@@ -661,7 +656,6 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
-        dao_config::default_multisig_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
@@ -895,7 +889,6 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
-        dao_config::default_multisig_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)

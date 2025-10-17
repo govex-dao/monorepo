@@ -31,7 +31,6 @@ find \
   contracts/futarchy_core/sources \
   contracts/futarchy_markets_core/sources \
   contracts/futarchy_markets_operations/sources \
-  contracts/futarchy_multisig/sources \
   contracts/futarchy_specialized_actions/sources \
   contracts/futarchy_lifecycle/sources \
   contracts/futarchy_actions/sources \
@@ -56,7 +55,6 @@ find \
   contracts/futarchy_markets_core/sources \
   contracts/futarchy_markets_operations/sources \
   contracts/futarchy_vault/sources \
-  contracts/futarchy_multisig/sources \
   contracts/futarchy_specialized_actions/sources \
   contracts/futarchy_lifecycle/sources \
   contracts/futarchy_actions/sources \
@@ -68,7 +66,7 @@ find \
 
 Run these commands from the project root directory (`/Users/admin/monorepo/`):
 
-**All 20 packages (Move Framework + Futarchy):**
+**All 19 packages (Move Framework + Futarchy):**
 ```bash
 find \
     contracts/move-framework/packages/extensions/sources \
@@ -80,16 +78,16 @@ find \
     contracts/futarchy_markets_core/sources \
     contracts/futarchy_markets_operations/sources \
     contracts/futarchy_markets_primitives/sources \
-    contracts/futarchy_multisig/sources \
     contracts/futarchy_dividend_actions/sources \
     contracts/futarchy_stream_actions/sources \
     contracts/futarchy_oracle_actions/sources \
     contracts/futarchy_factory/sources \
     contracts/futarchy_dissolution_actions/sources \
     contracts/futarchy_legal_actions/sources \
+    contracts/futarchy_governance/sources \
     contracts/futarchy_governance_actions/sources \
     contracts/futarchy_actions/sources \
-    contracts/futarchy_governance/sources \
+    contracts/futarchy_actions_tracker/sources \
     -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_19_packages.txt
 ```
 

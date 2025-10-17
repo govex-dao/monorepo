@@ -5,7 +5,6 @@ module futarchy_actions_tracker::gc_registry;
 
 use account_actions::access_control;
 use account_actions::currency;
-use account_actions::kiosk;
 use account_actions::package_upgrade;
 use account_actions::transfer;
 use account_actions::vault;
@@ -22,8 +21,6 @@ use futarchy_governance_actions::protocol_admin_actions;
 use futarchy_legal_actions::dao_file_actions;
 use futarchy_legal_actions::walrus_renewal;
 use futarchy_lifecycle::dissolution_actions;
-use futarchy_multisig::policy_actions;
-use futarchy_multisig::security_council_actions;
 use futarchy_oracle::oracle_actions;
 use futarchy_dividend_actions::dividend_actions;
 use futarchy_stream_actions::stream_actions;
@@ -90,19 +87,6 @@ public fun delete_slash_distribution(expired: &mut Expired) {
     config_actions::delete_slash_distribution_update<FutarchyConfig>(expired);
 }
 
-// === Security Council Actions ===
-public fun delete_create_council(expired: &mut Expired) {
-    futarchy_multisig::security_council_actions::delete_create_council(expired);
-}
-
-public fun delete_update_council_membership(expired: &mut Expired) {
-    futarchy_multisig::security_council_actions::delete_update_council_membership(expired);
-}
-
-public fun delete_approve_policy_change(expired: &mut Expired) {
-    futarchy_multisig::security_council_actions::delete_approve_generic(expired);
-}
-
 // === Vault/Custody Actions ===
 // REMOVED: custody_actions deleted, add/remove coin type actions deleted
 
@@ -125,15 +109,6 @@ public fun delete_create_pool<AssetType, StableType>(expired: &mut Expired) {
 
 public fun delete_update_pool_params(expired: &mut Expired) {
     liquidity_actions::delete_update_pool_params(expired);
-}
-
-// === Policy Actions ===
-public fun delete_set_policy(expired: &mut Expired) {
-    futarchy_multisig::policy_actions::delete_set_type_policy(expired);
-}
-
-public fun delete_remove_policy(expired: &mut Expired) {
-    futarchy_multisig::policy_actions::delete_remove_type_policy(expired);
 }
 
 // === Dissolution Actions ===
@@ -213,15 +188,6 @@ public fun delete_transfer(expired: &mut Expired) {
 
 public fun delete_transfer_to_sender(expired: &mut Expired) {
     transfer::delete_transfer_to_sender(expired);
-}
-
-// === Kiosk Actions ===
-public fun delete_kiosk_take(expired: &mut Expired) {
-    kiosk::delete_take(expired);
-}
-
-public fun delete_kiosk_list(expired: &mut Expired) {
-    kiosk::delete_list(expired);
 }
 
 // === Access Control Actions ===
@@ -377,15 +343,3 @@ public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Ex
     dissolution_actions::delete_withdraw_amm_liquidity<AssetType, StableType>(expired);
 }
 
-// === Additional Policy Actions ===
-public fun delete_register_council(expired: &mut Expired) {
-    policy_actions::delete_register_council(expired);
-}
-
-public fun delete_set_object_policy(expired: &mut Expired) {
-    policy_actions::delete_set_object_policy(expired);
-}
-
-public fun delete_remove_object_policy(expired: &mut Expired) {
-    policy_actions::delete_remove_object_policy(expired);
-}

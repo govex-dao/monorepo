@@ -26,7 +26,6 @@ const EInvalidMaxConcurrentProposals: u64 = 9; // Max concurrent proposals must 
 const EMaxOutcomesExceedsProtocol: u64 = 10; // Max outcomes exceeds protocol limit
 const EMaxActionsExceedsProtocol: u64 = 11; // Max actions exceeds protocol limit
 const EStateInconsistent: u64 = 12; // State would become inconsistent with this change
-const EInvalidChallengeBounty: u64 = 13; // Challenge bounty must be positive and not exceed challenge fee
 const EInvalidQuotaParams: u64 = 14; // Invalid quota parameters
 const ENoConditionalMetadata: u64 = 15; // No conditional metadata available (neither CoinMetadata nor fallback config)
 
@@ -109,11 +108,6 @@ public struct SecurityConfig has copy, drop, store {
     require_deadman_council: bool, // If true, all councils must support dead-man switch
 }
 
-/// Multisig configuration (currently empty, reserved for future features)
-public struct MultisigConfig has copy, drop, store {
-    _reserved: u64, // Reserved for future use
-}
-
 /// Storage configuration for DAO files
 public struct StorageConfig has copy, drop, store {
     allow_walrus_blobs: bool, // If true, allow Walrus blob storage; if false, string-only
@@ -152,10 +146,6 @@ public struct DaoConfig has copy, drop, store {
     storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
-    multisig_config: MultisigConfig,
-    optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals, streams, multisig actions
-    optimistic_challenge_period_ms: u64, // Time period to challenge optimistic actions (e.g., 10 days)
-    challenge_bounty: u64, // Reward paid to successful challengers (for streams, multisig, optimistic proposals)
 }
 
 // === Constructor Functions ===
@@ -363,12 +353,6 @@ public fun new_quota_config(
     }
 }
 
-/// Create a new multisig configuration
-public fun new_multisig_config(): MultisigConfig {
-    MultisigConfig {
-        _reserved: 0,
-    }
-}
 
 /// Create a complete DAO configuration
 public fun new_dao_config(
@@ -380,16 +364,7 @@ public fun new_dao_config(
     storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
-    multisig_config: MultisigConfig,
-    optimistic_challenge_fee: u64,
-    optimistic_challenge_period_ms: u64,
-    challenge_bounty: u64,
 ): DaoConfig {
-    // Validate challenge parameters
-    assert!(optimistic_challenge_fee > 0, EInvalidProposalFee);
-    assert!(optimistic_challenge_period_ms > 0, EInvalidPeriod);
-    assert!(challenge_bounty > 0, EInvalidChallengeBounty);
-
     DaoConfig {
         trading_params,
         twap_config,
@@ -399,10 +374,6 @@ public fun new_dao_config(
         storage_config,
         conditional_coin_config,
         quota_config,
-        multisig_config,
-        optimistic_challenge_fee,
-        optimistic_challenge_period_ms,
-        challenge_bounty,
     }
 }
 
@@ -613,22 +584,6 @@ public fun default_quota_amount(quota: &QuotaConfig): u64 { quota.default_quota_
 public fun default_quota_period_ms(quota: &QuotaConfig): u64 { quota.default_quota_period_ms }
 
 public fun default_reduced_fee(quota: &QuotaConfig): u64 { quota.default_reduced_fee }
-
-// Multisig config getters
-public fun multisig_config(config: &DaoConfig): &MultisigConfig { &config.multisig_config }
-
-public(package) fun multisig_config_mut(config: &mut DaoConfig): &mut MultisigConfig {
-    &mut config.multisig_config
-}
-
-// Challenge config getters (DAO-level)
-public fun optimistic_challenge_fee(config: &DaoConfig): u64 { config.optimistic_challenge_fee }
-
-public fun optimistic_challenge_period_ms(config: &DaoConfig): u64 {
-    config.optimistic_challenge_period_ms
-}
-
-public fun challenge_bounty(config: &DaoConfig): u64 { config.challenge_bounty }
 
 // === Update Functions ===
 
@@ -915,22 +870,6 @@ public(package) fun set_icon_url_string(meta: &mut MetadataConfig, url_str: Stri
     meta.icon_url = url::new_unsafe(ascii_url);
 }
 
-// Challenge config setters (DAO-level)
-public(package) fun set_optimistic_challenge_fee(config: &mut DaoConfig, amount: u64) {
-    assert!(amount > 0, EInvalidProposalFee);
-    config.optimistic_challenge_fee = amount;
-}
-
-public(package) fun set_optimistic_challenge_period_ms(config: &mut DaoConfig, period: u64) {
-    assert!(period > 0, EInvalidPeriod);
-    config.optimistic_challenge_period_ms = period;
-}
-
-public(package) fun set_challenge_bounty(config: &mut DaoConfig, bounty: u64) {
-    assert!(bounty > 0, EInvalidChallengeBounty);
-    config.challenge_bounty = bounty;
-}
-
 /// Update trading parameters (returns new config)
 public fun update_trading_params(config: &DaoConfig, new_params: TradingParams): DaoConfig {
     DaoConfig {
@@ -942,10 +881,6 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -960,10 +895,6 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -978,10 +909,6 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -996,10 +923,6 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -1014,10 +937,6 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -1032,10 +951,6 @@ public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig)
         storage_config: new_storage,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -1053,10 +968,6 @@ public fun update_conditional_coin_config(
         storage_config: config.storage_config,
         conditional_coin_config: new_coin_config,
         quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -1071,10 +982,6 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: new_quota,
-        multisig_config: config.multisig_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -1157,9 +1064,3 @@ public fun default_quota_config(): QuotaConfig {
     }
 }
 
-/// Get default multisig configuration
-public fun default_multisig_config(): MultisigConfig {
-    MultisigConfig {
-        _reserved: 0,
-    }
-}

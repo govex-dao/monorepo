@@ -7,7 +7,6 @@ module account_actions::init_actions;
 
 use account_actions::access_control;
 use account_actions::currency;
-use account_actions::kiosk;
 use account_actions::package_upgrade;
 use account_actions::transfer;
 use account_actions::vault;
@@ -36,20 +35,17 @@ const EInitAfterFinalization: u64 = 1002;
 /// Error when vault name already exists
 const EVaultAlreadyExists: u64 = 1003;
 
-/// Error when kiosk name already exists
-const EKioskAlreadyExists: u64 = 1004;
-
 /// Error when capability already locked
-const ECapabilityAlreadyLocked: u64 = 1005;
+const ECapabilityAlreadyLocked: u64 = 1004;
 
 /// Error when treasury cap already locked
-const ETreasuryCapAlreadyLocked: u64 = 1006;
+const ETreasuryCapAlreadyLocked: u64 = 1005;
 
 /// Error when upgrade cap already locked
-const EUpgradeCapAlreadyLocked: u64 = 1007;
+const EUpgradeCapAlreadyLocked: u64 = 1006;
 
 /// Error when object key already exists
-const EObjectKeyAlreadyExists: u64 = 1008;
+const EObjectKeyAlreadyExists: u64 = 1007;
 
 // === Init Vault Actions ===
 
@@ -215,18 +211,6 @@ public fun init_lock_upgrade_cap<Config>(
         delay_ms,
     );
 }
-
-// === Init Kiosk Actions ===
-
-/// Open kiosk during initialization
-/// Creates a kiosk for NFT management
-/// Returns the kiosk ID for subsequent operations
-public fun init_open_kiosk<Config>(account: &mut Account<Config>, ctx: &mut TxContext): object::ID {
-    kiosk::do_open_unshared(account, ctx)
-}
-
-// Note: init_place_in_kiosk removed - PTBs should use the returned
-// kiosk ID directly with standard kiosk functions
 
 // === Init Access Control Actions ===
 

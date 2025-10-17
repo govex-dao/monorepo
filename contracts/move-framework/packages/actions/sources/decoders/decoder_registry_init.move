@@ -13,7 +13,6 @@ module account_actions::decoder_registry_init;
 
 use account_actions::access_control_decoder;
 use account_actions::currency_decoder;
-use account_actions::kiosk_decoder;
 use account_actions::package_upgrade_decoder;
 use account_actions::transfer_decoder;
 use account_actions::vault_decoder;
@@ -106,9 +105,6 @@ public fun register_all_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut
 
     // Register transfer action decoders
     transfer_decoder::register_decoders(registry, ctx);
-
-    // Register kiosk action decoders
-    kiosk_decoder::register_decoders(registry, ctx);
 
     // Register access control action decoders
     access_control_decoder::register_decoders(registry, ctx);

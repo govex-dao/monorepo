@@ -73,19 +73,16 @@ public struct CoinFeeConfig has store {
     dao_creation_fee: u64,
     proposal_creation_fee_per_outcome: u64,
     recovery_fee: u64,
-    multisig_creation_fee: u64, // One-time fee when creating a multisig
     verification_fees: Table<u8, u64>,
     // Pending updates with 6-month delay
     pending_creation_fee: Option<u64>,
     pending_proposal_fee: Option<u64>,
     pending_recovery_fee: Option<u64>,
-    pending_multisig_creation_fee: Option<u64>,
     pending_fees_effective_timestamp: Option<u64>,
     // 10x cap tracking - baseline fees that reset every 6 months
     creation_fee_baseline: u64,
     proposal_fee_baseline: u64,
     recovery_fee_baseline: u64,
-    multisig_creation_fee_baseline: u64,
     baseline_reset_timestamp: u64,
 }
 
@@ -188,15 +185,6 @@ public struct RecoveryRequested has copy, drop {
 public struct RecoveryExecuted has copy, drop {
     dao_id: ID,
     new_council_id: ID,
-    timestamp: u64,
-}
-
-public struct MultisigCreationFeeCollected has copy, drop {
-    dao_id: ID,
-    multisig_id: ID,
-    amount: u64,
-    stable_type: AsciiString,
-    payer: address,
     timestamp: u64,
 }
 
@@ -658,7 +646,6 @@ public fun add_coin_fee_config(
     dao_creation_fee: u64,
     proposal_fee_per_outcome: u64,
     recovery_fee: u64,
-    multisig_creation_fee: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -675,18 +662,15 @@ public fun add_coin_fee_config(
         dao_creation_fee,
         proposal_creation_fee_per_outcome: proposal_fee_per_outcome,
         recovery_fee,
-        multisig_creation_fee,
         verification_fees,
         pending_creation_fee: option::none(),
         pending_proposal_fee: option::none(),
         pending_recovery_fee: option::none(),
-        pending_multisig_creation_fee: option::none(),
         pending_fees_effective_timestamp: option::none(),
         // Initialize baselines to current fees
         creation_fee_baseline: dao_creation_fee,
         proposal_fee_baseline: proposal_fee_per_outcome,
         recovery_fee_baseline: recovery_fee,
-        multisig_creation_fee_baseline: multisig_creation_fee,
         baseline_reset_timestamp: clock.timestamp_ms(),
     };
 
@@ -837,11 +821,6 @@ public fun apply_pending_coin_fees(
                 config.pending_recovery_fee = option::none();
             };
 
-            if (config.pending_multisig_creation_fee.is_some()) {
-                config.multisig_creation_fee = *config.pending_multisig_creation_fee.borrow();
-                config.pending_multisig_creation_fee = option::none();
-            };
-
             config.pending_fees_effective_timestamp = option::none();
         }
     }
@@ -852,110 +831,6 @@ public fun get_coin_fee_config(fee_manager: &FeeManager, coin_type: TypeName): &
     assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
     dynamic_field::borrow(&fee_manager.id, coin_type)
 }
-
-// === Multisig Fee Management ===
-
-/// Update multisig creation fee for a specific coin type (with 6-month delay and 10x cap)
-public fun update_coin_multisig_creation_fee(
-    fee_manager: &mut FeeManager,
-    admin_cap: &FeeAdminCap,
-    coin_type: TypeName,
-    new_fee: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
-    assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
-
-    let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
-    let current_time = clock.timestamp_ms();
-
-    // Check if 6 months have passed since baseline was set - if so, reset baseline
-    if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
-        config.multisig_creation_fee_baseline = config.multisig_creation_fee;
-        config.baseline_reset_timestamp = current_time;
-    };
-
-    // Enforce 10x cap from baseline
-    assert!(
-        new_fee <= config.multisig_creation_fee_baseline * MAX_FEE_MULTIPLIER,
-        EFeeExceedsTenXCap,
-    );
-
-    // Allow immediate decrease, delayed increase
-    if (new_fee <= config.multisig_creation_fee) {
-        // Fee decrease - apply immediately
-        config.multisig_creation_fee = new_fee;
-    } else {
-        // Fee increase - apply after delay
-        let effective_timestamp = current_time + FEE_UPDATE_DELAY_MS;
-        config.pending_multisig_creation_fee = option::some(new_fee);
-        config.pending_fees_effective_timestamp = option::some(effective_timestamp);
-    };
-}
-
-/// Get multisig creation fee for a specific coin type
-public fun get_coin_multisig_creation_fee(fee_manager: &FeeManager, coin_type: TypeName): u64 {
-    get_coin_fee_config(fee_manager, coin_type).multisig_creation_fee
-}
-
-// === Multisig Fee Collection ===
-
-/// Collect one-time multisig creation fee
-public fun collect_multisig_creation_fee<StableType>(
-    fee_manager: &mut FeeManager,
-    dao_id: ID,
-    multisig_id: ID,
-    coin_type: TypeName,
-    mut payment: Coin<StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<StableType> {
-    // CRITICAL: Verify type safety
-    assert!(type_name::get<StableType>() == coin_type, EWrongStableCoinType);
-
-    // Apply any pending fee updates
-    apply_pending_coin_fees(fee_manager, coin_type, clock);
-
-    // Get fee amount for this coin type
-    let fee_amount = if (dynamic_field::exists_(&fee_manager.id, coin_type)) {
-        let config: &CoinFeeConfig = dynamic_field::borrow(&fee_manager.id, coin_type);
-        config.multisig_creation_fee
-    } else {
-        // Fallback to 0 if coin not configured (no fee)
-        0
-    };
-
-    if (fee_amount == 0) {
-        return payment
-    };
-
-    // Check payment amount
-    let payment_amount = payment.value();
-    assert!(payment_amount >= fee_amount, EInvalidPayment);
-
-    // Split fee from payment
-    let fee_coin = payment.split(fee_amount, ctx);
-
-    // Deposit fee
-    deposit_stable_fees(fee_manager, fee_coin.into_balance(), dao_id, clock);
-
-    // Emit event
-    let stable_type_str = type_name::with_defining_ids<StableType>().into_string();
-    event::emit(MultisigCreationFeeCollected {
-        dao_id,
-        multisig_id,
-        amount: fee_amount,
-        stable_type: stable_type_str,
-        payer: ctx.sender(),
-        timestamp: clock.timestamp_ms(),
-    });
-
-    // Return remaining payment
-    payment
-}
-
-// Monthly fee collection system removed - replaced with per-execution fees via MultisigExecutionFeeManager
 
 // ======== Test Functions ========
 #[test_only]

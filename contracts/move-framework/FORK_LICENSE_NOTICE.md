@@ -8,13 +8,11 @@
   `packages/actions/sources/intents/access_control.move`  
   `packages/actions/sources/intents/currency.move`  
   `packages/actions/sources/intents/empty.move`  
-  `packages/actions/sources/intents/kiosk.move`  
   `packages/actions/sources/intents/owned.move`  
   `packages/actions/sources/intents/package_upgrade.move`  
   `packages/actions/sources/intents/vault.move`  
   `packages/actions/sources/lib/access_control.move`  
   `packages/actions/sources/lib/currency.move`  
-  `packages/actions/sources/lib/kiosk.move`  
   `packages/actions/sources/lib/package_upgrade.move`  
   `packages/actions/sources/lib/transfer.move`  
   `packages/actions/sources/lib/vault.move`  
@@ -38,7 +36,6 @@
   `packages/actions/sources/decoders/access_control_decoder.move`  
   `packages/actions/sources/decoders/currency_decoder.move`  
   `packages/actions/sources/decoders/decoder_registry_init.move`  
-  `packages/actions/sources/decoders/kiosk_decoder.move`  
   `packages/actions/sources/decoders/package_upgrade_decoder.move`  
   `packages/actions/sources/decoders/transfer_decoder.move`  
   `packages/actions/sources/decoders/vault_decoder.move`  

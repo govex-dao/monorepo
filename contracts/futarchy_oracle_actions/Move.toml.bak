@@ -1,5 +1,5 @@
 [package]
-name = "futarchy_legal_actions"
+name = "futarchy_oracle"
 edition = "2024.beta"
 published-at  = "0x0"
 
@@ -11,17 +11,15 @@ futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
-futarchy_lifecycle = { local = "../futarchy_dissolution_actions" }
-Walrus = { local = "../walrus_walrus" }
-WAL = { local = "../walrus_wal" }
+futarchy_multisig = { local = "../futarchy_multisig" }
+AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
-futarchy_legal_actions = "0xb594670af6dd19b1d7bfd8606e8b0e5c0c403dc4688d9ee316a2c7ec5f07741f"
-futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
+futarchy_oracle = "0x772f010aa6957c875b5777a9e770e4f8e9c45a932e7e5fced33b2956095313ea"
 futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"
+futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
 futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
 futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
-futarchy_lifecycle = "0x8f72dd124237359d6117977c13933f6c93581d381ed6d43713b35aa14b1b6275"
+futarchy_multisig = "0x8e216aa2f6eebad3377ac799c966d076c82dc9f58eccccbbf63bf28b206bc1cb"
 account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
 account_extensions = "0xa9ca20a7a38f897b021b35147070b3997e236c8b6791d6f115e264f3bb67ccd4"
-walrus = "0x66d71f5ebd9975e2715c3a71b3a1dd1c5b55f82a200ee859622efd92e11ccedb"

@@ -71,14 +71,6 @@ public struct PackageCommit has drop {}
 /// Restrict upgrade policy
 public struct PackageRestrict has drop {}
 
-// ======== Kiosk Actions ========
-
-/// Take item from kiosk
-public struct KioskTake has drop {}
-
-/// List item in kiosk
-public struct KioskList has drop {}
-
 // ======== Vesting Actions ========
 
 /// Create vesting schedule
@@ -159,10 +151,6 @@ public fun package_upgrade(): PackageUpgrade { PackageUpgrade {} }
 public fun package_commit(): PackageCommit { PackageCommit {} }
 
 public fun package_restrict(): PackageRestrict { PackageRestrict {} }
-
-public fun kiosk_take(): KioskTake { KioskTake {} }
-
-public fun kiosk_list(): KioskList { KioskList {} }
 
 public fun vesting_create(): VestingCreate { VestingCreate {} }
 

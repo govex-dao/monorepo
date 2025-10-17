@@ -3,7 +3,6 @@ module account_actions::decoder_tests;
 
 use account_actions::access_control_decoder;
 use account_actions::currency_decoder;
-use account_actions::kiosk_decoder;
 use account_actions::package_upgrade_decoder;
 use account_actions::transfer_decoder;
 use account_actions::vault_decoder;
@@ -31,7 +30,6 @@ fun start(): (Scenario, ActionDecoderRegistry) {
     // Register all decoders
     access_control_decoder::register_decoders(&mut registry, scenario.ctx());
     currency_decoder::register_decoders(&mut registry, scenario.ctx());
-    kiosk_decoder::register_decoders(&mut registry, scenario.ctx());
     package_upgrade_decoder::register_decoders(&mut registry, scenario.ctx());
     transfer_decoder::register_decoders(&mut registry, scenario.ctx());
     vault_decoder::register_decoders(&mut registry, scenario.ctx());
@@ -176,31 +174,6 @@ fun test_decode_claim_vesting_action() {
 
     // ClaimVestingAction has: vesting_id (ID), amount (u64)
     // For testing, we just verify the structure
-
-    end(scenario, registry);
-}
-
-// === Kiosk Decoder Tests ===
-
-#[test]
-fun test_decode_take_nft_action() {
-    let (scenario, registry) = start();
-
-    // TakeNftAction has: nft_ids (vector<ID>), recipients (vector<address>)
-    // For testing, we verify the decoder is registered
-
-    end(scenario, registry);
-}
-
-#[test]
-fun test_decode_list_nft_action() {
-    let (scenario, registry) = start();
-
-    // ListNftAction has: nft_id (ID), price (u64)
-    let price = 1000u64;
-    let action_data = bcs::to_bytes(&price);
-
-    assert!(action_data.length() > 0, 0);
 
     end(scenario, registry);
 }

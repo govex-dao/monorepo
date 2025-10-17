@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// Generic payment system for Account Protocol - REFACTORED
-/// Works with any Account<Config> type (DAOs, multisigs, etc.)
+/// Works with any Account<Config> type
 /// This version removes state duplication by using vault streams as the source of truth
 /// while preserving all original features (budget accountability, isolated pools, etc.)
 ///
@@ -28,7 +28,6 @@
 ///
 /// Example Config implementations:
 /// - `FutarchyConfig` - DAO with "treasury" vault ✅
-/// - `WeightedMultisig` - Can use any named vault ✅
 /// - Custom configs - Must implement vault system
 
 module futarchy_stream_actions::stream_actions;
@@ -59,7 +58,6 @@ use futarchy_core::{
     version,
     futarchy_config::{Self, FutarchyConfig},
 };
-use futarchy_multisig::weighted_list::{Self, WeightedList};
 // CreatePaymentAction is defined locally in this module
 use account_actions::{vault::{Self, Vault, VaultKey}, vault_intents};
 use account_protocol::{
@@ -136,21 +134,15 @@ const ETooManyWithdrawers: u64 = 16;
 const ENotAuthorizedWithdrawer: u64 = 17;
 const EWithdrawerAlreadyExists: u64 = 18;
 const EInvalidBudgetStream: u64 = 19;
-const ETooManyPendingWithdrawals: u64 = 20;
 const EVaultNotFound: u64 = 21;
-const EWithdrawalNotReady: u64 = 22;
-const EWithdrawalChallenged: u64 = 23;
 const EMissingReasonCode: u64 = 24;
 const EMissingProjectName: u64 = 25;
-const EChallengeMismatch: u64 = 26;
 const ECannotWithdrawFromVault: u64 = 27;
 const EBudgetExceeded: u64 = 28;
 const EInvalidSourceMode: u64 = 29;
 const EInvalidStreamType: u64 = 30;
 
 const MAX_WITHDRAWERS: u64 = 100;
-const MAX_PENDING_WITHDRAWALS: u64 = 100;
-const DEFAULT_PENDING_PERIOD_MS: u64 = 604_800_000; // 7 days in milliseconds
 
 // === Storage Keys === (Keep all original)
 
@@ -174,25 +166,9 @@ public struct PaymentStorage has store {
     total_payments: u64,
 }
 
-/// Pending withdrawal for budget streams with accountability (Keep as-is)
-public struct PendingWithdrawal has store, drop {
-    withdrawer: address,
-    amount: u64,
-    reason_code: String,
-    requested_at: u64,
-    processes_at: u64,
-    is_challenged: bool,
-    challenge_proposal_id: Option<ID>,
-}
-
-/// Configuration for budget streams with enhanced accountability (Keep as-is)
+/// Configuration for budget streams with accountability
 public struct BudgetStreamConfig has store {
     project_name: String,
-    pending_period_ms: u64,
-    pending_withdrawals: Table<u64, PendingWithdrawal>,
-    pending_count: u64,
-    total_pending_amount: u64,
-    next_withdrawal_id: u64,
     budget_period_ms: Option<u64>,
     current_period_start: u64,
     current_period_claimed: u64,
@@ -258,39 +234,6 @@ public struct PaymentToggled has copy, drop {
     timestamp: u64,
 }
 
-public struct WithdrawalRequested has copy, drop {
-    account_id: ID,
-    payment_id: String,
-    withdrawal_id: u64,
-    withdrawer: address,
-    amount: u64,
-    reason_code: String,
-    processes_at: u64,
-}
-
-public struct WithdrawalChallenged has copy, drop {
-    account_id: ID,
-    payment_id: String,
-    withdrawal_ids: vector<u64>,
-    proposal_id: ID,
-    challenger: address,
-}
-
-public struct WithdrawalProcessed has copy, drop {
-    account_id: ID,
-    payment_id: String,
-    withdrawal_id: u64,
-    withdrawer: address,
-    amount: u64,
-}
-
-public struct ChallengedWithdrawalsCancelled has copy, drop {
-    account_id: ID,
-    payment_id: String,
-    withdrawal_ids: vector<u64>,
-    proposal_id: ID,
-}
-
 // === Structs ===
 
 /// Payment types supported by the unified system
@@ -344,7 +287,6 @@ public struct PaymentConfig has store {
 /// Budget stream parameters (optional)
 public struct BudgetParams has store, drop, copy {
     project_name: String,
-    pending_period_ms: u64,
     budget_period_ms: Option<u64>,
     max_per_period: Option<u64>,
 }
@@ -401,30 +343,6 @@ public struct TogglePaymentAction has store, drop, copy {
     paused: bool,
 }
 
-/// Action to request withdrawal
-public struct RequestWithdrawalAction<phantom CoinType> has store, drop, copy {
-    payment_id: String,      // Direct payment ID
-    amount: u64,
-}
-
-/// Action to challenge withdrawals (marks them as challenged)
-/// Note: Challenge bounty is paid via a separate SpendAndTransfer action in the same proposal
-/// The bounty amount is configured in GovernanceConfig.challenge_bounty
-public struct ChallengeWithdrawalsAction has store, drop, copy {
-    payment_id: String,      // Direct payment ID
-}
-
-/// Action to process pending withdrawal
-public struct ProcessPendingWithdrawalAction<phantom CoinType> has store, drop, copy {
-    payment_id: String,      // Direct payment ID
-    withdrawal_index: u64,
-}
-
-/// Action to cancel challenged withdrawals
-public struct CancelChallengedWithdrawalsAction has store, drop, copy {
-    payment_id: String,      // Direct payment ID
-}
-
 /// Action to execute payment (for recurring payments)
 public struct ExecutePaymentAction<phantom CoinType> has store, drop, copy {
     payment_id: String,      // Direct payment ID
@@ -471,17 +389,6 @@ public fun new_cancel_payment_action(payment_id: String): CancelPaymentAction {
     CancelPaymentAction {
         payment_id,
         return_unclaimed_to_treasury: true,
-    }
-}
-
-/// Create a new RequestWithdrawalAction
-public fun new_request_withdrawal_action<CoinType>(
-    payment_id: String,
-    amount: u64,
-): RequestWithdrawalAction<CoinType> {
-    RequestWithdrawalAction {
-        payment_id,
-        amount
     }
 }
 
@@ -532,12 +439,10 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
     // Deserialize optional budget config
     let budget_config = if (bcs::peel_bool(&mut reader)) {
         let project_name = bcs::peel_vec_u8(&mut reader).to_string();
-        let pending_period_ms = bcs::peel_u64(&mut reader);
         let budget_period_ms = bcs::peel_option_u64(&mut reader);
         let max_per_period = bcs::peel_option_u64(&mut reader);
         option::some(BudgetParams {
             project_name,
-            pending_period_ms,
             budget_period_ms,
             max_per_period,
         })
@@ -563,9 +468,6 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
     };
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Note: Policy validation is handled by the PolicyRegistry in futarchy_multisig
-    // Action types are tracked via TypeName in the Intent for type-safe routing
-    
     // Create authorized withdrawers table with single recipient
     let mut authorized_withdrawers = table::new<address, bool>(ctx);
     authorized_withdrawers.add(action.recipient, true);
@@ -668,11 +570,6 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
 
         let budget_cfg = BudgetStreamConfig {
             project_name: budget_params.project_name,
-            pending_period_ms: budget_params.pending_period_ms,
-            pending_withdrawals: table::new(ctx),
-            pending_count: 0,
-            total_pending_amount: 0,
-            next_withdrawal_id: 0,
             budget_period_ms: budget_params.budget_period_ms,
             current_period_start: clock::timestamp_ms(clock),
             current_period_claimed: 0,
@@ -807,115 +704,6 @@ public fun do_execute_payment<Config: store, Outcome: store, CoinType: drop, IW:
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Execute and increment
-    executable::increment_action_idx(executable);
-}
-
-/// Execute do_request_withdrawal action
-public fun do_request_withdrawal<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    _version_witness: VersionWitness,
-    witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::RequestWithdrawal>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut reader = bcs::new(*action_data);
-    let payment_id = bcs::peel_vec_u8(&mut reader).to_string();
-    let amount = bcs::peel_u64(&mut reader);
-
-    let action = RequestWithdrawalAction<CoinType> {
-        payment_id,
-        amount,
-    };
-    bcs_validation::validate_all_bytes_consumed(reader);
-    
-    let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
-        account,
-        PaymentStorageKey {},
-        version::current()
-    );
-    
-    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
-    
-    assert!(config.is_budget_stream, EInvalidBudgetStream);
-    assert!(option::is_some(&config.budget_config), EInvalidBudgetStream);
-    
-    let budget_config = option::borrow_mut(&mut config.budget_config);
-    
-    let withdrawal = PendingWithdrawal {
-        withdrawer: tx_context::sender(ctx),
-        amount: action.amount,
-        reason_code: string::utf8(b"withdrawal"),
-        requested_at: clock::timestamp_ms(clock),
-        processes_at: clock::timestamp_ms(clock) + budget_config.pending_period_ms,
-        is_challenged: false,
-        challenge_proposal_id: option::none(),
-    };
-    
-    let withdrawal_id = budget_config.next_withdrawal_id;
-    budget_config.next_withdrawal_id = withdrawal_id + 1;
-    
-    table::add(&mut budget_config.pending_withdrawals, withdrawal_id, withdrawal);
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
-
-/// Execute do_process_pending_withdrawal action
-public fun do_process_pending_withdrawal<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    _version_witness: VersionWitness,
-    witness: IW,
-    clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::ProcessPendingWithdrawal>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut reader = bcs::new(*action_data);
-    let payment_id = bcs::peel_vec_u8(&mut reader).to_string();
-    let withdrawal_index = bcs::peel_u64(&mut reader);
-
-    let action = ProcessPendingWithdrawalAction<CoinType> {
-        payment_id,
-        withdrawal_index,
-    };
-    bcs_validation::validate_all_bytes_consumed(reader);
-    
-    let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
-        account,
-        PaymentStorageKey {},
-        version::current()
-    );
-    
-    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
-    
-    assert!(config.is_budget_stream, EInvalidBudgetStream);
-    assert!(option::is_some(&config.budget_config), EInvalidBudgetStream);
-    
-    let budget_config = option::borrow_mut(&mut config.budget_config);
-    assert!(table::contains(&budget_config.pending_withdrawals, action.withdrawal_index), EPaymentNotFound);
-    
-    let withdrawal = table::remove(&mut budget_config.pending_withdrawals, action.withdrawal_index);
-    
-    assert!(clock::timestamp_ms(clock) >= withdrawal.processes_at, EWithdrawalNotReady);
-    assert!(!withdrawal.is_challenged, EWithdrawalChallenged);
-
-    // Increment action index
     executable::increment_action_idx(executable);
 }
 
@@ -1084,75 +872,19 @@ public fun do_toggle_payment<Config: store, Outcome: store, IW: drop>(
         paused,
     };
     bcs_validation::validate_all_bytes_consumed(reader);
-    
+
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
         PaymentStorageKey {},
         version::current()
     );
-    
+
     assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
     let config = table::borrow_mut(&mut storage.payments, action.payment_id);
-    
+
     config.active = !action.paused;
 
     // Increment action index
-    executable::increment_action_idx(executable);
-}
-
-/// Execute do_challenge_withdrawals action
-public fun do_challenge_withdrawals<Config: store, Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    _version_witness: VersionWitness,
-    witness: IW,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::ChallengeWithdrawals>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut reader = bcs::new(*action_data);
-    let payment_id = bcs::peel_vec_u8(&mut reader).to_string();
-
-    let _action = ChallengeWithdrawalsAction {
-        payment_id,
-    };
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Execute and increment
-    executable::increment_action_idx(executable);
-}
-
-/// Execute do_cancel_challenged_withdrawals action
-public fun do_cancel_challenged_withdrawals<Config: store, Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    _version_witness: VersionWitness,
-    witness: IW,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CancelChallengedWithdrawals>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut reader = bcs::new(*action_data);
-    let payment_id = bcs::peel_vec_u8(&mut reader).to_string();
-
-    let _action = CancelChallengedWithdrawalsAction {
-        payment_id,
-    };
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Execute and increment
     executable::increment_action_idx(executable);
 }
 
@@ -1488,44 +1220,30 @@ fun handle_budget_withdrawal(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Reason code is optional for budget withdrawals
-    let _ = reason_code; // May be used for audit trail
-    
+    // Reason code logged in events for audit trail (handled by caller)
+    let _ = reason_code;
+    let _ = withdrawer;
+    let _ = ctx;
+
     // Check budget period limits if configured
     if (budget_config.budget_period_ms.is_some()) {
         let period_duration = *budget_config.budget_period_ms.borrow();
         let current_time = clock.timestamp_ms();
-        
+
         // Reset period if needed
         if (current_time >= budget_config.current_period_start + period_duration) {
             budget_config.current_period_start = current_time;
             budget_config.current_period_claimed = 0;
         };
-        
+
         // Check period limit
         if (budget_config.max_per_period.is_some()) {
             let max = *budget_config.max_per_period.borrow();
             assert!(budget_config.current_period_claimed + amount <= max, EBudgetExceeded);
         };
-        
+
         budget_config.current_period_claimed = budget_config.current_period_claimed + amount;
     };
-    
-    // Create pending withdrawal
-    let withdrawal = PendingWithdrawal {
-        withdrawer,
-        amount,
-        reason_code: reason_code.destroy_with_default(string::utf8(b"")),
-        requested_at: clock.timestamp_ms(),
-        processes_at: clock.timestamp_ms() + budget_config.pending_period_ms,
-        is_challenged: false,
-        challenge_proposal_id: option::none(),
-    };
-    
-    table::add(&mut budget_config.pending_withdrawals, budget_config.next_withdrawal_id, withdrawal);
-    budget_config.next_withdrawal_id = budget_config.next_withdrawal_id + 1;
-    budget_config.pending_count = budget_config.pending_count + 1;
-    budget_config.total_pending_amount = budget_config.total_pending_amount + amount;
 }
 
 /// Withdraw from isolated pool (existing logic preserved)
@@ -1594,30 +1312,6 @@ public fun delete_remove_withdrawers(expired: &mut account_protocol::intents::Ex
 }
 
 public fun delete_toggle_payment(expired: &mut account_protocol::intents::Expired) {
-    // Remove the action spec from expired intent
-    let spec = account_protocol::intents::remove_action_spec(expired);
-    let _ = spec;
-}
-
-public fun delete_request_withdrawal<CoinType>(expired: &mut account_protocol::intents::Expired) {
-    // Remove the action spec from expired intent
-    let spec = account_protocol::intents::remove_action_spec(expired);
-    let _ = spec;
-}
-
-public fun delete_challenge_withdrawals(expired: &mut account_protocol::intents::Expired) {
-    // Remove the action spec from expired intent
-    let spec = account_protocol::intents::remove_action_spec(expired);
-    let _ = spec;
-}
-
-public fun delete_process_pending_withdrawal<CoinType>(expired: &mut account_protocol::intents::Expired) {
-    // Remove the action spec from expired intent
-    let spec = account_protocol::intents::remove_action_spec(expired);
-    let _ = spec;
-}
-
-public fun delete_cancel_challenged_withdrawals(expired: &mut account_protocol::intents::Expired) {
     // Remove the action spec from expired intent
     let spec = account_protocol::intents::remove_action_spec(expired);
     let _ = spec;

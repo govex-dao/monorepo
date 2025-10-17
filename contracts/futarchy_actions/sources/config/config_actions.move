@@ -26,9 +26,9 @@ use account_protocol::{
     bcs_validation,
 };
 use futarchy_types::action_type_markers;
+use account_protocol::action_validation;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
-    action_validation,
     // action_types moved to futarchy_types
     dao_config,
 };

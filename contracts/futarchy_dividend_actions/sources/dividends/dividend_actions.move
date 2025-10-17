@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// Generic dividend distribution actions for Account Protocol
-/// Works with any Account<Config> type (DAOs, multisigs, etc.)
+/// Works with any Account<Config> type
 /// Uses pre-built DividendTree for massive scale (100M recipients)
 /// Tree is built off-chain over multiple transactions, then passed to proposal
 ///
@@ -27,7 +27,6 @@
 ///
 /// Example Config implementations:
 /// - `FutarchyConfig` - DAO ✅
-/// - `WeightedMultisig` - Standalone multisig ✅
 /// - Custom configs - Just need managed data support ✅
 module futarchy_dividend_actions::dividend_actions;
 
@@ -144,7 +143,7 @@ public fun resource_receipt_dividend_id<Action>(receipt: &ResourceReceipt<Action
 }
 
 /// Capability proving authority to cancel a specific dividend
-/// Issued during dividend creation, held by governance/multisig
+/// Issued during dividend creation, held by governance
 /// Can only be used if NO payments have been made (sent_count == 0)
 public struct DividendCancelCap has key, store {
     id: UID,

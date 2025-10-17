@@ -328,27 +328,6 @@ fun test_init_lock_upgrade_cap() {
     end(scenario, extensions, clock);
 }
 
-// === Kiosk Init Tests ===
-
-#[test]
-fun test_init_open_kiosk() {
-    let (mut scenario, extensions, clock) = start();
-
-    let mut account = create_unshared_account(&extensions, &mut scenario);
-
-    // Open kiosk during init
-    let kiosk_id = init_actions::init_open_kiosk<Config>(
-        &mut account,
-        scenario.ctx(),
-    );
-
-    // Verify kiosk was created
-    assert!(object::id_to_address(&kiosk_id) != @0x0, 0);
-
-    destroy(account);
-    end(scenario, extensions, clock);
-}
-
 // === Access Control Init Tests ===
 
 #[test]
@@ -597,9 +576,6 @@ fun test_complete_dao_initialization() {
         &clock,
         scenario.ctx(),
     );
-
-    // 6. Open kiosk
-    let _kiosk_id = init_actions::init_open_kiosk<Config>(&mut account, scenario.ctx());
 
     // Verify everything was set up
     assert!(currency::has_cap<Config, INIT_ACTIONS_TESTS>(&account), 0);

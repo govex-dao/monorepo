@@ -10,7 +10,6 @@ futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
-futarchy_multisig = { local = "../futarchy_multisig" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_actions = { local = "../futarchy_actions" }
 futarchy_actions_tracker = { local = "../futarchy_actions_tracker" }
@@ -22,7 +21,6 @@ futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8
 futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
 futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
-futarchy_multisig = "0x8e216aa2f6eebad3377ac799c966d076c82dc9f58eccccbbf63bf28b206bc1cb"
 futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
 futarchy_actions = "0x0393f67d13f180d5dcedb1be3b789c6f20b4b4a478f0d98b58fc2754eb3486d4"
 futarchy_actions_tracker = "0xa3ba8c617ed6abf839080b6c1490e1ca68bb61a242f43800661871aa3a2c6791"

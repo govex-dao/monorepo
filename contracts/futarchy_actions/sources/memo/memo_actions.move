@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// Generic memo emission actions for Account Protocol
-/// Works with any Account<Config> type (DAOs, multisigs, etc.)
+/// Works with any Account<Config> type
 /// Provides text memos and accept/reject decision memos
 module futarchy_actions::memo_actions;
 

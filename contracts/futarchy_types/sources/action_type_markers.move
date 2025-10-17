@@ -119,14 +119,10 @@ public struct CreatePayment has drop {}
 public struct CancelPayment has drop {}
 public struct ProcessPayment has drop {}
 public struct ExecutePayment has drop {}
-public struct RequestWithdrawal has drop {}
-public struct ProcessPendingWithdrawal has drop {}
 public struct UpdatePaymentRecipient has drop {}
 public struct AddWithdrawer has drop {}
 public struct RemoveWithdrawers has drop {}
 public struct TogglePayment has drop {}
-public struct ChallengeWithdrawals has drop {}
-public struct CancelChallengedWithdrawals has drop {}
 
 // === Dividend Action Types ===
 
@@ -392,12 +388,6 @@ public fun process_payment(): TypeName { type_name::with_defining_ids<ProcessPay
 
 public fun execute_payment(): TypeName { type_name::with_defining_ids<ExecutePayment>() }
 
-public fun request_withdrawal(): TypeName { type_name::with_defining_ids<RequestWithdrawal>() }
-
-public fun process_pending_withdrawal(): TypeName {
-    type_name::with_defining_ids<ProcessPendingWithdrawal>()
-}
-
 public fun update_payment_recipient(): TypeName {
     type_name::with_defining_ids<UpdatePaymentRecipient>()
 }
@@ -407,14 +397,6 @@ public fun add_withdrawer(): TypeName { type_name::with_defining_ids<AddWithdraw
 public fun remove_withdrawers(): TypeName { type_name::with_defining_ids<RemoveWithdrawers>() }
 
 public fun toggle_payment(): TypeName { type_name::with_defining_ids<TogglePayment>() }
-
-public fun challenge_withdrawals(): TypeName {
-    type_name::with_defining_ids<ChallengeWithdrawals>()
-}
-
-public fun cancel_challenged_withdrawals(): TypeName {
-    type_name::with_defining_ids<CancelChallengedWithdrawals>()
-}
 
 // Oracle actions
 public fun create_oracle_grant(): TypeName { type_name::with_defining_ids<CreateOracleGrant>() }

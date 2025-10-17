@@ -57,10 +57,6 @@ fun drain_all(expired: &mut Expired) {
     gc_registry::delete_transfer(expired);
     gc_registry::delete_transfer_to_sender(expired);
 
-    // Kiosk Actions
-    gc_registry::delete_kiosk_take(expired);
-    gc_registry::delete_kiosk_list(expired);
-
     // Liquidity (non-generic)
     gc_registry::delete_update_pool_params(expired);
 
@@ -280,10 +276,6 @@ fun drain_all_with_account(account: &Account<FutarchyConfig>, expired: &mut Expi
 
     // Handle owned withdrawals
     gc_registry::delete_owned_withdraw(account, expired);
-
-    // Handle NFT/Kiosk actions for common NFT types
-    // Note: These would need specific NFT type parameters
-    // For production, you'd enumerate known NFT types here
 }
 
 /// Public export of drain_all for use in other modules

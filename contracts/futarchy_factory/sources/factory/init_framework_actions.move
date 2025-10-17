@@ -159,14 +159,6 @@ public entry fun init_lock_upgrade_cap(
     init_actions::init_lock_upgrade_cap(account, cap, package_name, delay_ms);
 }
 
-// === Kiosk Actions ===
-
-/// Open NFT kiosk during DAO creation
-/// Returns the kiosk ID for subsequent NFT operations
-public fun init_open_kiosk(account: &mut Account<FutarchyConfig>, ctx: &mut TxContext): ID {
-    init_actions::init_open_kiosk(account, ctx)
-}
-
 // === Access Control Actions ===
 
 /// Lock generic capability during DAO creation

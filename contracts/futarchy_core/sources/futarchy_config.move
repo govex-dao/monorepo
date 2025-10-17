@@ -37,7 +37,6 @@ public fun state_dissolving(): u8 {
 // === Errors ===
 
 const EInvalidSlashDistribution: u64 = 0;
-const EApprovalExpired: u64 = 100;
 const ELaunchpadPriceAlreadySet: u64 = 101;
 
 // === Structs ===
@@ -54,36 +53,6 @@ public struct SlashDistribution has copy, drop, store {
     burn_bps: u16,
 }
 
-/// Multisig and optimistic intent configuration
-/// Extensible config struct for security council behavior
-public struct MultisigConfig has copy, drop, store {
-    /// If true: MODE_COUNCIL_ONLY actions have 10-day challenge period (DAO can challenge)
-    /// If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
-    optimistic_intent_challenge_enabled: bool,
-    // Future extensibility:
-    // challenge_duration_ms: Option<u64>,      // Custom challenge duration
-    // allowed_challengers: vector<address>,     // Restrict who can challenge
-    // require_bond: bool,                       // Require bond to create optimistic intent
-}
-
-/// Create default multisig config (safe defaults)
-public fun default_multisig_config(): MultisigConfig {
-    MultisigConfig {
-        optimistic_intent_challenge_enabled: true, // Safe default: require 10-day challenge
-    }
-}
-
-/// Create custom multisig config
-public fun new_multisig_config(optimistic_intent_challenge_enabled: bool): MultisigConfig {
-    MultisigConfig {
-        optimistic_intent_challenge_enabled,
-    }
-}
-
-/// Get challenge enabled setting from MultisigConfig
-public fun multisig_config_challenge_enabled(config: &MultisigConfig): bool {
-    config.optimistic_intent_challenge_enabled
-}
 
 /// Early resolve configuration - per DAO
 /// Enables proposals to resolve early when markets reach consensus
@@ -203,10 +172,10 @@ public struct FutarchyConfig has copy, drop, store {
     // Verification configuration
     verification_level: u8, // 0 = unverified, 1 = basic, 2 = standard, 3 = premium
     dao_score: u64, // DAO quality score (0-unlimited, higher = better, admin-set only)
-    // Security Council Optimistic Intent Challenge Period
-    // If true: MODE_COUNCIL_ONLY actions have 10-day challenge period (DAO can challenge)
-    // If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
-    // Default: true (safer, gives DAO oversight of council actions)
+    // Optimistic Intent Challenge Period
+    // If true: Optimistic actions have challenge period (DAO can challenge)
+    // If false: Optimistic actions execute instantly
+    // Default: true (safer, gives DAO oversight)
     optimistic_intent_challenge_enabled: bool,
     // Write-once immutable starting price from launchpad raise
     // Once set to Some(price), can NEVER be changed
@@ -531,10 +500,10 @@ public fun with_slash_distribution(
 
 /// Builder function: Set optimistic intent challenge enabled
 ///
-/// If true: MODE_COUNCIL_ONLY actions require 10-day challenge period (DAO can challenge)
-/// If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
+/// If true: Optimistic actions require challenge period (DAO can challenge)
+/// If false: Optimistic actions execute instantly
 ///
-/// Default: true (safer - gives DAO oversight of council actions)
+/// Default: true (safer - gives DAO oversight)
 public fun with_optimistic_intent_challenge_enabled(
     config: FutarchyConfig,
     enabled: bool,
@@ -555,57 +524,6 @@ public fun with_optimistic_intent_challenge_enabled(
         early_resolve_config: config.early_resolve_config,
         refund_quota_on_eviction: config.refund_quota_on_eviction,
     }
-}
-
-// === Council Approval Functions ===
-
-/// Represents a custody approval from a council
-public struct CustodyApproval has copy, drop, store {
-    dao_id: ID,
-    resource_key: String,
-    resource_id: ID,
-    expires_at: u64,
-    created_at: u64,
-}
-
-/// Create a new custody approval record
-public fun new_custody_approval(
-    dao_id: ID,
-    resource_key: String,
-    resource_id: ID,
-    expires_at: u64,
-    ctx: &mut TxContext,
-): CustodyApproval {
-    CustodyApproval {
-        dao_id,
-        resource_key,
-        resource_id,
-        expires_at,
-        created_at: ctx.epoch_timestamp_ms(),
-    }
-}
-
-/// Record a council's generic approval for an intent
-/// Note: Since Account doesn't expose its UID, we store approvals in a separate shared object
-/// In production, this would be stored in a registry or as a dynamic field on a DAO-specific object
-public fun record_council_approval_generic<Config: store>(
-    _dao: &mut Account<Config>,
-    _intent_key: String,
-    approval: CustodyApproval,
-    clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Verify approval hasn't expired
-    assert!(clock.timestamp_ms() < approval.expires_at, EApprovalExpired);
-
-    // In a production implementation, this would:
-    // 1. Store in a shared ApprovalRegistry object, or
-    // 2. Store as a dynamic field on a DAO wrapper object, or
-    // 3. Emit an event for off-chain tracking
-    // For now, we just validate the approval is valid
-
-    // The approval is validated and can be used by the caller
-    let _ = approval;
 }
 
 // === FutarchyOutcome Type ===
@@ -739,18 +657,6 @@ public fun max_amm_swap_percent_bps(config: &FutarchyConfig): u64 {
 
 public fun conditional_liquidity_ratio_percent(config: &FutarchyConfig): u64 {
     dao_config::conditional_liquidity_ratio_percent(dao_config::trading_params(&config.config))
-}
-
-// === Missing Functions Added for Build Fixes ===
-
-public fun optimistic_challenge_period_ms(config: &FutarchyConfig): u64 {
-    // Default to 3 days if not specified
-    259_200_000
-}
-
-public fun optimistic_challenge_fee(config: &FutarchyConfig): u64 {
-    // Use proposal pass reward as challenge fee
-    config.proposal_pass_reward
 }
 
 /// Create witness for authorized operations
