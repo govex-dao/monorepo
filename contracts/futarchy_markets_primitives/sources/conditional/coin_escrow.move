@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_markets_primitives::coin_escrow;
 
 use futarchy_markets_primitives::market_state::MarketState;

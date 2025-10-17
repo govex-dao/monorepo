@@ -132,13 +132,14 @@ and patara.app
 - [ ] maybe alow conditional only swaps no arb????
 
 
-- [WIP] ad simple window to twap maybe cant accumualte by more than 5%???
-- [WIP] dao end proposal early
-- [WIP] on disolution of dao / partial ignore tokens in treasury and amm??? / allow emptying full of AMM???
-- [WIP] https://github.com/AftermathFinance/move-amm-public/blob/main/packages/amm-math/sources/geometric_mean_calculations.move
-- [ ] Need psecial amm empty function that ignored amm min amount check for daos portion when  dao terminated, but what about edge case of ongoign proposal. Also need to block amm some how like shut it down if that is triggered
-- [ ] for withdraw protion dont count dao owned LP assets as total suply, do count dao lp owned stable as in treasury
-- [ ]
+- [X] ad simple window to twap maybe cant accumualte by more than 5%???
+- [X] dao end proposal early
+- [X] on disolution of dao / partial ignore tokens in treasury and amm??? / allow emptying full of AMM???
+- [X] https://github.com/AftermathFinance/move-amm-public/blob/main/packages/amm-math/sources/geometric_mean_calculations.move
+- [X] Need psecial amm empty function that ignored amm min amount check for daos portion when  dao terminated, but what about edge case of ongoign proposal. Also need to block amm some how like shut it down if that is triggered
+- [x] for withdraw protion dont count dao owned LP assets as total suply, do count dao lp owned stable as in treasury
+- [ ] move discord bot to its owan channel
+- [ ] negative twap threshold for team
 
 1) dao needs to supside LPs during proposals ( use proposer fee)\
 2) I need to slwly replace aftermath!!! \
@@ -393,6 +394,8 @@ like walrus deep book and leading lending protocols etc
 main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big ones on defillama
 
 # Consider for V3
+- [ ] heiarchy / deadman switch for multisgis
+- [ ] amm asubsidy actios
 - [ ] allow daos and launchapd to be verified by anyone not jsut us
 - [ ] proposal that dont share liqudity but provide their own liquditity
 - [ ] set proposal time by policy / action and proposal fee proportoonal to proposal time

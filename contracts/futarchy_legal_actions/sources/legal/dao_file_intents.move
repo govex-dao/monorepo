@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Intent creation functions for DAO Document Registry
 /// Provides high-level API for building document management intents
 module futarchy_legal_actions::dao_file_intents;

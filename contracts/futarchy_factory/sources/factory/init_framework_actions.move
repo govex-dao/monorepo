@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Init wrappers for Move Framework actions during DAO creation
 ///
 /// This module provides simple wrappers around Move framework init functions

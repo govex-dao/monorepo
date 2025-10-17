@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Helper module for type-safe action validation in Futarchy
 /// Provides centralized type checking before BCS deserialization
 module futarchy_core::action_validation;

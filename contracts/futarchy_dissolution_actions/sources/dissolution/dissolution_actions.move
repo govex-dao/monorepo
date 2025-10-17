@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Dissolution-related actions for futarchy DAOs
 /// This module defines action structs and execution logic for DAO dissolution
 module futarchy_lifecycle::dissolution_actions;

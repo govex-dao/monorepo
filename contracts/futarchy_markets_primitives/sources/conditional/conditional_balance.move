@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Balance-based conditional market position tracking
 ///
 /// This module provides a type-agnostic way to track conditional market positions

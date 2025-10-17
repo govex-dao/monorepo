@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Factory for creating futarchy DAOs using account_protocol
 /// This is the main entry point for creating DAOs in the Futarchy protocol
 module futarchy_factory::factory;

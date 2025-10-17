@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_factory::launchpad;
 
 use account_actions::init_actions as account_init_actions;

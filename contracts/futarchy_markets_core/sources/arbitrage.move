@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Unified arbitrage module that works for ANY outcome count
 ///
 /// This module eliminates type explosion by using balance-based operations.

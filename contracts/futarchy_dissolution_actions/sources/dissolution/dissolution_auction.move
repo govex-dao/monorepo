@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Production-grade dissolution auction system
 /// - Shared auction objects (no contention)
 /// - Type-erased actions (no type parameter explosion)

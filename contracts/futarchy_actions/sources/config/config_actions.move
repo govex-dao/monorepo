@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Consolidated configuration actions for futarchy DAOs
 /// This module combines basic and advanced configuration actions and their execution logic
 module futarchy_actions::config_actions;

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// A generic, weighted M-of-N multisig configuration for an Account.
 /// Each member has an assigned weight, and an intent is approved when
 /// the sum of approving members' weights meets a given threshold.

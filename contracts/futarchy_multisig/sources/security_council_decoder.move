@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Decoder for security council actions in futarchy DAOs
 module futarchy_multisig::security_council_decoder;
 

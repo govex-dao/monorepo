@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Manages on-chain policies that require external account approval for critical actions.
 /// This registry uses type-based policies (via TypeName) and object-specific policies (via ID)
 /// to determine which actions require security council approval.

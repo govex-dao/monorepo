@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Decoder for protocol admin actions in futarchy DAOs
 module futarchy_governance_actions::protocol_admin_decoder;
 

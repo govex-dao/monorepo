@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Type markers for all Futarchy actions
 /// These types are used for compile-time type safety in action routing
 module futarchy_core::action_type_markers;

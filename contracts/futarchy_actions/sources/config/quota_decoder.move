@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Decoder for quota management actions in futarchy DAOs
 module futarchy_actions::quota_decoder;
 

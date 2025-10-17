@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Liquidity-related actions for futarchy DAOs
 /// This module defines action structs and execution logic for liquidity management
 module futarchy_actions::liquidity_actions;

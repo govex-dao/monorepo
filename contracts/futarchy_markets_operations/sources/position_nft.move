@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// NFT-based liquidity position tracking for Futarchy AMMs
 /// Allows other protocols to discover and compose with LP positions
 module futarchy_markets_operations::position_nft;

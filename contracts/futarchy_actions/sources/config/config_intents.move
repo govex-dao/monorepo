@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Consolidated config intent creation module
 /// Combines basic and advanced configuration intent creation
 module futarchy_actions::config_intents;

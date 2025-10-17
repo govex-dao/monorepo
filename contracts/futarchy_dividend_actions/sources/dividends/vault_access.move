@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Vault access helpers with clear error messages
 /// Used by dividend actions to safely access treasury vaults
 module futarchy_dividend_actions::vault_access;

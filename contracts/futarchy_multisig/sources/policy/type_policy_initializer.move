@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Initialize type-based policies for a DAO
 module futarchy_multisig::type_policy_initializer;
 

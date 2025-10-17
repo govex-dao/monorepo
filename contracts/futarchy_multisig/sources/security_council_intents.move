@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_multisig::security_council_intents;
 
 use std::{string::String, option::{Self, Option}, type_name};

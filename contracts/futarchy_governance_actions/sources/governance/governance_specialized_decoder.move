@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Decoder for specialized governance actions in futarchy DAOs
 /// Note: This module handles governance intents that don't have explicit action structs
 module futarchy_governance_actions::governance_specialized_decoder;

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Common utilities and patterns for 2-of-2 co-execution between DAO and Security Council
 module futarchy_multisig::coexec_common;
 

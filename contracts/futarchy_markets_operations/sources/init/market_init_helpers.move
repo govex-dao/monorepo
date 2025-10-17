@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Helper functions for building market initialization Intents
 ///
 /// These helpers calculate Intent parameters for conditional raise and buyback strategies.

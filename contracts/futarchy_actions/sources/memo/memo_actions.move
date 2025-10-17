@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Generic memo emission actions for Account Protocol
 /// Works with any Account<Config> type (DAOs, multisigs, etc.)
 /// Provides text memos and accept/reject decision memos

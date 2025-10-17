@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// DAO configuration management module
 /// Provides centralized configuration structs and validation for futarchy DAOs
 module futarchy_core::dao_config;

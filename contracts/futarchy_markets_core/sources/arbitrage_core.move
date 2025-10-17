@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// ARBITRAGE CORE - Complex logic extracted from arbitrage_executor.move
 ///
 /// All the hard stuff lives here. Per-N wrappers just call these with explicit types.

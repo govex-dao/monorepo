@@ -22,3 +22,4 @@ get in here
 - [ ] add 1.5 second delay to more places in front end so dont have recombine or redeem coin bug
 - [ ] shop twp staart verticle dashed line in graph
 - [ ] show exact time of trade on frontend
+- [ ] start on proposal descrption tab not your coins?

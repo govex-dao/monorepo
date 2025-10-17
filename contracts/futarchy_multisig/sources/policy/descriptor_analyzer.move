@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_multisig::descriptor_analyzer {
     use std::vector;
     use std::option::{Self, Option};

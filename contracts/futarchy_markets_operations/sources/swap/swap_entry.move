@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// User-facing swap API with auto-arbitrage
 ///
 /// This is where users enter the system. Provides entry functions that:

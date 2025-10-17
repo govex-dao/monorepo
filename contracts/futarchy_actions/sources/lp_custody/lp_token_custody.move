@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// LP Token Custody Module
 /// Manages LP tokens owned by DAOs from liquidity operations
 ///

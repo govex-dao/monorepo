@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Resource and Role Key System for Policy Engine
 /// Provides standardized, type-safe keys for granular governance control
 ///

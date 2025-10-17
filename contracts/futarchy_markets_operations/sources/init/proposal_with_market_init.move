@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Proposal creation with integrated market initialization strategies
 ///
 /// This module enables DAOs to atomically seed prediction markets with asymmetric liquidity

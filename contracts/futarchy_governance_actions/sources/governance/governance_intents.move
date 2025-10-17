@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Governance module for creating and executing intents from approved proposals
 /// This module provides a simplified interface for governance operations
 module futarchy_governance_actions::governance_intents;

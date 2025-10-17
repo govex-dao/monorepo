@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// No-arbitrage band enforcement for quantum liquidity futarchy markets
 ///
 /// Prevents arbitrage loops by ensuring spot price stays within bounds implied by:

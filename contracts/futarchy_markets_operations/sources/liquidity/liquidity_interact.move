@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_markets_operations::liquidity_interact;
 
 use futarchy_markets_core::fee::FeeManager;

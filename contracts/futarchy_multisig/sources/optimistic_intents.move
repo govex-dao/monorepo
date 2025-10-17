@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Optimistic intent system for Security Council
 /// Allows council to create intents that execute after a delay unless challenged
 /// 

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Quota intent creation module - for managing proposal quotas
 module futarchy_actions::quota_intents;
 

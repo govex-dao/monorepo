@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// PTB execution helpers for Futarchy proposals.
 ///
 /// The frontend composes a programmable transaction that:

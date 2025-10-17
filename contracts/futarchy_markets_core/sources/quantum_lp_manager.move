@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Simplified Quantum LP Management
 ///
 /// Single LP token level with DAO-configured liquidity splitting:

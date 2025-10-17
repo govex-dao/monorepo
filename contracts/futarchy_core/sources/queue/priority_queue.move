@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Priority Queue Implementation Using Binary Heap
 /// Provides O(log n) insertion and extraction for scalable gas costs
 module futarchy_core::priority_queue;

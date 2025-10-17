@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Handles the complete lifecycle of proposals from queue activation to intent execution
 module futarchy_dao::proposal_lifecycle;
 

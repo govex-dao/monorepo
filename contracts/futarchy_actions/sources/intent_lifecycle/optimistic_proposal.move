@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Optimistic Proposal System
 /// Proposals execute automatically after a delay unless challenged
 /// Challenges trigger futarchy markets using standard proposal fees

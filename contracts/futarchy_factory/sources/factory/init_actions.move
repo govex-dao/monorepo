@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Init Actions - Entry functions for DAO initialization
 ///
 /// Each module that needs init actions exposes its own entry functions here.

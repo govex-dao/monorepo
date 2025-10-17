@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Enforces critical policies and validates council ownership
 module futarchy_multisig::policy_enforcer;
 

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Decoder for oracle mint grant actions
 module futarchy_oracle::oracle_decoder;
 

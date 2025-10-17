@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Market initialization strategies for futarchy prediction markets
 /// Provides different ways to seed initial liquidity and create price discovery mechanisms
 ///

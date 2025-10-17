@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// ============================================================================
 /// N-OUTCOME ARBITRAGE MATH - EFFICIENT B-PARAMETERIZATION
 /// ============================================================================

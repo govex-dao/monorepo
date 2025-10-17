@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_markets_primitives::conditional_amm;
 
 use futarchy_markets_primitives::futarchy_twap_oracle::{Self, Oracle};

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Registry of pre-created "blank" coin types that can be used for conditional tokens
 /// Solves the problem that coin types can't be created dynamically in Sui
 /// Allows proposal creators to acquire coin pairs without requiring two transactions

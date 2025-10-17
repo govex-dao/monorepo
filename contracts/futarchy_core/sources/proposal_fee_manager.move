@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_core::proposal_fee_manager;
 
 use futarchy_core::futarchy_config::{Self, SlashDistribution};

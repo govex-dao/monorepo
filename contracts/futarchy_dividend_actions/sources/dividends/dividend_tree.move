@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// # DIVIDEND TREE SECURITY MODEL (Massive Scale: 100M+ Recipients)
 ///
 /// ## Overview

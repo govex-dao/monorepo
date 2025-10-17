@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Analyzes InitActionSpecs to determine policy requirements before intent creation
 /// Similar to descriptor_analyzer but works on action specs instead of live intents
 ///

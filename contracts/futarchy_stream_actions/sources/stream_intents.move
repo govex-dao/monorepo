@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// User-facing API for creating stream-related intents
 /// This module provides helper functions for creating stream actions
 /// The actual intent creation must be done by the governance system that provides the Outcome

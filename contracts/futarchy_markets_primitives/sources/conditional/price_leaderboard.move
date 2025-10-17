@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Price leaderboard using binary max-heap for O(log N) updates
 /// Maintains sorted order of outcome prices with O(1) winner lookup
 ///

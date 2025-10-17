@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Oracle intent builders for price-based minting grants
 module futarchy_oracle::oracle_intents;
 

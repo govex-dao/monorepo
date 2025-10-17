@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Oracle Actions - Price-Based Minting and Grants
 ///
 /// Complete oracle grant system with action structs, execution functions, and grant management.

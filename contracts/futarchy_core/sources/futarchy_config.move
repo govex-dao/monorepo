@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Pure configuration struct for Futarchy governance systems
 /// This is the configuration object used with Account<FutarchyConfig>
 /// All dynamic state and object references are stored as dynamic fields on the Account

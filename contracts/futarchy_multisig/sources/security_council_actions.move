@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Actions specific to the role of a Security Council Account.
 /// This enables the council to accept and manage critical capabilities like UpgradeCaps
 /// through its own internal M-of-N governance process.

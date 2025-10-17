@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Actions for managing the approval policy registry
 /// These are critical governance actions that typically require DAO approval
 module futarchy_multisig::policy_actions;

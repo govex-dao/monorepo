@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Centralized constants for the Futarchy protocol
 /// This module contains all magic numbers and configuration constants
 /// to ensure consistency across the codebase

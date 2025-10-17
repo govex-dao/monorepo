@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// DAO Document Registry - Clean table-based architecture for multi-document management
 /// Replaces operating_agreement.move with superior design:
 /// - Multiple named documents per DAO (bylaws, policies, code of conduct)

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Resource Management Pattern for Init Actions
 /// This module provides a clear pattern for actions that need external resources during initialization
 ///

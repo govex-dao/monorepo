@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Action specification types for staging init actions
 /// These are lightweight "blueprints" stored on Raise before DAO creation
 /// GENERIC - doesn't know about specific action types

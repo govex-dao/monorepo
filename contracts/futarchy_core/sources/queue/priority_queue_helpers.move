@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_core::priority_queue_helpers;
 
 use futarchy_core::priority_queue::{

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 module futarchy_core::multisig_execution_fee_manager;
 
 use sui::balance::{Self, Balance};

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Initialize all default policies for a DAO
 /// This module re-exports type-based policy initialization functions
 module futarchy_multisig::policy_initializer;

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Intent-based Walrus blob renewal system for Operating Agreements
 /// Uses Account Protocol recurring intents for governance-approved renewals
 /// DAO pays WAL from treasury, keeper pays SUI gas and gets reward

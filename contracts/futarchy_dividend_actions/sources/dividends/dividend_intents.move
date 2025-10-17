@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// User-facing API for creating dividend-related intents
 module futarchy_dividend_actions::dividend_intents;
 

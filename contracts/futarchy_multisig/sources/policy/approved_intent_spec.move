@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Shared object representing a security council's approval of an IntentSpec
 ///
 /// Flow:

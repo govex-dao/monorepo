@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Core swap primitives (building blocks)
 ///
 /// Internal library providing low-level swap functions used by other modules.

@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Proposal quota registry for allowlisted addresses
 /// Tracks recurring proposal quotas (N proposals per period at reduced fee)
 module futarchy_core::proposal_quota_registry;

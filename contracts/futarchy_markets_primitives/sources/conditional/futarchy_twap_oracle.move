@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// ============================================================================
 /// FUTARCHY TWAP ORACLE - WRITE-THROUGH TWAP FOR PREDICTION MARKETS (INTERNAL)
 /// ============================================================================

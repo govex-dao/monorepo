@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// A generic, reusable module for managing weighted lists of addresses.
 /// This eliminates duplication between weighted multisig governance and payment beneficiaries.
 module futarchy_multisig::weighted_list;

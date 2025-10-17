@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// DAO Document Registry actions with BCS serialization support
 /// Provides action structs and execution logic for multi-document management
 module futarchy_legal_actions::dao_file_actions;

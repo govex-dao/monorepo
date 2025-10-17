@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Generic dividend distribution actions for Account Protocol
 /// Works with any Account<Config> type (DAOs, multisigs, etc.)
 /// Uses pre-built DividendTree for massive scale (100M recipients)

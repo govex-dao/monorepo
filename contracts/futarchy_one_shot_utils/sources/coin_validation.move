@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Common validation logic for conditional token coin metadata and treasury caps
 /// Used by both coin_registry and proposal modules to enforce invariants
 module futarchy_one_shot_utils::coin_validation;

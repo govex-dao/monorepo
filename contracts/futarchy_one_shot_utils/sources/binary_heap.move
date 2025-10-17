@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Generic binary heap operations for vectors
 /// Extracted from conditional market price leader board
 module futarchy_one_shot_utils::binary_heap;

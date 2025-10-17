@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Protocol admin actions for managing the futarchy protocol through its own DAO (dogfooding).
 /// This module allows the protocol's owner DAO and its security council to control:
 /// - Factory admin functions (FactoryOwnerCap)

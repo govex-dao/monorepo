@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Public cleanup functions for expired intents
 /// Sui's storage rebate system naturally incentivizes cleanup -
 /// cleaners get the storage deposit back when deleting objects

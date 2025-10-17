@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Generic payment system for Account Protocol - REFACTORED
 /// Works with any Account<Config> type (DAOs, multisigs, etc.)
 /// This version removes state duplication by using vault streams as the source of truth

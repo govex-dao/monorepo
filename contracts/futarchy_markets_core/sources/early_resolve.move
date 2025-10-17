@@ -1,3 +1,6 @@
+// Copyright (c) Govex DAO LLC
+// SPDX-License-Identifier: BUSL-1.1
+
 /// Early resolution system for futarchy proposals
 ///
 /// This module handles flip tracking and eligibility checks for proposals
