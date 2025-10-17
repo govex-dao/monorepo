@@ -24,12 +24,9 @@ use account_protocol::{
     version_witness::VersionWitness,
     intents::{Self, Expired, Intent},
     bcs_validation,
+    action_validation,
 };
 use futarchy_types::action_type_markers;
-use futarchy_core::{
-    action_validation,
-    // action_types moved to futarchy_types
-};
 
 // === Aliases ===
 use account_protocol::intents as protocol_intents;

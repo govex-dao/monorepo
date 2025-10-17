@@ -253,6 +253,12 @@ public struct ToggleStreamFreezeAction has store {
     freeze: bool, // true = freeze, false = unfreeze
 }
 
+/// Action for canceling a stream
+public struct CancelStreamAction has store {
+    vault_name: String,
+    stream_id: ID,
+}
+
 // === Public Functions ===
 
 /// Authorized address can open a vault.
@@ -546,6 +552,11 @@ public fun destroy_toggle_stream_freeze_action(action: ToggleStreamFreezeAction)
     let ToggleStreamFreezeAction { vault_name: _, stream_id: _, freeze: _ } = action;
 }
 
+/// Destroy a CancelStreamAction after serialization
+public fun destroy_cancel_stream_action(action: CancelStreamAction) {
+    let CancelStreamAction { vault_name: _, stream_id: _ } = action;
+}
+
 // Intent functions
 
 /// Creates a DepositAction and adds it to an intent with descriptor.
@@ -738,6 +749,23 @@ public fun new_toggle_stream_freeze<Outcome, IW: drop>(
     destroy_toggle_stream_freeze_action(action);
 }
 
+/// Creates a CancelStreamAction and adds it to an intent
+public fun new_cancel_stream<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    vault_name: String,
+    stream_id: ID,
+    intent_witness: IW,
+) {
+    let action = CancelStreamAction { vault_name, stream_id };
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        framework_action_types::cancel_stream(),
+        action_data,
+        intent_witness
+    );
+    destroy_cancel_stream_action(action);
+}
+
 // === Execution Functions ===
 
 /// Execute toggle stream pause action
@@ -763,8 +791,11 @@ public fun do_toggle_stream_pause<Config, Outcome: store, CoinType, IW: drop>(
     // Create BCS reader and deserialize
     let mut reader = bcs::new(*action_data);
     let deserialized_vault_name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
-    let stream_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
+    let stream_id = bcs::peel_address(&mut reader).to_id();
     let pause_duration_ms = bcs::peel_u64(&mut reader);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     // Validate vault name matches
     assert!(vault_name == deserialized_vault_name, EVaultDoesNotExist);
@@ -808,8 +839,11 @@ public fun do_toggle_stream_freeze<Config, Outcome: store, CoinType, IW: drop>(
     // Create BCS reader and deserialize
     let mut reader = bcs::new(*action_data);
     let deserialized_vault_name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
-    let stream_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
+    let stream_id = bcs::peel_address(&mut reader).to_id();
     let freeze = bcs::peel_bool(&mut reader);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     // Validate vault name matches
     assert!(vault_name == deserialized_vault_name, EVaultDoesNotExist);
@@ -827,6 +861,92 @@ public fun do_toggle_stream_freeze<Config, Outcome: store, CoinType, IW: drop>(
 
     // Increment action index
     executable::increment_action_idx(executable);
+}
+
+/// Execute cancel stream action
+public fun do_cancel_stream<Config, Outcome: store, CoinType: drop, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    vault_name: String,
+    clock: &Clock,
+    version_witness: VersionWitness,
+    witness: IW,
+    ctx: &mut TxContext,
+): (Coin<CoinType>, u64) {
+    executable.intent().assert_is_account(account.addr());
+
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::CancelStream>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let deserialized_vault_name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
+    let stream_id = bcs::peel_address(&mut reader).to_id();
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Validate vault name matches
+    assert!(vault_name == deserialized_vault_name, EVaultDoesNotExist);
+
+    // Get vault
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version_witness);
+    assert!(vault.streams.contains(stream_id), EStreamNotFound);
+
+    let stream = table::remove(&mut vault.streams, stream_id);
+    assert!(stream.is_cancellable, ENotCancellable);
+
+    let current_time = clock.timestamp_ms();
+    let balance_remaining = stream.total_amount - stream.claimed_amount;
+
+    // Calculate what should be paid to beneficiary vs refunded
+    let (to_pay_beneficiary, to_refund, _unvested_claimed) =
+        account_actions::stream_utils::split_vested_unvested(
+            stream.total_amount,
+            stream.claimed_amount,
+            balance_remaining,
+            stream.start_time,
+            stream.end_time,
+            current_time,
+            stream.paused_duration,
+            &stream.cliff_time,
+        );
+
+    let balance_mut = vault.bag.borrow_mut<TypeName, Balance<CoinType>>(stream.coin_type);
+
+    // Create coins for refund and final payment
+    let mut refund_coin = coin::zero<CoinType>(ctx);
+    if (to_refund > 0) {
+        refund_coin.join(coin::take(balance_mut, to_refund, ctx));
+    };
+
+    // Transfer final payment to beneficiary if any
+    if (to_pay_beneficiary > 0) {
+        let final_payment = coin::take(balance_mut, to_pay_beneficiary, ctx);
+        transfer::public_transfer(final_payment, stream.beneficiary);
+    };
+
+    // Emit event
+    event::emit(StreamCancelled {
+        stream_id,
+        refunded_amount: to_refund,
+        final_payment: to_pay_beneficiary,
+    });
+
+    // Clean up empty balance if needed
+    if (balance_mut.value() == 0) {
+        vault.bag.remove<TypeName, Balance<CoinType>>(stream.coin_type).destroy_zero();
+    };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
+    (refund_coin, to_refund)
 }
 
 /// Processes a SpendAction and takes a coin from the vault.
@@ -971,6 +1091,27 @@ public fun delete_approve_coin_type<CoinType>(expired: &mut Expired) {
 
 /// Deletes a RemoveApprovedCoinTypeAction from an expired intent.
 public fun delete_remove_approved_coin_type<CoinType>(expired: &mut Expired) {
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
+    // No need to deserialize the data
+}
+
+/// Deletes a CancelStreamAction from an expired intent.
+public fun delete_cancel_stream(expired: &mut Expired) {
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
+    // No need to deserialize the data
+}
+
+/// Deletes a ToggleStreamPauseAction from an expired intent.
+public fun delete_toggle_stream_pause(expired: &mut Expired) {
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
+    // No need to deserialize the data
+}
+
+/// Deletes a ToggleStreamFreezeAction from an expired intent.
+public fun delete_toggle_stream_freeze(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, so it's automatically cleaned up
     // No need to deserialize the data

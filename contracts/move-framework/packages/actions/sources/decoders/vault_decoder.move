@@ -9,7 +9,8 @@ use account_actions::vault::{
     SpendAction,
     DepositAction,
     ToggleStreamPauseAction,
-    ToggleStreamFreezeAction
+    ToggleStreamFreezeAction,
+    CancelStreamAction
 };
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
@@ -40,6 +41,11 @@ public struct ToggleStreamPauseActionDecoder has key, store {
 
 /// Decoder for ToggleStreamFreezeAction
 public struct ToggleStreamFreezeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for CancelStreamAction
+public struct CancelStreamActionDecoder has key, store {
     id: UID,
 }
 
@@ -193,6 +199,37 @@ public fun decode_toggle_stream_freeze_action(
     ]
 }
 
+/// Decode a CancelStreamAction
+public fun decode_cancel_stream_action(
+    _decoder: &CancelStreamActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
+    let stream_id_address = bcs::peel_address(&mut bcs_data);
+    let stream_id = object::id_from_address(stream_id_address);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"vault_name".to_string(),
+            vault_name,
+            b"String".to_string(),
+        ),
+        schema::new_field(
+            b"stream_id".to_string(),
+            stream_id.id_to_address().to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"action".to_string(),
+            b"cancel_stream".to_string(),
+            b"string".to_string(),
+        ),
+    ]
+}
+
 // === Registration Functions ===
 
 /// Register all vault decoders in the registry
@@ -202,6 +239,7 @@ public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxC
     register_deposit_decoder(registry, ctx);
     register_toggle_stream_pause_decoder(registry, ctx);
     register_toggle_stream_freeze_decoder(registry, ctx);
+    register_cancel_stream_decoder(registry, ctx);
 }
 
 /// Register the SpendAction decoder
@@ -264,6 +302,24 @@ fun register_toggle_stream_freeze_decoder(
     };
 
     let type_key = type_name::with_defining_ids<ToggleStreamFreezeAction>();
+
+    dynamic_object_field::add(
+        schema::registry_id_mut(registry),
+        type_key,
+        decoder,
+    );
+}
+
+/// Register the CancelStreamAction decoder
+fun register_cancel_stream_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = CancelStreamActionDecoder {
+        id: object::new(ctx),
+    };
+
+    let type_key = type_name::with_defining_ids<CancelStreamAction>();
 
     dynamic_object_field::add(
         schema::registry_id_mut(registry),

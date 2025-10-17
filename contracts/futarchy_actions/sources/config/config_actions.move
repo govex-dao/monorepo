@@ -1366,7 +1366,11 @@ public fun delete_twap_config_update<Config>(expired: &mut Expired) {
     reader.peel_option_u64();
     reader.peel_option_u64();
     reader.peel_option_u128();
-    reader.peel_option_u64();
+    // Peel Option<SignedU128> - magnitude: u128, is_negative: bool
+    let _ = bcs::peel_option!(&mut reader, |r| {
+        r.peel_u128();
+        r.peel_bool()
+    });
     let _ = reader.into_remainder_bytes();
 }
 
@@ -1922,7 +1926,7 @@ public fun get_twap_config_fields(update: &TwapConfigUpdateAction): (
     &Option<u64>,
     &Option<u64>,
     &Option<u128>,
-    &Option<u64>
+    &Option<SignedU128>
 ) {
     (
         &update.start_delay,
@@ -2225,7 +2229,11 @@ public(package) fun twap_config_update_action_from_bytes(bytes: vector<u8>): Twa
         start_delay: bcs.peel_option_u64(),
         step_max: bcs.peel_option_u64(),
         initial_observation: bcs.peel_option_u128(),
-        threshold: bcs.peel_option_u64(),
+        threshold: bcs::peel_option!(&mut bcs, |r| {
+            let magnitude = r.peel_u128();
+            let is_negative = r.peel_bool();
+            signed::from_parts(magnitude, is_negative)
+        }),
     }
 }
 

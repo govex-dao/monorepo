@@ -147,6 +147,31 @@ public fun request_toggle_stream_freeze<Config, Outcome: store>(
     );
 }
 
+/// Request to cancel a stream
+public fun request_cancel_stream<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    params: Params,
+    outcome: Outcome,
+    vault_name: String,
+    stream_id: ID,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+
+    account.build_intent!(
+        params,
+        outcome,
+        vault_name,
+        version::current(),
+        SpendAndTransferIntent(),
+        ctx,
+        |intent, iw| {
+            vault::new_cancel_stream(intent, vault_name, stream_id, iw);
+        },
+    );
+}
+
 // === Execution Functions ===
 
 /// Executes toggle stream pause action
@@ -198,4 +223,37 @@ public fun execute_toggle_stream_freeze<Config, Outcome: store, CoinType>(
             );
         },
     );
+}
+
+/// Executes cancel stream action
+public fun execute_cancel_stream<Config, Outcome: store, CoinType: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    vault_name: String,
+    clock: &sui::clock::Clock,
+    ctx: &mut TxContext,
+): (sui::coin::Coin<CoinType>, u64) {
+    let mut refund_coin = sui::coin::zero<CoinType>(ctx);
+    let mut total_refund = 0u64;
+
+    account.process_intent!(
+        executable,
+        version::current(),
+        SpendAndTransferIntent(),
+        |executable, iw| {
+            let (coin, amount) = vault::do_cancel_stream<_, _, CoinType, _>(
+                executable,
+                account,
+                vault_name,
+                clock,
+                version::current(),
+                iw,
+                ctx,
+            );
+            refund_coin.join(coin);
+            total_refund = amount;
+        },
+    );
+
+    (refund_coin, total_refund)
 }

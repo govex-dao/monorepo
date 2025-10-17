@@ -257,7 +257,7 @@ public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
     );
 
     // Add all actions from the spec to the intent
-    let actions = action_specs::actions(&spec);
+    let actions = init_action_specs::actions(&spec);
     let mut i = 0;
     let len = vector::length(actions);
     while (i < len) {
@@ -266,7 +266,7 @@ public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
         intents::add_action_spec(
             &mut intent,
             witness(),
-            *action_specs::action_data(action),
+            *init_action_specs::action_data(action),
             witness()
         );
         i = i + 1;

@@ -341,8 +341,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         1000000, // proposal_fee_per_outcome (1 token per outcome)
         100_000_000, // required_bond_amount
         50, // max_concurrent_proposals
-        2_592_000_000, // proposal_recreation_window_ms (30 days default)
-        5, // max_proposal_chain_depth
         100, // fee_escalation_basis_points
         true, // proposal_creation_enabled
         true, // accept_new_proposals
@@ -373,9 +371,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
-        10_000_000, // optimistic_challenge_fee
-        864_000_000, // optimistic_challenge_period_ms (10 days)
-        10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
     );
 
     // Create slash distribution with default values
@@ -624,8 +619,6 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         1000000, // proposal_fee_per_outcome (1 token per outcome)
         100_000_000, // required_bond_amount
         50, // max_concurrent_proposals
-        2_592_000_000, // proposal_recreation_window_ms (30 days default)
-        5, // max_proposal_chain_depth
         100, // fee_escalation_basis_points
         true, // proposal_creation_enabled
         true, // accept_new_proposals
@@ -656,9 +649,6 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
-        10_000_000, // optimistic_challenge_fee
-        864_000_000, // optimistic_challenge_period_ms (10 days)
-        10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
     );
 
     // Create slash distribution with default values
@@ -889,9 +879,6 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
-        10_000_000, // optimistic_challenge_fee
-        864_000_000, // optimistic_challenge_period_ms (10 days)
-        10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
     );
 
     // Create slash distribution with default values

@@ -76,6 +76,30 @@ public fun request_toggle_vesting_freeze<Config, Outcome: store>(
     );
 }
 
+/// Request to cancel a vesting
+public fun request_cancel_vesting<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    params: Params,
+    outcome: Outcome,
+    vesting_id: ID,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingControlIntent(),
+        ctx,
+        |intent, iw| {
+            vesting::new_cancel_vesting(intent, vesting_id, iw);
+        },
+    );
+}
+
 /// Executes toggle vesting pause action
 public fun execute_toggle_vesting_pause<Config, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
@@ -122,6 +146,31 @@ public fun execute_toggle_vesting_freeze<Config, Outcome: store, CoinType>(
                 clock,
                 version::current(),
                 iw,
+            );
+        },
+    );
+}
+
+/// Executes cancel vesting action
+public fun execute_cancel_vesting<Config, Outcome: store, CoinType: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    vesting: vesting::Vesting<CoinType>,
+    clock: &sui::clock::Clock,
+    ctx: &mut TxContext,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        VestingControlIntent(),
+        |executable, iw| {
+            vesting::cancel_vesting<_, _, CoinType, _>(
+                executable,
+                account,
+                vesting,
+                clock,
+                iw,
+                ctx,
             );
         },
     );

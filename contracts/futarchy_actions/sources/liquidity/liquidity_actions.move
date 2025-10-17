@@ -23,14 +23,13 @@ use account_protocol::{
     intents::{Self, Expired, ActionSpec},
     version_witness::VersionWitness,
     bcs_validation,
+    action_validation,
 };
 use account_actions::vault;
 use futarchy_types::action_type_markers;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     version,
-    action_validation,
-    // action_types moved to futarchy_types
 };
 use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};

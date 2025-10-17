@@ -1525,70 +1525,137 @@ public fun list_stream_coin_types<Config: store>(
 }
 
 /// Cancel all payments for dissolution and return funds
+/// FIXED: Now actually cancels vault streams and handles non-cancellable streams
+/// Returns total amount refunded across all cancelled streams
 public fun cancel_all_payments_for_dissolution<Config: store, CoinType: drop>(
     account: &mut Account<Config>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): (Coin<CoinType>, u64) {
     if (!account::has_managed_data(account, PaymentStorageKey {})) {
-        return
+        return (coin::zero<CoinType>(ctx), 0)
     };
-    
-    // First pass: cancel payments and collect pool IDs
-    let mut pools_to_return = vector::empty<String>();
-    let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
-        account,
-        PaymentStorageKey {},
-        version::current()
-    );
-    
-    let mut i = 0;
-    while (i < storage.payment_ids.length()) {
-        let payment_id = *storage.payment_ids.borrow(i);
-        
-        if (table::contains(&storage.payments, payment_id)) {
-            let payment = table::borrow_mut(&mut storage.payments, payment_id);
-            
-            // Cancel if active and cancellable
-            if (payment.active && payment.cancellable) {
-                payment.active = false;
-                
-                // Mark pools for return
-                pools_to_return.push_back(payment_id);
+
+    // Create auth for canceling vault streams
+    let auth = account::new_auth(account, version::current(), tx_context::sender(ctx));
+
+    // Accumulator for all refunds
+    let mut total_refund_coin = coin::zero<CoinType>(ctx);
+    let mut total_refund_amount = 0u64;
+    let mut cancelled_count = 0u64;
+    let mut non_cancellable_count = 0u64;
+
+    // First pass: collect info about what needs cancelling
+    let mut payments_to_cancel = vector::empty<(String, Option<ID>, u8, bool)>(); // (payment_id, vault_stream_id, source_mode, cancellable)
+    {
+        let storage: &PaymentStorage = account::borrow_managed_data(
+            account,
+            PaymentStorageKey {},
+            version::current()
+        );
+
+        let mut i = 0;
+        while (i < storage.payment_ids.length()) {
+            let payment_id = *storage.payment_ids.borrow(i);
+
+            if (table::contains(&storage.payments, payment_id)) {
+                let payment = table::borrow(&storage.payments, payment_id);
+
+                // Only process active payments
+                if (payment.active) {
+                    // Check coin type matches (for this CoinType batch)
+                    let matches_coin_type = payment.coin_type == type_name::with_defining_ids<CoinType>();
+
+                    if (matches_coin_type) {
+                        payments_to_cancel.push_back((
+                            payment_id,
+                            payment.vault_stream_id,
+                            payment.source_mode,
+                            payment.cancellable
+                        ));
+                    };
+                };
             };
+
+            i = i + 1;
         };
-        
-        i = i + 1;
     };
-    
-    // Second pass: return funds from isolated pools
+
+    // Second pass: cancel vault streams and isolated pools
     let mut j = 0;
-    while (j < pools_to_return.length()) {
-        let payment_id = *pools_to_return.borrow(j);
-        let pool_key = PaymentPoolKey { payment_id };
-        
-        if (account::has_managed_data(account, pool_key)) {
-            let mut pool = account::remove_managed_data<Config, PaymentPoolKey, Balance<CoinType>>(
-                account,
-                pool_key,
-                version::current()
-            );
-        
-            // Transfer remaining balance back to treasury
-            if (pool.value() > 0) {
-                let coin = coin::from_balance(pool, ctx);
-                vault::deposit_permissionless(
+    while (j < payments_to_cancel.length()) {
+        let (payment_id, vault_stream_id_opt, source_mode, cancellable) = *payments_to_cancel.borrow(j);
+
+        if (cancellable) {
+            // Cancel vault stream if it exists
+            if (vault_stream_id_opt.is_some()) {
+                let stream_id = *vault_stream_id_opt.borrow();
+
+                // Cancel the vault stream (this handles vested vs unvested split)
+                let (vault_refund, vault_amount) = vault::cancel_stream<Config, CoinType>(
+                    auth,
                     account,
                     string::utf8(b"treasury"),
-                    coin
+                    stream_id,
+                    clock,
+                    ctx
                 );
-            } else {
-                pool.destroy_zero();
+
+                total_refund_coin.join(vault_refund);
+                total_refund_amount = total_refund_amount + vault_amount;
             };
+
+            // Handle isolated pools
+            if (source_mode == SOURCE_ISOLATED_POOL) {
+                let pool_key = PaymentPoolKey { payment_id };
+
+                if (account::has_managed_data(account, pool_key)) {
+                    let pool_balance: Balance<CoinType> = account::remove_managed_data(
+                        account,
+                        pool_key,
+                        version::current()
+                    );
+
+                    let pool_amount = pool_balance.value();
+                    if (pool_amount > 0) {
+                        total_refund_coin.join(coin::from_balance(pool_balance, ctx));
+                        total_refund_amount = total_refund_amount + pool_amount;
+                    } else {
+                        pool_balance.destroy_zero();
+                    };
+                };
+            };
+
+            // Mark payment as inactive
+            let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
+                account,
+                PaymentStorageKey {},
+                version::current()
+            );
+            let payment = table::borrow_mut(&mut storage.payments, payment_id);
+            payment.active = false;
+
+            cancelled_count = cancelled_count + 1;
+        } else {
+            // Non-cancellable stream - just count it
+            non_cancellable_count = non_cancellable_count + 1;
         };
 
         j = j + 1;
     };
+
+    // Emit dissolution event
+    if (cancelled_count > 0 || non_cancellable_count > 0) {
+        event::emit(DissolutionFundsReturned {
+            account_id: object::id(account),
+            coin_type: string::from_ascii(type_name::into_string(type_name::with_defining_ids<CoinType>())),
+            total_amount: total_refund_amount,
+            payment_count: cancelled_count,
+            timestamp: clock.timestamp_ms(),
+        });
+    };
+
+    (total_refund_coin, total_refund_amount)
 }
 
 // === Init Entry Functions ===

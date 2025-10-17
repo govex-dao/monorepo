@@ -12,13 +12,12 @@ use account_protocol::{
     version_witness::VersionWitness,
     intents as protocol_intents,
     bcs_validation,
+    action_validation,
 };
 use futarchy_types::action_type_markers;
 use futarchy_core::{
     futarchy_config::FutarchyConfig,
     proposal_quota_registry::ProposalQuotaRegistry,
-    action_validation,
-    // action_types moved to futarchy_types
 };
 
 // === Errors ===

@@ -9,9 +9,9 @@
 /// actions atomically so a finalizer cannot change parameters.
 module futarchy_factory::init_actions;
 
-use account_protocol::account::{self as account, Account};
-use account_protocol::executable::{self as executable, Executable};
-use account_protocol::intents::{self as intents, Intent};
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::{Self, Intent};
 use futarchy_actions::config_actions;
 use futarchy_actions::config_intents;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
@@ -23,7 +23,7 @@ use std::type_name::{Self, TypeName};
 use std::vector;
 use sui::clock::Clock;
 use sui::event;
-use sui::object::{self as object, ID};
+use sui::object::{Self, ID};
 use sui::tx_context::TxContext;
 
 /// Outcome stored on launchpad init intents (mainly for observability).
@@ -60,10 +60,7 @@ fun build_init_intent_key(owner: &ID, index: u64): String {
 }
 
 fun action_type_label(action_type: TypeName): String {
-    let mut label = action_type.module_string();
-    label.append(b"::".to_string());
-    label.append(action_type.name_string());
-    label
+    type_name::into_string(action_type)
 }
 
 fun append_action_to_intent(
@@ -313,7 +310,7 @@ public fun stage_init_intent(
     let key = build_init_intent_key(owner_id, staged_index);
 
     let params = intents::new_params(
-        key.clone(),
+        key,
         b"Init Intent Batch".to_string(),
         vector[clock.timestamp_ms()],
         clock.timestamp_ms() + 3_600_000,
@@ -322,7 +319,7 @@ public fun stage_init_intent(
     );
 
     let outcome = InitIntentOutcome {
-        key: key.clone(),
+        key,
         index: staged_index,
     };
 
@@ -356,7 +353,7 @@ public fun execute_init_intents(
     // Enforce an upper bound to protect against DoS.
     let mut count_check = 0u64;
     while (idx < len) {
-        count_check = count_check + action_specs::action_count(vector::borrow(specs, idx));
+        count_check = count_check + init_action_specs::action_count(vector::borrow(specs, idx));
         idx = idx + 1;
     };
     assert!(count_check <= MAX_INIT_ACTIONS, ETooManyInitActions);
@@ -370,7 +367,7 @@ public fun execute_init_intents(
             config_intents::ConfigIntent
         >(
             account,
-            key.clone(),
+            key,
             clock,
             version::current(),
             config_intents::ConfigIntent {},
@@ -378,7 +375,7 @@ public fun execute_init_intents(
         );
 
         let spec = vector::borrow(specs, idx);
-        let action_count = action_specs::action_count(spec);
+        let action_count = init_action_specs::action_count(spec);
         let mut processed = 0u64;
         while (processed < action_count) {
             let action_type = executable::current_action_type(&executable);
@@ -424,7 +421,7 @@ fun cancel_init_intent_internal(
     key: String,
     ctx: &mut TxContext,
 ) {
-    if (!intents::contains(account::intents(account), key.clone())) {
+    if (!intents::contains(account::intents(account), key)) {
         return
     };
 

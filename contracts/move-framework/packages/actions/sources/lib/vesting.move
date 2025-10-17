@@ -955,9 +955,8 @@ public fun next_vest_time<CoinType>(
 // NOTE: Expiry management removed - doesn't make sense for beneficiary to set their own expiry
 
 /// Proposes to cancel a vesting
-public fun new_cancel_vesting<Config, Outcome, IW: drop>(
+public fun new_cancel_vesting<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
-    _account: &Account<Config>,
     vesting_id: ID,
     intent_witness: IW,
 ) {
