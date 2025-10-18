@@ -126,8 +126,7 @@ public struct RemoveWithdrawers has drop {}
 public struct TogglePayment has drop {}
 
 // === Dividend Action Types ===
-
-public struct CreateDividend has drop {}
+// REMOVED: Dividend actions package deleted
 
 // === Oracle Action Types ===
 
@@ -637,4 +636,4 @@ public fun walrus_renewal(): TypeName { type_name::with_defining_ids<WalrusRenew
 public fun set_quotas(): TypeName { type_name::with_defining_ids<SetQuotas>() }
 
 // Dividend actions
-public fun create_dividend(): TypeName { type_name::with_defining_ids<CreateDividend>() }
+// REMOVED: Dividend actions package deleted

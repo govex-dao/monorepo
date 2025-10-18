@@ -17,7 +17,6 @@ futarchy_lifecycle = { local = "../futarchy_dissolution_actions" }
 futarchy_actions = { local = "../futarchy_actions" }
 futarchy_legal_actions = { local = "../futarchy_legal_actions" }
 futarchy_governance_actions = { local = "../futarchy_governance_actions" }
-futarchy_dividend_actions = { local = "../futarchy_dividend_actions" }
 Walrus = { local = "../walrus_walrus" }
 WAL = { local = "../walrus_wal" }
 [addresses]
@@ -33,7 +32,6 @@ futarchy_lifecycle = "0x8f72dd124237359d6117977c13933f6c93581d381ed6d43713b35aa1
 futarchy_legal_actions = "0xb594670af6dd19b1d7bfd8606e8b0e5c0c403dc4688d9ee316a2c7ec5f07741f"
 futarchy_governance_actions = "0xb099b96ba26f0facde45dae7947e7d0144282b7a2923c2b4c4f0e942ae608865"
 futarchy_actions = "0x0393f67d13f180d5dcedb1be3b789c6f20b4b4a478f0d98b58fc2754eb3486d4"
-futarchy_dividend_actions = "0x575ffe78bb1b4392db4cfbae5cb55eec078c57df30b4725f8e0dd095df95c528"
 account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
 account_extensions = "0xa9ca20a7a38f897b021b35147070b3997e236c8b6791d6f115e264f3bb67ccd4"
 account_actions = "0x6cfb759426af38215d70d49467ca5b9829a23bd8aad53aeb408a777e6db33784"

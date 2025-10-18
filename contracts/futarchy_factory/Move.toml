@@ -15,7 +15,6 @@ futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 futarchy_oracle = { local = "../futarchy_oracle_actions" }
 futarchy_actions = { local = "../futarchy_actions" }
 futarchy_stream_actions = { local = "../futarchy_stream_actions" }
-futarchy_dividend_actions = { local = "../futarchy_dividend_actions" }
 futarchy_legal_actions = { local = "../futarchy_legal_actions" }
 futarchy_lifecycle = { local = "../futarchy_dissolution_actions" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
