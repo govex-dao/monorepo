@@ -429,7 +429,7 @@ fun test_execute_optimal_arbitrage_stable_to_asset_direction_2_outcomes() {
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(1000, ctx);
     let asset_for_arb = coin::zero<TEST_COIN_A>(ctx);
 
-    let (stable_profit, asset_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
+    let (stable_profit, asset_profit, dust) = arbitrage::execute_optimal_spot_arbitrage(
         &mut spot_pool,
         &mut escrow,
         &session,
@@ -437,7 +437,7 @@ fun test_execute_optimal_arbitrage_stable_to_asset_direction_2_outcomes() {
         asset_for_arb,
         0, // min_profit
         @0x999, // recipient
-        false, // return_dust_balance
+        option::none(), // existing_balance_opt
         &clock,
         ctx,
     );
@@ -445,14 +445,11 @@ fun test_execute_optimal_arbitrage_stable_to_asset_direction_2_outcomes() {
     // Should get stable profit back (may be less due to fees/slippage)
     assert!(stable_profit.value() > 0 || stable_profit.value() == 0, 0);
     assert!(asset_profit.value() == 0, 1);
-    assert!(option::is_some(&dust_opt), 2); // Dust balance always returned now
 
     // Cleanup
     coin::burn_for_testing(stable_profit);
     coin::burn_for_testing(asset_profit);
-    let dust = option::extract(&mut dust_opt);
     conditional_balance::destroy_for_testing(dust);
-    option::destroy_none(dust_opt);
     swap_core::destroy_test_swap_session(session);
     unified_spot_pool::destroy_for_testing(spot_pool);
     coin_escrow::destroy_for_testing(escrow);
@@ -488,7 +485,7 @@ fun test_execute_optimal_arbitrage_asset_to_stable_direction_2_outcomes() {
     let stable_for_arb = coin::zero<TEST_COIN_B>(ctx);
     let asset_for_arb = coin::mint_for_testing<TEST_COIN_A>(2000, ctx);
 
-    let (stable_profit, asset_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
+    let (stable_profit, asset_profit, dust) = arbitrage::execute_optimal_spot_arbitrage(
         &mut spot_pool,
         &mut escrow,
         &session,
@@ -496,7 +493,7 @@ fun test_execute_optimal_arbitrage_asset_to_stable_direction_2_outcomes() {
         asset_for_arb,
         0,
         @0x999,
-        false,
+        option::none(),
         &clock,
         ctx,
     );
@@ -504,14 +501,11 @@ fun test_execute_optimal_arbitrage_asset_to_stable_direction_2_outcomes() {
     // Should get asset profit back
     assert!(stable_profit.value() == 0, 0);
     assert!(asset_profit.value() > 0 || asset_profit.value() == 0, 1);
-    assert!(option::is_some(&dust_opt), 2); // Dust balance always returned now
 
     // Cleanup
     coin::burn_for_testing(stable_profit);
     coin::burn_for_testing(asset_profit);
-    let dust = option::extract(&mut dust_opt);
     conditional_balance::destroy_for_testing(dust);
-    option::destroy_none(dust_opt);
     swap_core::destroy_test_swap_session(session);
     unified_spot_pool::destroy_for_testing(spot_pool);
     coin_escrow::destroy_for_testing(escrow);
@@ -543,11 +537,11 @@ fun test_execute_optimal_arbitrage_with_dust_balance_return() {
     let proposal_id = object::id_from_address(@0xABC);
     let session = swap_core::create_test_swap_session(proposal_id);
 
-    // Execute with return_dust_balance=true
+    // Execute with existing balance
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(500, ctx);
     let asset_for_arb = coin::zero<TEST_COIN_A>(ctx);
 
-    let (stable_profit, asset_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
+    let (stable_profit, asset_profit, dust) = arbitrage::execute_optimal_spot_arbitrage(
         &mut spot_pool,
         &mut escrow,
         &session,
@@ -555,20 +549,15 @@ fun test_execute_optimal_arbitrage_with_dust_balance_return() {
         asset_for_arb,
         0,
         @0x999,
-        true, // return_dust_balance=true
+        option::none(), // existing_balance_opt
         &clock,
         ctx,
     );
 
-    // Should return dust balance object
-    assert!(option::is_some(&dust_opt), 0);
-
     // Cleanup
     coin::burn_for_testing(stable_profit);
     coin::burn_for_testing(asset_profit);
-    let dust = option::extract(&mut dust_opt);
     conditional_balance::destroy_for_testing(dust);
-    option::destroy_none(dust_opt);
     swap_core::destroy_test_swap_session(session);
     unified_spot_pool::destroy_for_testing(spot_pool);
     coin_escrow::destroy_for_testing(escrow);
@@ -601,7 +590,7 @@ fun test_execute_optimal_arbitrage_both_zero_amounts() {
     let stable_for_arb = coin::zero<TEST_COIN_B>(ctx);
     let asset_for_arb = coin::zero<TEST_COIN_A>(ctx);
 
-    let (stable_profit, asset_profit, dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
+    let (stable_profit, asset_profit, dust) = arbitrage::execute_optimal_spot_arbitrage(
         &mut spot_pool,
         &mut escrow,
         &session,
@@ -609,20 +598,19 @@ fun test_execute_optimal_arbitrage_both_zero_amounts() {
         asset_for_arb,
         0,
         @0x999,
-        false,
+        option::none(),
         &clock,
         ctx,
     );
 
-    // Should return zeros (no arbitrage executed, so no dust balance)
+    // Should return zeros (no arbitrage executed)
     assert!(stable_profit.value() == 0, 0);
     assert!(asset_profit.value() == 0, 1);
-    assert!(option::is_none(&dust_opt), 2); // No arbitrage = no dust balance
 
     // Cleanup
     coin::burn_for_testing(stable_profit);
     coin::burn_for_testing(asset_profit);
-    option::destroy_none(dust_opt);
+    conditional_balance::destroy_for_testing(dust);
     swap_core::destroy_test_swap_session(session);
     unified_spot_pool::destroy_for_testing(spot_pool);
     coin_escrow::destroy_for_testing(escrow);
@@ -661,7 +649,7 @@ fun test_execute_optimal_arbitrage_insufficient_profit() {
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(100, ctx);
     let asset_for_arb = coin::zero<TEST_COIN_A>(ctx);
 
-    let (stable_profit, asset_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
+    let (stable_profit, asset_profit, dust) = arbitrage::execute_optimal_spot_arbitrage(
         &mut spot_pool,
         &mut escrow,
         &session,
@@ -669,7 +657,7 @@ fun test_execute_optimal_arbitrage_insufficient_profit() {
         asset_for_arb,
         999_999_999_999, // Impossibly high min_profit
         @0x999,
-        false,
+        option::none(),
         &clock,
         ctx,
     );
@@ -677,9 +665,7 @@ fun test_execute_optimal_arbitrage_insufficient_profit() {
     // Should abort before reaching here
     coin::burn_for_testing(stable_profit);
     coin::burn_for_testing(asset_profit);
-    let dust = option::extract(&mut dust_opt);
     conditional_balance::destroy_for_testing(dust);
-    option::destroy_none(dust_opt);
     swap_core::destroy_test_swap_session(session);
     unified_spot_pool::destroy_for_testing(spot_pool);
     coin_escrow::destroy_for_testing(escrow);
@@ -718,7 +704,7 @@ fun test_arbitrage_with_5_outcomes() {
     let asset_for_arb = coin::zero<TEST_COIN_A>(ctx);
 
     // Same function works for 5 outcomes!
-    let (stable_profit, asset_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
+    let (stable_profit, asset_profit, dust) = arbitrage::execute_optimal_spot_arbitrage(
         &mut spot_pool,
         &mut escrow,
         &session,
@@ -726,7 +712,7 @@ fun test_arbitrage_with_5_outcomes() {
         asset_for_arb,
         0,
         @0x999,
-        false,
+        option::none(),
         &clock,
         ctx,
     );
@@ -734,14 +720,11 @@ fun test_arbitrage_with_5_outcomes() {
     // Should complete successfully
     assert!(stable_profit.value() >= 0, 0);
     assert!(asset_profit.value() == 0, 1);
-    assert!(option::is_some(&dust_opt), 2); // Dust balance always returned now
 
     // Cleanup
     coin::burn_for_testing(stable_profit);
     coin::burn_for_testing(asset_profit);
-    let dust = option::extract(&mut dust_opt);
     conditional_balance::destroy_for_testing(dust);
-    option::destroy_none(dust_opt);
     swap_core::destroy_test_swap_session(session);
     unified_spot_pool::destroy_for_testing(spot_pool);
     coin_escrow::destroy_for_testing(escrow);

@@ -1,0 +1,927 @@
+Auto packing the repository in background for optimum performance.
+See "git help gc" for manual housekeeping.
+warning: The last gc run reported the following. Please correct the root cause
+and remove .git/gc.log
+Automatic cleanup will not be performed until the file is removed.
+
+warning: There are too many unreachable loose objects; run 'git prune' to remove them.
+
+INCLUDING DEPENDENCY futarchy_dividend_actions
+INCLUDING DEPENDENCY futarchy_legal_actions
+INCLUDING DEPENDENCY futarchy_lifecycle
+INCLUDING DEPENDENCY futarchy_actions
+INCLUDING DEPENDENCY Walrus
+INCLUDING DEPENDENCY WAL
+INCLUDING DEPENDENCY futarchy_oracle
+INCLUDING DEPENDENCY futarchy_stream_actions
+INCLUDING DEPENDENCY AccountActions
+INCLUDING DEPENDENCY futarchy_markets_operations
+INCLUDING DEPENDENCY futarchy_markets_core
+INCLUDING DEPENDENCY futarchy_markets_primitives
+INCLUDING DEPENDENCY futarchy_core
+INCLUDING DEPENDENCY AccountProtocol
+INCLUDING DEPENDENCY AccountExtensions
+INCLUDING DEPENDENCY futarchy_one_shot_utils
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY futarchy_types
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING futarchy_factory
+[0m[1m[38;5;11mwarning[W09006][0m[1m: unused struct type parameter[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:29:35
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m public struct InitResourceRequest<[0m[33mT[0m> has drop {
+   [0m[34m│[0m                                   [0m[33m^[0m [0m[33mUnused type parameter 'T'. Consider declaring it as phantom[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09006][0m[1m: unused struct type parameter[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:37:31
+   [0m[34m│[0m
+[0m[34m37[0m [0m[34m│[0m public struct ResourceReceipt<[0m[33mT[0m> has drop {
+   [0m[34m│[0m                               [0m[33m^[0m [0m[33mUnused type parameter 'T'. Consider declaring it as phantom[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:49:7
+   [0m[34m│[0m
+[0m[34m49[0m [0m[34m│[0m const [0m[33mRESOURCE_COIN[0m: u8 = 0;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^[0m [0m[33mThe constant 'RESOURCE_COIN' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:50:7
+   [0m[34m│[0m
+[0m[34m50[0m [0m[34m│[0m const [0m[33mRESOURCE_SHARED_OBJECT[0m: u8 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'RESOURCE_SHARED_OBJECT' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:51:7
+   [0m[34m│[0m
+[0m[34m51[0m [0m[34m│[0m const [0m[33mRESOURCE_CAPABILITY[0m: u8 = 2;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'RESOURCE_CAPABILITY' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:52:7
+   [0m[34m│[0m
+[0m[34m52[0m [0m[34m│[0m const [0m[33mRESOURCE_LP_TOKEN[0m: u8 = 3;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'RESOURCE_LP_TOKEN' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:63:35
+   [0m[34m│[0m
+[0m[34m63[0m [0m[34m│[0m         resource_type: type_name::[0m[33mget[0m<CoinType>(),
+   [0m[34m│[0m                                   [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09010][0m[1m: unused function type parameter[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:70:58
+   [0m[34m│[0m
+[0m[34m70[0m [0m[34m│[0m public fun request_liquidity_resources<ActionType: drop, [0m[33mAssetType[0m, StableType>(
+   [0m[34m│[0m                                                          [0m[33m^^^^^^^^^[0m [0m[33mUnused type parameter 'AssetType'.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09010][0m[1m: unused function type parameter[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:70:69
+   [0m[34m│[0m
+[0m[34m70[0m [0m[34m│[0m public fun request_liquidity_resources<ActionType: drop, AssetType, [0m[33mStableType[0m>(
+   [0m[34m│[0m                                                                     [0m[33m^^^^^^^^^^[0m [0m[33mUnused type parameter 'StableType'.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:81:35
+   [0m[34m│[0m
+[0m[34m81[0m [0m[34m│[0m         resource_type: type_name::[0m[33mget[0m<ActionType>(),
+   [0m[34m│[0m                                   [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+   [0m[34m┌─[0m ./sources/factory/init_resource_management.move:93:35
+   [0m[34m│[0m
+[0m[34m93[0m [0m[34m│[0m         resource_type: type_name::[0m[33mget[0m<ObjectType>(),
+   [0m[34m│[0m                                   [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/factory/init_resource_management.move:105:35
+    [0m[34m│[0m
+[0m[34m105[0m [0m[34m│[0m         resource_type: type_name::[0m[33mget[0m<CapType>(),
+    [0m[34m│[0m                                   [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/factory/init_resource_management.move:116:33
+    [0m[34m│[0m
+[0m[34m116[0m [0m[34m│[0m         action_type: type_name::[0m[33mget[0m<T>(),
+    [0m[34m│[0m                                 [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/factory/init_resource_management.move:125:33
+    [0m[34m│[0m
+[0m[34m125[0m [0m[34m│[0m         action_type: type_name::[0m[33mget[0m<T>(),
+    [0m[34m│[0m                                 [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/factory/init_resource_management.move:134:33
+    [0m[34m│[0m
+[0m[34m134[0m [0m[34m│[0m         action_type: type_name::[0m[33mget[0m<T>(),
+    [0m[34m│[0m                                 [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./sources/factory/launchpad.move:8:33
+  [0m[34m│[0m
+[0m[34m8[0m [0m[34m│[0m use account_protocol::account::{[0m[33mSelf[0m, Account};
+  [0m[34m│[0m                                 [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'account'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:19:19
+   [0m[34m│[0m
+[0m[34m19[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+   [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:19:25
+   [0m[34m│[0m
+[0m[34m19[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+   [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:22:10
+   [0m[34m│[0m
+[0m[34m22[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:29:19
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m use sui::object::{[0m[33mSelf[0m, UID, ID};
+   [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:29:25
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m use sui::object::{Self, [0m[33mUID[0m, ID};
+   [0m[34m│[0m                         [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:29:30
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m use sui::object::{Self, UID, [0m[33mID[0m};
+   [0m[34m│[0m                              [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:32:22
+   [0m[34m│[0m
+[0m[34m32[0m [0m[34m│[0m use sui::tx_context::[0m[33mTxContext[0m;
+   [0m[34m│[0m                      [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:55:7
+   [0m[34m│[0m
+[0m[34m55[0m [0m[34m│[0m const [0m[33mENotUSDC[0m: u64 = 12;
+   [0m[34m│[0m       [0m[33m^^^^^^^^[0m [0m[33mThe constant 'ENotUSDC' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:63:7
+   [0m[34m│[0m
+[0m[34m63[0m [0m[34m│[0m const [0m[33mECapChangeAfterDeadline[0m: u64 = 105;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'ECapChangeAfterDeadline' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:65:7
+   [0m[34m│[0m
+[0m[34m65[0m [0m[34m│[0m const [0m[33mESettlementAlreadyStarted[0m: u64 = 107;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'ESettlementAlreadyStarted' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:70:7
+   [0m[34m│[0m
+[0m[34m70[0m [0m[34m│[0m const [0m[33mEDaoAlreadyPreCreated[0m: u64 = 112;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EDaoAlreadyPreCreated' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:77:7
+   [0m[34m│[0m
+[0m[34m77[0m [0m[34m│[0m const [0m[33mEFinalRaiseAmountZero[0m: u64 = 123;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EFinalRaiseAmountZero' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/factory/launchpad.move:78:7
+   [0m[34m│[0m
+[0m[34m78[0m [0m[34m│[0m const [0m[33mEInvalidMinFillPct[0m: u64 = 126; // min_fill_pct must be 0-100
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidMinFillPct' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/launchpad.move:562:8
+    [0m[34m│[0m
+[0m[34m562[0m [0m[34m│[0m public [0m[33mentry[0m fun unstage_last_launchpad_init_intent<RaiseToken, StableCoin>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/launchpad.move:596:8
+    [0m[34m│[0m
+[0m[34m596[0m [0m[34m│[0m public [0m[33mentry[0m fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/launchpad.move:629:8
+    [0m[34m│[0m
+[0m[34m629[0m [0m[34m│[0m public [0m[33mentry[0m fun create_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/launchpad.move:706:8
+    [0m[34m│[0m
+[0m[34m706[0m [0m[34m│[0m public [0m[33mentry[0m fun enable_cranking<RaiseToken, StableCoin>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/launchpad.move:720:8
+    [0m[34m│[0m
+[0m[34m720[0m [0m[34m│[0m public [0m[33mentry[0m fun disable_cranking<RaiseToken, StableCoin>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/launchpad.move:748:8
+    [0m[34m│[0m
+[0m[34m748[0m [0m[34m│[0m public [0m[33mentry[0m fun place_bid_2d<RaiseToken, StableCoin>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09008][0m[1m: unused function[0m
+    [0m[34m┌─[0m ./sources/factory/launchpad.move:928:5
+    [0m[34m│[0m
+[0m[34m928[0m [0m[34m│[0m fun [0m[33mbuild_max_heap[0m(v: &mut vector<u64>) {
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^[0m [0m[33mThe non-'public', non-'entry' function 'build_max_heap' is never called. Consider removing it.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1008:1
+     [0m[34m│[0m
+[0m[34m1008[0m [0m[34m│[0m [0m[33m/// Start settlement: snapshot caps into a heap[0m
+     [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mDocumentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1070:8
+     [0m[34m│[0m
+[0m[34m1070[0m [0m[34m│[0m public [0m[33mentry[0m fun crank_settlement_2d<RT, SC>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1237:5
+     [0m[34m│[0m
+[0m[34m1237[0m [0m[34m│[0m     [0m[33mclock[0m: &Clock,
+     [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'clock'. Consider removing or prefixing with an underscore: '_clock'[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1309:8
+     [0m[34m│[0m
+[0m[34m1309[0m [0m[34m│[0m public [0m[33mentry[0m fun start_settlement_2d<RT, SC>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1319:8
+     [0m[34m│[0m
+[0m[34m1319[0m [0m[34m│[0m public [0m[33mentry[0m fun complete_settlement_2d<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1331:8
+     [0m[34m│[0m
+[0m[34m1331[0m [0m[34m│[0m public [0m[33mentry[0m fun allocate_tokens_fcfs_2d<RaiseToken, StableCoin>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1405:8
+     [0m[34m│[0m
+[0m[34m1405[0m [0m[34m│[0m public [0m[33mentry[0m fun end_raise_early<RT, SC>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1439:8
+     [0m[34m│[0m
+[0m[34m1439[0m [0m[34m│[0m public [0m[33mentry[0m fun close_raise_early<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1469:8
+     [0m[34m│[0m
+[0m[34m1469[0m [0m[34m│[0m public [0m[33mentry[0m fun claim_success_and_activate_dao<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1626:8
+     [0m[34m│[0m
+[0m[34m1626[0m [0m[34m│[0m public [0m[33mentry[0m fun claim_tokens_2d<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1735:8
+     [0m[34m│[0m
+[0m[34m1735[0m [0m[34m│[0m public [0m[33mentry[0m fun mint_claim_nfts_2d<RaiseToken, StableCoin>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1826:8
+     [0m[34m│[0m
+[0m[34m1826[0m [0m[34m│[0m public [0m[33mentry[0m fun claim_with_nft_2d<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:1890:8
+     [0m[34m│[0m
+[0m[34m1890[0m [0m[34m│[0m public [0m[33mentry[0m fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:2006:8
+     [0m[34m│[0m
+[0m[34m2006[0m [0m[34m│[0m public [0m[33mentry[0m fun claim_hard_cap_refund<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:2035:8
+     [0m[34m│[0m
+[0m[34m2035[0m [0m[34m│[0m public [0m[33mentry[0m fun claim_refund<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:2090:8
+     [0m[34m│[0m
+[0m[34m2090[0m [0m[34m│[0m public [0m[33mentry[0m fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:2238:57
+     [0m[34m│[0m
+[0m[34m2238[0m [0m[34m│[0m         raise_token_type: string::from_ascii(type_name::[0m[33mget[0m<RaiseToken>().into_string()),
+     [0m[34m│[0m                                                         [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:2239:57
+     [0m[34m│[0m
+[0m[34m2239[0m [0m[34m│[0m         stable_coin_type: string::from_ascii(type_name::[0m[33mget[0m<StableCoin>().into_string()),
+     [0m[34m│[0m                                                         [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+     [0m[34m┌─[0m ./sources/factory/launchpad.move:2383:36
+     [0m[34m│[0m
+[0m[34m2383[0m [0m[34m│[0m     let raise_name_bytes = string::[0m[33mbytes[0m(raise_name);
+     [0m[34m│[0m                                    [0m[33m^^^^^[0m [0m[33mThe function 'std::string::bytes' is deprecated: Use `std::string::as_bytes` instead.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/init_actions.move:21:19
+   [0m[34m│[0m
+[0m[34m21[0m [0m[34m│[0m use std::string::{[0m[33mSelf[0m, String};
+   [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'string'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/init_actions.move:23:18
+   [0m[34m│[0m
+[0m[34m23[0m [0m[34m│[0m use sui::object::[0m[33mID[0m;
+   [0m[34m│[0m                  [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/init_actions.move:24:22
+   [0m[34m│[0m
+[0m[34m24[0m [0m[34m│[0m use sui::tx_context::[0m[33mTxContext[0m;
+   [0m[34m│[0m                      [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:16:10
+   [0m[34m│[0m
+[0m[34m16[0m [0m[34m│[0m use std::[0m[33moption[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:19:18
+   [0m[34m│[0m
+[0m[34m19[0m [0m[34m│[0m use sui::object::[0m[33mID[0m;
+   [0m[34m│[0m                  [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:19:18
+   [0m[34m│[0m
+[0m[34m19[0m [0m[34m│[0m use sui::object::[0m[33mID[0m;
+   [0m[34m│[0m                  [0m[33m^^[0m [0m[33mUnused 'use' of alias 'ID'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:21:22
+   [0m[34m│[0m
+[0m[34m21[0m [0m[34m│[0m use sui::tx_context::[0m[33mTxContext[0m;
+   [0m[34m│[0m                      [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:26:8
+   [0m[34m│[0m
+[0m[34m26[0m [0m[34m│[0m public [0m[33mentry[0m fun init_vault_deposit<CoinType: drop>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:41:8
+   [0m[34m│[0m
+[0m[34m41[0m [0m[34m│[0m public [0m[33mentry[0m fun init_vault_deposit_named<CoinType: drop>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:58:8
+   [0m[34m│[0m
+[0m[34m58[0m [0m[34m│[0m public [0m[33mentry[0m fun init_lock_treasury_cap<CoinType>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:66:8
+   [0m[34m│[0m
+[0m[34m66[0m [0m[34m│[0m public [0m[33mentry[0m fun init_mint<CoinType>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:76:8
+   [0m[34m│[0m
+[0m[34m76[0m [0m[34m│[0m public [0m[33mentry[0m fun init_mint_and_deposit<CoinType: drop>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:88:8
+   [0m[34m│[0m
+[0m[34m88[0m [0m[34m│[0m public [0m[33mentry[0m fun init_create_vesting<CoinType>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:111:8
+    [0m[34m│[0m
+[0m[34m111[0m [0m[34m│[0m public [0m[33mentry[0m fun init_create_founder_vesting<CoinType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:130:8
+    [0m[34m│[0m
+[0m[34m130[0m [0m[34m│[0m public [0m[33mentry[0m fun init_create_team_vesting<CoinType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:153:8
+    [0m[34m│[0m
+[0m[34m153[0m [0m[34m│[0m public [0m[33mentry[0m fun init_lock_upgrade_cap(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:165:8
+    [0m[34m│[0m
+[0m[34m165[0m [0m[34m│[0m public [0m[33mentry[0m fun init_lock_capability<Cap: key + store>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:175:8
+    [0m[34m│[0m
+[0m[34m175[0m [0m[34m│[0m public [0m[33mentry[0m fun init_store_object<Key: copy + drop + store, T: key + store>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:187:8
+    [0m[34m│[0m
+[0m[34m187[0m [0m[34m│[0m public [0m[33mentry[0m fun init_transfer_object<T: key + store>(object: T, recipient: address) {
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:192:8
+    [0m[34m│[0m
+[0m[34m192[0m [0m[34m│[0m public [0m[33mentry[0m fun init_transfer_objects<T: key + store>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:203:8
+    [0m[34m│[0m
+[0m[34m203[0m [0m[34m│[0m public [0m[33mentry[0m fun init_create_vault_stream<CoinType: drop>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/init_framework_actions.move:238:8
+    [0m[34m│[0m
+[0m[34m238[0m [0m[34m│[0m public [0m[33mentry[0m fun init_create_salary_stream<CoinType: drop>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+    [0m[34m┌─[0m ./../futarchy_legal_actions/sources/legal/dao_file_actions.move:247:1
+    [0m[34m│[0m
+[0m[34m247[0m [0m[34m│[0m [0m[33m/// Create child document[0m
+    [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mDocumentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+    [0m[34m┌─[0m ./../futarchy_legal_actions/sources/legal/dao_file_actions.move:950:1
+    [0m[34m│[0m
+[0m[34m950[0m [0m[34m│[0m [0m[33m/// Create child document intent[0m
+    [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mDocumentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+     [0m[34m┌─[0m ./../futarchy_legal_actions/sources/legal/dao_file_actions.move:1090:1
+     [0m[34m│[0m
+[0m[34m1090[0m [0m[34m│[0m [0m[33m/// Create document version intent[0m
+     [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mDocumentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:13:5
+   [0m[34m│[0m
+[0m[34m13[0m [0m[34m│[0m     [0m[33mDaoConfig[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'DaoConfig'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:14:5
+   [0m[34m│[0m
+[0m[34m14[0m [0m[34m│[0m     [0m[33mTradingParams[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'TradingParams'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:15:5
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     [0m[33mTwapConfig[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'TwapConfig'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:16:5
+   [0m[34m│[0m
+[0m[34m16[0m [0m[34m│[0m     [0m[33mGovernanceConfig[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'GovernanceConfig'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:17:5
+   [0m[34m│[0m
+[0m[34m17[0m [0m[34m│[0m     [0m[33mMetadataConfig[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'MetadataConfig'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:18:5
+   [0m[34m│[0m
+[0m[34m18[0m [0m[34m│[0m     [0m[33mSecurityConfig[0m
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'SecurityConfig'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:29:18
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m use std::option::[0m[33mOption[0m;
+   [0m[34m│[0m                  [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:32:10
+   [0m[34m│[0m
+[0m[34m32[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:34:17
+   [0m[34m│[0m
+[0m[34m34[0m [0m[34m│[0m use sui::coin::{[0m[33mSelf[0m, Coin, TreasuryCap};
+   [0m[34m│[0m                 [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'coin'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:36:19
+   [0m[34m│[0m
+[0m[34m36[0m [0m[34m│[0m use sui::object::{[0m[33mSelf[0m, ID, UID};
+   [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:36:25
+   [0m[34m│[0m
+[0m[34m36[0m [0m[34m│[0m use sui::object::{Self, [0m[33mID[0m, UID};
+   [0m[34m│[0m                         [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:36:29
+   [0m[34m│[0m
+[0m[34m36[0m [0m[34m│[0m use sui::object::{Self, ID, [0m[33mUID[0m};
+   [0m[34m│[0m                             [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:38:10
+   [0m[34m│[0m
+[0m[34m38[0m [0m[34m│[0m use sui::[0m[33mtransfer[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/factory/factory.move:39:22
+   [0m[34m│[0m
+[0m[34m39[0m [0m[34m│[0m use sui::tx_context::[0m[33mTxContext[0m;
+   [0m[34m│[0m                      [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/factory/factory.move:398:9
+    [0m[34m│[0m
+[0m[34m398[0m [0m[34m│[0m     let [0m[33mspot_pool_id[0m = object::id(&spot_pool);
+    [0m[34m│[0m         [0m[33m^^^^^^^^^^^^[0m [0m[33mUnused local variable 'spot_pool_id'. Consider removing or prefixing with an underscore: '_spot_pool_id'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/factory/factory.move:669:9
+    [0m[34m│[0m
+[0m[34m669[0m [0m[34m│[0m     let [0m[33mspot_pool_id[0m = object::id(&spot_pool);
+    [0m[34m│[0m         [0m[33m^^^^^^^^^^^^[0m [0m[33mUnused local variable 'spot_pool_id'. Consider removing or prefixing with an underscore: '_spot_pool_id'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/factory.move:972:8
+    [0m[34m│[0m
+[0m[34m972[0m [0m[34m│[0m public [0m[33mentry[0m fun toggle_pause(factory: &mut Factory, cap: &FactoryOwnerCap) {
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/factory.move:978:8
+    [0m[34m│[0m
+[0m[34m978[0m [0m[34m│[0m public [0m[33mentry[0m fun add_allowed_stable_type<StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/factory/factory.move:999:8
+    [0m[34m│[0m
+[0m[34m999[0m [0m[34m│[0m public [0m[33mentry[0m fun remove_allowed_stable_type<StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/factory.move:1019:8
+     [0m[34m│[0m
+[0m[34m1019[0m [0m[34m│[0m public [0m[33mentry[0m fun burn_factory_owner_cap(factory: &Factory, cap: FactoryOwnerCap) {
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+     [0m[34m┌─[0m ./sources/factory/factory.move:1048:36
+     [0m[34m│[0m
+[0m[34m1048[0m [0m[34m│[0m     let type_name_obj = type_name::[0m[33mget_with_original_ids[0m<T>();
+     [0m[34m│[0m                                    [0m[33m^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe function 'std::type_name::get_with_original_ids' is deprecated: Renamed to `with_original_ids` for clarity.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m ./sources/factory/factory.move:1080:8
+     [0m[34m│[0m
+[0m[34m1080[0m [0m[34m│[0m public [0m[33mentry[0m fun create_dao_test<AssetType: drop, StableType: drop>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/factory_tests.move:11:29
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m use sui::coin::{Self, Coin, [0m[33mTreasuryCap[0m, CoinMetadata};
+   [0m[34m│[0m                             [0m[33m^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'TreasuryCap'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;9merror[E04001][0m[1m: restricted visibility[0m
+   [0m[34m┌─[0m ./sources/factory_tests.move:48:20
+   [0m[34m│[0m  
+[0m[34m48[0m [0m[34m│[0m       let metadata = [0m[31msui::coin::CoinMetadata<T> {[0m
+   [0m[34m│[0m [0m[31m╭[0m[0m[31m────────────────────^[0m
+[0m[34m49[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        id: object::new(ctx),[0m
+[0m[34m50[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        decimals,[0m
+[0m[34m51[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        name: string::utf8(name),[0m
+   [0m[34m·[0m [0m[31m│[0m
+[0m[34m58[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        },[0m
+[0m[34m59[0m [0m[34m│[0m [0m[31m│[0m [0m[31m    }[0m;
+   [0m[34m│[0m [0m[31m╰[0m[0m[31m─────^ Struct 'sui::coin::CoinMetadata' can only be instantiated within its defining module 'sui::coin'[0m
+   [0m[34m│[0m  
+   [0m[34m┌─[0m /Users/admin/.move/https___github_com_MystenLabs_sui_git_f63c9fc78e2171fa174dc43e757ded416c204558/crates/sui-framework/packages/sui-framework/sources/coin.move:51:15
+   [0m[34m│[0m
+[0m[34m51[0m [0m[34m│[0m public struct CoinMetadata<phantom T> has key, store {
+   [0m[34m│[0m               [0m[34m------------[0m [0m[34mStruct defined in module 'sui::coin'[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+   [0m[34m┌─[0m ./sources/factory_tests.move:55:26
+   [0m[34m│[0m
+[0m[34m39[0m [0m[34m│[0m     icon_url: Option<std::ascii::String>,
+   [0m[34m│[0m                      [0m[34m------------------[0m [0m[34mGiven: 'std::ascii::String'[0m
+   [0m[34m·[0m
+[0m[34m55[0m [0m[34m│[0m             option::some([0m[31murl::new_unsafe_from_bytes(*icon_url.borrow())[0m)
+   [0m[34m│[0m                          [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31mInvalid call of 'sui::url::new_unsafe_from_bytes'. Invalid argument for parameter 'bytes'[0m
+   [0m[34m│[0m
+   [0m[34m┌─[0m /Users/admin/.move/https___github_com_MystenLabs_sui_git_f63c9fc78e2171fa174dc43e757ded416c204558/crates/sui-framework/packages/sui-framework/sources/url.move:22:41
+   [0m[34m│[0m
+[0m[34m22[0m [0m[34m│[0m public fun new_unsafe_from_bytes(bytes: vector<u8>): Url {
+   [0m[34m│[0m                                         [0m[34m----------[0m [0m[34mExpected: 'vector<u8>'[0m
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+    [0m[34m┌─[0m ./../futarchy_legal_actions/sources/legal/dao_file_registry.move:542:1
+    [0m[34m│[0m  
+[0m[34m542[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Create document as owned object (Phase 1: Private staging)[0m
+[0m[34m543[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Returns unshared Document for multi-transaction construction[0m
+[0m[34m544[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Proposer can build document incrementally over multiple transactions[0m
+[0m[34m545[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Document is NOT shared, so no one else can modify it during construction[0m
+    [0m[34m│[0m [0m[33m╰[0m[0m[33m────────────────────────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+

@@ -934,7 +934,12 @@ public fun new_with_extensions(
 #[test_only]
 public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Account<FutarchyConfig> {
     // Create dependencies for testing without Extensions
-    let deps = deps::new_for_testing();
+    // Must include futarchy_core because version::current() creates a VersionWitness
+    // with the @futarchy_core package address
+    let deps = deps::new_for_testing_with_config(
+        b"FutarchyCore".to_string(),
+        @futarchy_core
+    );
 
     // Create account with FutarchyConfig using the config witness
     account::new(

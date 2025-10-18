@@ -281,11 +281,6 @@ dependencies = [
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
-[move.toolchain-version]
-compiler-version = "1.57.2"
-edition = "2024.beta"
-flavor = "sui"
-
 [[move.package]]
 id = "futarchy_stream_actions"
 source = { local = "../futarchy_stream_actions" }
@@ -312,3 +307,8 @@ source = { local = "../futarchy_types" }
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.57.2"
+edition = "2024.beta"
+flavor = "sui"

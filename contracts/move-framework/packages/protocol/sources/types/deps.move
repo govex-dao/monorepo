@@ -293,6 +293,26 @@ public fun toggle_unverified_allowed_for_testing(deps: &mut Deps) {
     deps.unverified_allowed = !deps.unverified_allowed;
 }
 
+#[test_only]
+/// Create deps for testing with a custom config package address
+/// This is useful when the config module (e.g., FutarchyConfig) is in a different package
+/// and version::current() from that package needs to be validated
+/// Includes @account_protocol, account_actions, and the custom config address as valid dependencies
+public fun new_for_testing_with_config(config_name: String, config_addr: address): Deps {
+    // Hard-coded address for account_actions package
+    // This is the published address of the AccountActions package
+    let account_actions_addr = @0x6cfb759426af38215d70d49467ca5b9829a23bd8aad53aeb408a777e6db33784;
+
+    Deps {
+        inner: vector[
+            Dep { name: b"AccountProtocol".to_string(), addr: @account_protocol, version: 1 },
+            Dep { name: config_name, addr: config_addr, version: 1 },
+            Dep { name: b"AccountActions".to_string(), addr: account_actions_addr, version: 1 },
+        ],
+        unverified_allowed: false,
+    }
+}
+
 // === Tests ===
 
 #[test]

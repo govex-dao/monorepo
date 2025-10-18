@@ -8,7 +8,7 @@ use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
 use account_protocol::owned;
-use futarchy_types::action_type_markers;
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
 use futarchy_factory::factory::{FactoryOwnerCap, ValidatorAdminCap};

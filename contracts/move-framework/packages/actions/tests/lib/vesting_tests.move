@@ -539,9 +539,8 @@ fun test_vesting_cancel() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_cancel_vesting<Config, Outcome, VestingIntent>(
+            vesting::new_cancel_vesting<Outcome, VestingIntent>(
                 intent,
-                account_ref2,
                 vesting_id,
                 iw,
             );

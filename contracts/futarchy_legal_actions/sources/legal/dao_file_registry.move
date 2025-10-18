@@ -1858,7 +1858,7 @@ public fun delete_document(
 
     // Borrow to validate state before removal
     let doc_index = {
-        let doc_ref = bag::borrow<File>(&registry.documents, doc_id);
+        let doc_ref = bag::borrow<ID, File>(&registry.documents, doc_id);
         assert!(doc_ref.chunk_count == 0, EDocumentNotEmpty);
         assert!(option::is_none(&doc_ref.head_chunk), EDocumentNotEmpty);
         assert!(option::is_none(&doc_ref.tail_chunk), EDocumentNotEmpty);
@@ -1908,7 +1908,7 @@ public fun delete_document(
         table::add(&mut registry.docs_by_index, doc_index, last_doc_id);
 
         // Update the moved document's index
-        let moved_doc = bag::borrow_mut<File>(&mut registry.documents, last_doc_id);
+        let moved_doc = bag::borrow_mut<ID, File>(&mut registry.documents, last_doc_id);
         moved_doc.index = doc_index;
 
         // Update the name vector slot

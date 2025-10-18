@@ -11,7 +11,7 @@ use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 use futarchy_actions::config_actions;
-use futarchy_types::action_type_markers;
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::dao_config;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
@@ -68,7 +68,7 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
             let action = config_actions::new_set_proposals_enabled_action(enabled);
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::set_proposals_enabled(),
+                action_types::set_proposals_enabled(),
                 action_bytes,
                 iw,
             );
@@ -102,7 +102,7 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
             let action = config_actions::new_update_name_action(new_name);
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_name(),
+                action_types::update_name(),
                 action_bytes,
                 iw,
             );
@@ -137,7 +137,7 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::set_metadata(),
+                action_types::set_metadata(),
                 action_bytes,
                 iw,
             );
@@ -173,7 +173,7 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_trading_config(),
+                action_types::update_trading_config(),
                 action_bytes,
                 iw,
             );
@@ -208,7 +208,7 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_twap_config(),
+                action_types::update_twap_config(),
                 action_bytes,
                 iw,
             );
@@ -247,7 +247,7 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_governance(),
+                action_types::update_governance(),
                 action_bytes,
                 iw,
             );
@@ -290,7 +290,7 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_governance(),
+                action_types::update_governance(),
                 action_bytes,
                 iw,
             );
@@ -325,7 +325,7 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_slash_distribution(),
+                action_types::update_slash_distribution(),
                 action_bytes,
                 iw,
             );
@@ -359,7 +359,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_queue_params(),
+                action_types::update_queue_params(),
                 action_bytes,
                 iw,
             );
@@ -397,7 +397,7 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::update_conditional_metadata(),
+                action_types::update_conditional_metadata(),
                 action_bytes,
                 iw,
             );
@@ -439,7 +439,7 @@ public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::sponsorship_config_update(),
+                action_types::sponsorship_config_update(),
                 action_bytes,
                 iw,
             );
@@ -489,7 +489,7 @@ public fun create_update_early_resolve_config_intent<Outcome: store + drop + cop
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                action_type_markers::early_resolve_config_update(),
+                action_types::early_resolve_config_update(),
                 action_bytes,
                 iw,
             );

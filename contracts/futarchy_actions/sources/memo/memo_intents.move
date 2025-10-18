@@ -7,7 +7,7 @@ use account_protocol::account::Account;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Intent, Params};
 use futarchy_actions::memo_actions;
-use futarchy_types::action_type_markers;
+use futarchy_types::action_type_markers as action_types;
 use futarchy_core::version;
 use std::option::Option;
 use std::string::String;
@@ -41,7 +41,7 @@ public fun create_emit_memo_intent<Config, Outcome: store>(
         |intent, iw| {
             let action = memo_actions::new_emit_memo_action(memo);
             let action_bytes = bcs::to_bytes(&action);
-            intent.add_typed_action(action_type_markers::memo(), action_bytes, iw);
+            intent.add_typed_action(action_types::memo(), action_bytes, iw);
         },
     );
 }
@@ -68,7 +68,7 @@ public fun create_emit_decision_intent<Config, Outcome: store>(
                 reference_id,
             );
             let action_bytes = bcs::to_bytes(&action);
-            intent.add_typed_action(action_type_markers::memo(), action_bytes, iw);
+            intent.add_typed_action(action_types::memo(), action_bytes, iw);
         },
     );
 }

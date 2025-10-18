@@ -337,7 +337,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 
     let governance_config = dao_config::new_governance_config(
         max_outcomes,
-        100, // max_actions_per_outcome
+        20, // max_actions_per_outcome (protocol limit)
         1000000, // proposal_fee_per_outcome (1 token per outcome)
         100_000_000, // required_bond_amount
         50, // max_concurrent_proposals
@@ -539,7 +539,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 
 #[test_only]
 /// Internal function to create a DAO for testing without Extensions
-fun create_dao_internal_test<AssetType: drop, StableType>(
+fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
@@ -609,7 +609,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 
     let governance_config = dao_config::new_governance_config(
         max_outcomes,
-        100, // max_actions_per_outcome
+        20, // max_actions_per_outcome (protocol limit)
         1000000, // proposal_fee_per_outcome (1 token per outcome)
         100_000_000, // required_bond_amount
         50, // max_concurrent_proposals
@@ -1077,7 +1077,7 @@ public fun create_factory(ctx: &mut TxContext) {
 
 #[test_only]
 /// Create a DAO for testing without Extensions
-public entry fun create_dao_test<AssetType: drop, StableType>(
+public entry fun create_dao_test<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
@@ -1090,7 +1090,8 @@ public entry fun create_dao_test<AssetType: drop, StableType>(
     twap_start_delay: u64,
    twap_step_max: u64,
    twap_initial_observation: u128,
-    twap_threshold: SignedU128,
+    twap_threshold_magnitude: u128,
+    twap_threshold_negative: bool,
     amm_total_fee_bps: u64,
     description: UTF8String,
     max_outcomes: u64,
@@ -1101,6 +1102,7 @@ public entry fun create_dao_test<AssetType: drop, StableType>(
 ) {
     // For testing, we bypass the Extensions requirement
     // by directly calling the test internal function
+    let twap_threshold = signed::new(twap_threshold_magnitude, twap_threshold_negative);
     create_dao_internal_test<AssetType, StableType>(
         factory,
         fee_manager,

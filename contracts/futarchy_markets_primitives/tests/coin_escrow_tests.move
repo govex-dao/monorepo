@@ -6,7 +6,7 @@ use futarchy_markets_primitives::market_state::{Self, MarketState};
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
 use sui::clock;
-use sui::coin::{Self, TreasuryCap, CoinMetadata};
+use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
 use sui::test_scenario as ts;
 use sui::test_utils;
 
@@ -2392,8 +2392,8 @@ fun test_split_stable_complete_set_2_basic() {
     assert!(cond_0.value() == 2000, 3);
     assert!(cond_1.value() == 2000, 4);
 
-    coin::burn_for_testing(cond_0);
-    coin::burn_for_testing(cond_1);
+    coin::burn_for_testing<COND_0_STABLE>(cond_0);
+    coin::burn_for_testing<COND_1_STABLE>(cond_1);
 
     test_utils::destroy(escrow);
 
@@ -2446,7 +2446,7 @@ fun test_recombine_asset_complete_set_2_basic() {
     >(&mut escrow, cond_0, cond_1, ctx);
 
     assert!(spot_back.value() == 1000, 2);
-    coin::burn_for_testing(spot_back);
+    coin::burn_for_testing<TEST_COIN_A>(spot_back);
 
     // Supplies should now be zero and escrow balances restored
     let supply_0 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(
@@ -2506,7 +2506,7 @@ fun test_split_recombine_cycle_maintains_balance() {
     assert!(bal_asset == 0, 0);
     assert!(spot_back.value() == 500, 1);
 
-    coin::burn_for_testing(spot_back);
+    coin::burn_for_testing<TEST_COIN_A>(spot_back);
     test_utils::destroy(escrow);
 
     ts::end(scenario);
@@ -2563,9 +2563,9 @@ fun test_split_asset_complete_set_3_outcomes() {
     assert!(cond_1.value() == 1500, 4);
     assert!(cond_2.value() == 1500, 5);
 
-    coin::burn_for_testing(cond_0);
-    coin::burn_for_testing(cond_1);
-    coin::burn_for_testing(cond_2);
+    coin::burn_for_testing<COND_0_ASSET>(cond_0);
+    coin::burn_for_testing<COND_1_ASSET>(cond_1);
+    coin::burn_for_testing<COND_2_ASSET>(cond_2);
 
     test_utils::destroy(escrow);
 
@@ -2631,7 +2631,7 @@ fun test_recombine_asset_complete_set_3_outcomes() {
     let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
     assert!(bal_asset == 0, 4);
 
-    coin::burn_for_testing(spot);
+    coin::burn_for_testing<TEST_COIN_A>(spot);
     test_utils::destroy(escrow);
 
     ts::end(scenario);

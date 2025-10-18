@@ -487,11 +487,28 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
         // 1. Cancelling all cancellable streams
         // 2. Returning isolated pool funds to treasury
         // 3. Cancelling pending budget withdrawals
-        stream_actions::cancel_all_payments_for_dissolution<FutarchyConfig, CoinType>(
+        let (refund_coin, refund_amount) = stream_actions::cancel_all_payments_for_dissolution<FutarchyConfig, CoinType>(
             account,
             clock,
             ctx
         );
+
+        // Return funds to treasury using deposit_approved
+        // This uses the permissionless deposit pattern for approved coin types
+        // The treasury vault must have this coin type approved for this to work
+        // This is safer than creating auth as it explicitly requires prior approval
+        if (refund_coin.value() > 0) {
+            vault::deposit_approved(
+                account,
+                string::utf8(b"treasury"),
+                refund_coin
+            );
+        } else {
+            refund_coin.destroy_zero();
+        };
+
+        // Use refund_amount to avoid unused variable warning
+        let _ = refund_amount;
     };
     
     // Note: In production, you would:

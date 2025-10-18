@@ -664,7 +664,10 @@ public fun do_cancel_payment<Config: store, Outcome: store, CoinType: drop, IW: 
 
     // Return refund to treasury or sender based on flag
     if (action.return_unclaimed_to_treasury && refund_coin.value() > 0) {
-        vault::deposit_permissionless(
+        // Use vault::deposit_approved for permissionless deposit to treasury
+        // This requires the coin type to be approved for the treasury vault
+        // If not approved, the deposit will fail - this is a safety feature
+        vault::deposit_approved(
             account,
             string::utf8(b"treasury"),
             refund_coin
@@ -1548,9 +1551,6 @@ public fun cancel_all_payments_for_dissolution<Config: store, CoinType: drop>(
         return (coin::zero<CoinType>(ctx), 0)
     };
 
-    // Create auth for canceling vault streams
-    let auth = account::new_auth(account, version::current(), tx_context::sender(ctx));
-
     // Accumulator for all refunds
     let mut total_refund_coin = coin::zero<CoinType>(ctx);
     let mut total_refund_amount = 0u64;
@@ -1594,6 +1594,9 @@ public fun cancel_all_payments_for_dissolution<Config: store, CoinType: drop>(
                 // Cancel vault stream if it exists
                 if (vault_stream_id_opt.is_some()) {
                     let stream_id = *vault_stream_id_opt.borrow();
+
+                    // Create auth for each cancellation (auth doesn't have copy ability)
+                    let auth = account::new_auth(account, version::current(), tx_context::sender(ctx));
 
                     // Cancel the vault stream (this handles vested vs unvested split)
                     let (vault_refund, vault_amount) = vault::cancel_stream<Config, CoinType>(

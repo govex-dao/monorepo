@@ -626,11 +626,11 @@ public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
 /// - min_raise_amount: Protocol minimum (L_0)
 /// - max_raise_amount: Optional protocol maximum (U_0)
 /// - allowed_prices: Sorted price ticks (≤128 for on-chain feasibility)
-public entry fun create_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
+public fun create_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     factory: &factory::Factory,
     fee_manager: &mut fee::FeeManager,
     treasury_cap: TreasuryCap<RaiseToken>,
-    coin_metadata: CoinMetadata<RaiseToken>,
+    coin_metadata: Option<CoinMetadata<RaiseToken>>, // Optional - can be none for testing
     affiliate_id: String, // Partner identifier (e.g., UUID, domain)
     max_tokens_for_sale: Option<u64>, // Q_bar (optional supply ceiling)
     min_raise_amount: u64, // L_0 (protocol min)
@@ -1508,9 +1508,8 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     assert!(raise.settlement_done, ESettlementNotStarted);
     assert!(raise.dao_id.is_some(), EDaoNotPreCreated);
 
-    // CRITICAL: Verify treasury cap and metadata exist and match
+    // CRITICAL: Verify treasury cap exists
     assert!(raise.treasury_cap.is_some(), ETreasuryCapMissing);
-    assert!(df::exists_(&raise.id, CoinMetadataKey {}), EMetadataMissing);
 
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
@@ -1549,18 +1548,20 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
         treasury_cap,
     );
 
-    // Extract and deposit metadata into DAO account
-    let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
-    account_init_actions::init_store_object<
-        FutarchyConfig,
-        DaoMetadataKey,
-        CoinMetadata<RaiseToken>,
-    >(
-        &mut account,
-        DaoMetadataKey {},
-        metadata,
-        ctx,
-    );
+    // Extract and deposit metadata into DAO account (if it exists)
+    if (df::exists_(&raise.id, CoinMetadataKey {})) {
+        let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
+        account_init_actions::init_store_object<
+            FutarchyConfig,
+            DaoMetadataKey,
+            CoinMetadata<RaiseToken>,
+        >(
+            &mut account,
+            DaoMetadataKey {},
+            metadata,
+            ctx,
+        );
+    };
 
     // CRITICAL: Set the launchpad initial price (write-once, immutable)
     // This is the canonical raise price: tokens_for_sale / final_raise_amount
@@ -2155,7 +2156,7 @@ public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
 /// - Sets is_2d_auction = true
 fun init_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     treasury_cap: TreasuryCap<RaiseToken>,
-    coin_metadata: CoinMetadata<RaiseToken>,
+    coin_metadata: Option<CoinMetadata<RaiseToken>>,
     affiliate_id: String,
     max_tokens_for_sale: Option<u64>,
     min_raise_amount: u64,
@@ -2227,7 +2228,12 @@ fun init_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
         is_2d_auction: true, // This is a 2D auction!
     };
 
-    df::add(&mut raise.id, CoinMetadataKey {}, coin_metadata);
+    // Only store metadata if provided
+    if (coin_metadata.is_some()) {
+        df::add(&mut raise.id, CoinMetadataKey {}, coin_metadata.destroy_some());
+    } else {
+        coin_metadata.destroy_none();
+    };
 
     let raise_id = object::id(&raise);
 

@@ -1344,6 +1344,7 @@ public fun destroy_for_testing<AssetType, StableType>(
             last_proposal_usage: _,
             conditional_liquidity_ratio_percent: _,
             oracle_conditional_threshold_bps: _,
+            spot_cumulative_at_lock: _,
             protocol_fees_stable,
         } = config;
 
