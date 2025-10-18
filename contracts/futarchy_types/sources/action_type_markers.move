@@ -125,10 +125,6 @@ public struct AddWithdrawer has drop {}
 public struct RemoveWithdrawers has drop {}
 public struct TogglePayment has drop {}
 
-// === Dividend Action Types ===
-
-public struct CreateDividend has drop {}
-
 // === Oracle Action Types ===
 
 public struct ReadOraclePrice has drop {}
@@ -226,6 +222,7 @@ public struct Memo has drop {}
 // === Protocol Admin Action Types ===
 
 public struct SetFactoryPaused has drop {}
+public struct DisableFactoryPermanently has drop {}
 public struct AddStableType has drop {}
 public struct RemoveStableType has drop {}
 public struct UpdateDaoCreationFee has drop {}
@@ -548,6 +545,8 @@ public fun emit_decision(): TypeName { type_name::with_defining_ids<Memo>() }
 // Protocol admin actions
 public fun set_factory_paused(): TypeName { type_name::with_defining_ids<SetFactoryPaused>() }
 
+public fun disable_factory_permanently(): TypeName { type_name::with_defining_ids<DisableFactoryPermanently>() }
+
 public fun add_stable_type(): TypeName { type_name::with_defining_ids<AddStableType>() }
 
 public fun remove_stable_type(): TypeName { type_name::with_defining_ids<RemoveStableType>() }
@@ -635,6 +634,3 @@ public fun walrus_renewal(): TypeName { type_name::with_defining_ids<WalrusRenew
 
 // Quota actions
 public fun set_quotas(): TypeName { type_name::with_defining_ids<SetQuotas>() }
-
-// Dividend actions
-public fun create_dividend(): TypeName { type_name::with_defining_ids<CreateDividend>() }

@@ -22,7 +22,6 @@ use futarchy_legal_actions::dao_file_actions;
 use futarchy_legal_actions::walrus_renewal;
 use futarchy_lifecycle::dissolution_actions;
 use futarchy_oracle::oracle_actions;
-use futarchy_dividend_actions::dividend_actions;
 use futarchy_stream_actions::stream_actions;
 
 /// Register one delete_* per action you actually use in futarchy.
@@ -254,11 +253,6 @@ public fun delete_cancel_challenged_withdrawals(expired: &mut Expired) {
 // === Memo Actions ===
 public fun delete_memo(expired: &mut Expired) {
     memo_actions::delete_memo(expired);
-}
-
-// === Dividend Actions ===
-public fun delete_create_dividend<CoinType>(expired: &mut Expired) {
-    dividend_actions::delete_create_dividend<CoinType>(expired);
 }
 
 // === Platform Fee Actions ===

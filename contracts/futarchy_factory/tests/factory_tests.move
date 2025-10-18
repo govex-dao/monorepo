@@ -460,3 +460,132 @@ fun test_launchpad_bid_placement() {
     ts::end(scenario);
 }
 
+
+#[test]
+#[expected_failure(abort_code = factory::EPermanentlyDisabled)]
+fun test_permanent_disable_prevents_dao_creation() {
+    let sender = @0xA;
+    let mut scenario = setup_test(sender);
+
+    // Permanently disable the factory
+    ts::next_tx(&mut scenario, sender);
+    {
+        let mut factory = ts::take_shared<factory::Factory>(&scenario);
+        let owner_cap = ts::take_from_sender<factory::FactoryOwnerCap>(&scenario);
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+        // Verify not disabled initially
+        assert!(!factory::is_permanently_disabled(&factory), 0);
+
+        // Permanently disable
+        factory::disable_permanently(&mut factory, &owner_cap, &clock, ts::ctx(&mut scenario));
+
+        // Verify it is now disabled
+        assert!(factory::is_permanently_disabled(&factory), 1);
+
+        clock::destroy_for_testing(clock);
+        ts::return_to_sender(&scenario, owner_cap);
+        ts::return_shared(factory);
+    };
+
+    // Try to create a DAO - this should fail with EPermanentlyDisabled
+    ts::next_tx(&mut scenario, sender);
+    {
+        let mut factory = ts::take_shared<factory::Factory>(&scenario);
+        let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+        let payment = create_payment(100_000_000, &mut scenario);
+
+        factory::create_dao_test<TEST_ASSET_REGULAR, TEST_STABLE_REGULAR>(
+            &mut factory,
+            &mut fee_manager,
+            payment,
+            1_000_000,
+            1_000_000,
+            b"Test DAO".to_ascii_string(),
+            b"https://example.com/icon.png".to_ascii_string(),
+            86_400_000, // 1 day review
+            86_400_000, // 1 day trading
+            60_000,     // 1 minute delay
+            10,         // twap_step_max
+            1_000_000_000_000, // twap_initial_observation
+            100_000,    // twap_threshold_magnitude (0.1 = 10%)
+            false,      // twap_threshold_negative
+            30,         // 0.3% AMM fee
+            b"Test DAO Description".to_string(),
+            2,          // max_outcomes
+            vector::empty(),
+            vector::empty(),
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+
+        clock::destroy_for_testing(clock);
+        ts::return_shared(fee_manager);
+        ts::return_shared(factory);
+    };
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_pause_is_reversible_but_disable_is_not() {
+    let sender = @0xA;
+    let mut scenario = setup_test(sender);
+
+    ts::next_tx(&mut scenario, sender);
+    {
+        let mut factory = ts::take_shared<factory::Factory>(&scenario);
+        let owner_cap = ts::take_from_sender<factory::FactoryOwnerCap>(&scenario);
+
+        // Test pause/unpause (reversible)
+        assert!(!factory::is_paused(&factory), 0);
+        factory::toggle_pause(&mut factory, &owner_cap);
+        assert!(factory::is_paused(&factory), 1);
+        factory::toggle_pause(&mut factory, &owner_cap);
+        assert!(!factory::is_paused(&factory), 2);
+
+        // Test permanent disable (not reversible)
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        assert!(!factory::is_permanently_disabled(&factory), 3);
+        factory::disable_permanently(&mut factory, &owner_cap, &clock, ts::ctx(&mut scenario));
+        assert!(factory::is_permanently_disabled(&factory), 4);
+
+        // Verify there is no way to reverse it - the flag stays true
+        // (No function exists to set it back to false)
+
+        clock::destroy_for_testing(clock);
+        ts::return_to_sender(&scenario, owner_cap);
+        ts::return_shared(factory);
+    };
+
+    ts::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = factory::EAlreadyDisabled)]
+fun test_disable_twice_fails() {
+    let sender = @0xA;
+    let mut scenario = setup_test(sender);
+
+    ts::next_tx(&mut scenario, sender);
+    {
+        let mut factory = ts::take_shared<factory::Factory>(&scenario);
+        let owner_cap = ts::take_from_sender<factory::FactoryOwnerCap>(&scenario);
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+        // First disable - should succeed
+        factory::disable_permanently(&mut factory, &owner_cap, &clock, ts::ctx(&mut scenario));
+        assert!(factory::is_permanently_disabled(&factory), 0);
+
+        // Second disable - should fail with EAlreadyDisabled
+        factory::disable_permanently(&mut factory, &owner_cap, &clock, ts::ctx(&mut scenario));
+
+        clock::destroy_for_testing(clock);
+        ts::return_to_sender(&scenario, owner_cap);
+        ts::return_shared(factory);
+    };
+
+    ts::end(scenario);
+}

@@ -52,6 +52,8 @@ const ELongTwapDelayTime: u64 = 8;
 const ETwapInitialTooLarge: u64 = 9;
 const EDelayNearTotalTrading: u64 = 10;
 const EInvalidStateForAction: u64 = 11;
+const EPermanentlyDisabled: u64 = 12;
+const EAlreadyDisabled: u64 = 13;
 
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1;
@@ -71,6 +73,7 @@ public struct Factory has key, store {
     id: UID,
     dao_count: u64,
     paused: bool,
+    permanently_disabled: bool,
     owner_cap_id: ID,
     allowed_stable_types: VecSet<TypeName>,
 }
@@ -109,6 +112,12 @@ public struct StableCoinTypeRemoved has copy, drop {
     timestamp: u64,
 }
 
+public struct FactoryPermanentlyDisabled has copy, drop {
+    admin: address,
+    dao_count_at_shutdown: u64,
+    timestamp: u64,
+}
+
 // === Internal Helper Functions ===
 // Note: Action registry removed - using statically-typed pattern like move-framework
 
@@ -127,6 +136,7 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
+        permanently_disabled: false,
         owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty(),
     };
@@ -290,6 +300,9 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Check factory is not permanently disabled
+    assert!(!factory.permanently_disabled, EPermanentlyDisabled);
+
     // Check factory is active
     assert!(!factory.paused, EPaused);
 
@@ -563,6 +576,9 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Check factory is not permanently disabled
+    assert!(!factory.permanently_disabled, EPermanentlyDisabled);
+
     // Check factory is active
     assert!(!factory.paused, EPaused);
 
@@ -834,6 +850,9 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Account<FutarchyConfig>, ProposalQueue<StableType>, UnifiedSpotPool<AssetType, StableType>) {
+    // Check factory is not permanently disabled
+    assert!(!factory.permanently_disabled, EPermanentlyDisabled);
+
     // Check factory is active
     assert!(!factory.paused, EPaused);
 
@@ -968,10 +987,33 @@ public fun finalize_and_share_dao<AssetType, StableType>(
 
 // === Admin Functions ===
 
-/// Toggle factory pause state
+/// Toggle factory pause state (reversible)
 public entry fun toggle_pause(factory: &mut Factory, cap: &FactoryOwnerCap) {
     assert!(object::id(cap) == factory.owner_cap_id, EBadWitness);
     factory.paused = !factory.paused;
+}
+
+/// Permanently disable the factory - THIS CANNOT BE REVERSED
+/// Once called, no new DAOs can ever be created from this factory
+/// Existing DAOs are unaffected and continue to operate normally
+public entry fun disable_permanently(
+    factory: &mut Factory,
+    cap: &FactoryOwnerCap,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(cap) == factory.owner_cap_id, EBadWitness);
+
+    // Idempotency check: prevent duplicate disable and event emission
+    assert!(!factory.permanently_disabled, EAlreadyDisabled);
+
+    factory.permanently_disabled = true;
+
+    event::emit(FactoryPermanentlyDisabled {
+        admin: ctx.sender(),
+        dao_count_at_shutdown: factory.dao_count,
+        timestamp: clock.timestamp_ms(),
+    });
 }
 
 /// Add an allowed stable coin type
@@ -1031,15 +1073,25 @@ public fun dao_count(factory: &Factory): u64 {
     factory.dao_count
 }
 
-/// Check if factory is paused
+/// Check if factory is paused (reversible)
 public fun is_paused(factory: &Factory): bool {
     factory.paused
+}
+
+/// Check if factory is permanently disabled (irreversible)
+public fun is_permanently_disabled(factory: &Factory): bool {
+    factory.permanently_disabled
 }
 
 /// Check if a stable type is allowed
 public fun is_stable_type_allowed<StableType>(factory: &Factory): bool {
     let type_name_val = type_name::with_defining_ids<StableType>();
     factory.allowed_stable_types.contains(&type_name_val)
+}
+
+/// Get the permanently disabled error code (for external modules)
+public fun permanently_disabled_error(): u64 {
+    EPermanentlyDisabled
 }
 
 // === Private Functions ===
@@ -1062,6 +1114,7 @@ public fun create_factory(ctx: &mut TxContext) {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
+        permanently_disabled: false,
         owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty(),
     };

@@ -643,7 +643,11 @@ public fun create_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Collect launchpad creation fee
+    // CRITICAL: Check factory is not permanently disabled FIRST
+    // This prevents users from paying fees for raises that can never complete
+    assert!(!factory::is_permanently_disabled(factory), factory::permanently_disabled_error());
+
+    // Collect launchpad creation fee (after factory check)
     fee::deposit_launchpad_creation_payment(fee_manager, launchpad_fee, clock, ctx);
 
     // CRITICAL: Validate parameters

@@ -89,6 +89,11 @@ public struct SetFactoryPausedAction has store, drop {
     paused: bool,
 }
 
+/// Permanently disable the factory - CANNOT BE REVERSED
+public struct DisableFactoryPermanentlyAction has store, drop {
+    // No fields needed - this is a one-way operation
+}
+
 /// Add a stable coin type to the factory whitelist
 public struct AddStableTypeAction has store, drop {
     stable_type: TypeName,
@@ -208,6 +213,10 @@ public struct UpdateCoinRecoveryFeeAction has store, drop {
 
 public fun new_set_factory_paused(paused: bool): SetFactoryPausedAction {
     SetFactoryPausedAction { paused }
+}
+
+public fun new_disable_factory_permanently(): DisableFactoryPermanentlyAction {
+    DisableFactoryPermanentlyAction {}
 }
 
 public fun new_add_stable_type(stable_type: TypeName): AddStableTypeAction {
@@ -347,10 +356,43 @@ public fun do_set_factory_paused<Outcome: store, IW: drop>(
     );
     
     // Toggle pause state if action says to pause and factory is unpaused, or vice versa
-    if ((action.paused && !factory::is_paused(factory)) || 
+    if ((action.paused && !factory::is_paused(factory)) ||
         (!action.paused && factory::is_paused(factory))) {
         factory::toggle_pause(factory, cap);
     }
+}
+
+/// Execute permanent factory disable action - THIS CANNOT BE REVERSED
+public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    factory: &mut Factory,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::DisableFactoryPermanently>(spec);
+
+    // No deserialization needed - action has no fields
+    let _action = DisableFactoryPermanentlyAction {};
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
+    let _ = witness;
+
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
+        account,
+        b"protocol:factory_owner_cap".to_string(),
+        version
+    );
+
+    // Permanently disable the factory - THIS CANNOT BE UNDONE
+    factory::disable_permanently(factory, cap, clock, ctx);
 }
 
 /// Execute add stable type action

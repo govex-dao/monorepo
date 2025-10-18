@@ -202,7 +202,6 @@ declare -a PACKAGES=(
     "futarchy_vault:/Users/admin/monorepo/contracts/futarchy_vault:futarchy_vault"
     "futarchy_multisig:/Users/admin/monorepo/contracts/futarchy_multisig:futarchy_multisig"
     "futarchy_oracle:/Users/admin/monorepo/contracts/futarchy_oracle_actions:futarchy_oracle"
-    "futarchy_dividend_actions:/Users/admin/monorepo/contracts/futarchy_dividend_actions:futarchy_dividend_actions"
     "futarchy_stream_actions:/Users/admin/monorepo/contracts/futarchy_stream_actions:futarchy_stream_actions"
     "futarchy_lifecycle:/Users/admin/monorepo/contracts/futarchy_lifecycle:futarchy_lifecycle"
     "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"

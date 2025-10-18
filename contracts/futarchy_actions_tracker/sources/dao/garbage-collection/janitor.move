@@ -132,9 +132,6 @@ fun drain_common_generics(expired: &mut Expired) {
 
     // NOTE: Oracle Mint Actions removed - ConditionalMint/TieredMint replaced by PriceBasedMintGrant
 
-    // Dividend Actions (phantom CoinType)
-    gc_registry::delete_create_dividend<SUI>(expired);
-
     // Liquidity Actions for common pairs (phantom AssetType, StableType)
     drain_liquidity_generic_actions_for_pair<SUI, SUI>(expired);
 
