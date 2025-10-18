@@ -958,7 +958,7 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
 
 /// Backfill spot's SimpleTWAP with winning conditional's data after proposal ends
 /// This fills the gap [proposal_start, proposal_end] with conditional's price history
-/// Updates BOTH arithmetic (lending) and geometric (oracle grants) windows using oracle support
+/// Updates oracle windows using winning conditional's data
 public fun backfill_from_winning_conditional<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     winning_conditional_oracle: &SimpleTWAP,
@@ -1008,17 +1008,6 @@ public fun is_twap_ready<AssetType, StableType>(
 
     let config = pool.aggregator_config.borrow();
     PCW_TWAP_oracle::is_ready(&config.simple_twap, clock)
-}
-
-/// Get lending TWAP (30-minute arithmetic window)
-/// Used by lending protocols for collateral valuation
-public fun get_lending_twap<AssetType, StableType>(
-    pool: &UnifiedSpotPool<AssetType, StableType>,
-    _clock: &Clock,
-): u128 {
-    assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
-    let config = pool.aggregator_config.borrow();
-    PCW_TWAP_oracle::get_twap(&config.simple_twap)
 }
 
 /// Get governance TWAP (90-day arithmetic window)

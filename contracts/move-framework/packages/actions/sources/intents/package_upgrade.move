@@ -36,6 +36,8 @@ const ETimeDelay: u64 = 4;
 public struct UpgradePackageIntent() has copy, drop;
 /// Intent Witness defining the intent to restrict an UpgradeCap.
 public struct RestrictPolicyIntent() has copy, drop;
+/// Intent Witness defining the intent to create and transfer a commit cap.
+public struct CreateCommitCapIntent() has copy, drop;
 
 // === Public Functions ===
 
@@ -92,21 +94,47 @@ public fun execute_upgrade_package<Config, Outcome: store>(
     )
 }
 
-/// Need to consume the ticket to upgrade the package before completing the intent.
-
-public fun execute_commit_upgrade<Config, Outcome: store>(
+/// Commits upgrade - DAO-only mode (no commit cap required)
+/// Use this when DAO has full control over upgrades OR when reclaim timelock has expired
+/// If reclaim is pending, validates that timelock has passed
+public fun execute_commit_upgrade_dao_only<Config, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     receipt: UpgradeReceipt,
+    clock: &Clock,
 ) {
     account.process_intent!(
         executable,
         version::current(),
         UpgradePackageIntent(),
-        |executable, iw| package_upgrade::do_commit(
+        |executable, iw| package_upgrade::do_commit_dao_only(
             executable,
             account,
             receipt,
+            clock,
+            version::current(),
+            iw,
+        ),
+    )
+}
+
+/// Commits upgrade - Core team mode (requires commit cap)
+/// Use this when core team/multisig holds commit authority
+public fun execute_commit_upgrade_with_cap<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    receipt: UpgradeReceipt,
+    commit_cap: &package_upgrade::UpgradeCommitCap,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        UpgradePackageIntent(),
+        |executable, iw| package_upgrade::do_commit_with_cap(
+            executable,
+            account,
+            receipt,
+            commit_cap,
             version::current(),
             iw,
         ),
@@ -157,4 +185,52 @@ public fun execute_restrict_policy<Config, Outcome: store>(
         RestrictPolicyIntent(),
         |executable, iw| package_upgrade::do_restrict(executable, account, version::current(), iw),
     );
+}
+
+/// Creates a CreateCommitCapIntent to give commit authority to a new team via governance
+/// This allows the DAO to vote on transferring commit authority and set new reclaim delay
+public fun request_create_commit_cap<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    params: Params,
+    outcome: Outcome,
+    package_name: String,
+    recipient: address,
+    new_reclaim_delay_ms: u64,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    params.assert_single_execution();
+
+    assert!(package_upgrade::has_cap(account, package_name), ENoLock);
+
+    account.build_intent!(
+        params,
+        outcome,
+        package_name,
+        version::current(),
+        CreateCommitCapIntent(),
+        ctx,
+        |intent, iw| package_upgrade::new_create_commit_cap(intent, package_name, recipient, new_reclaim_delay_ms, iw),
+    );
+}
+
+/// Executes a CreateCommitCapIntent, creating and transferring commit cap to recipient
+public fun execute_create_commit_cap<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    ctx: &mut TxContext,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        CreateCommitCapIntent(),
+        |executable, iw| package_upgrade::do_create_commit_cap(
+            executable,
+            account,
+            ctx,
+            version::current(),
+            iw,
+        ),
+    )
 }

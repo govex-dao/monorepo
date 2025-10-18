@@ -308,6 +308,7 @@ fun test_init_lock_upgrade_cap() {
     destroy(publisher);
 
     let delay_ms = 7 * 24 * 60 * 60 * 1000; // 7 days
+    let reclaim_delay_ms = 15552000000; // 6 months
 
     // Lock upgrade cap during init
     init_actions::init_lock_upgrade_cap<Config>(
@@ -315,6 +316,7 @@ fun test_init_lock_upgrade_cap() {
         upgrade_cap,
         b"test_package",
         delay_ms,
+        reclaim_delay_ms,
     );
 
     // Verify cap is locked

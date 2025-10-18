@@ -424,13 +424,13 @@ public fun get_spot_price_after(detailed: &DetailedSpotQuote): u64 {
 // === Oracle Price Functions ===
 
 /// Get combined oracle price from spot AMM
-/// Returns the spot AMM lending TWAP (30-minute arithmetic for trading)
+/// Returns the spot AMM current price
 public fun get_combined_oracle_price<AssetType, StableType>(
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
-    clock: &Clock,
+    _clock: &Clock,
 ): u128 {
-    // Return the spot AMM lending TWAP (30-minute window for immediate trading decisions)
-    unified_spot_pool::get_lending_twap(spot_pool, clock)
+    // Return the spot AMM current price
+    unified_spot_pool::get_spot_price(spot_pool)
 }
 
 /// Check if a price meets a threshold condition
@@ -465,12 +465,12 @@ public fun time_until_proposals_allowed<AssetType, StableType>(
 }
 
 /// Get initialization price for conditional AMMs
-/// Uses lending TWAP (30-minute) for immediate market initialization
+/// Uses current spot price for immediate market initialization
 public fun get_initialization_price<AssetType, StableType>(
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
-    clock: &Clock,
+    _clock: &Clock,
 ): u128 {
-    unified_spot_pool::get_lending_twap(spot_pool, clock)
+    unified_spot_pool::get_spot_price(spot_pool)
 }
 
 // === Test-Only Functions ===

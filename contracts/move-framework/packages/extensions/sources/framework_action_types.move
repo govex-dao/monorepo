@@ -71,6 +71,9 @@ public struct PackageCommit has drop {}
 /// Restrict upgrade policy
 public struct PackageRestrict has drop {}
 
+/// Create and transfer commit cap (governance action)
+public struct PackageCreateCommitCap has drop {}
+
 // ======== Vesting Actions ========
 
 /// Create vesting schedule
@@ -154,6 +157,8 @@ public fun package_upgrade(): PackageUpgrade { PackageUpgrade {} }
 public fun package_commit(): PackageCommit { PackageCommit {} }
 
 public fun package_restrict(): PackageRestrict { PackageRestrict {} }
+
+public fun package_create_commit_cap(): PackageCreateCommitCap { PackageCreateCommitCap {} }
 
 public fun vesting_create(): VestingCreate { VestingCreate {} }
 

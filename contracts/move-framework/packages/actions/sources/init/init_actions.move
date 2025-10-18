@@ -198,18 +198,51 @@ public fun init_create_team_vesting<Config, CoinType>(
 
 /// Lock upgrade cap during initialization
 /// Stores UpgradeCap in the Account for controlled package upgrades
+/// reclaim_delay_ms: Time before DAO can reclaim externally-held commit cap (e.g., 6 months)
 public fun init_lock_upgrade_cap<Config>(
     account: &mut Account<Config>,
     cap: UpgradeCap,
     package_name: vector<u8>,
     delay_ms: u64,
+    reclaim_delay_ms: u64,
 ) {
     package_upgrade::do_lock_cap_unshared(
         account,
         cap,
         string::utf8(package_name),
         delay_ms,
+        reclaim_delay_ms,
     );
+}
+
+/// Lock commit cap during initialization
+/// Creates and stores an UpgradeCommitCap in the Account
+/// This cap grants authority to commit package upgrades (finalize with UpgradeReceipt)
+public fun init_lock_commit_cap<Config>(
+    account: &mut Account<Config>,
+    package_name: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    package_upgrade::do_lock_commit_cap_unshared(
+        account,
+        string::utf8(package_name),
+        ctx,
+    );
+}
+
+/// Create commit cap and transfer to recipient during initialization
+/// Use this to give commit authority to an external multisig
+/// while the DAO Account holds the UpgradeCap
+public fun init_create_and_transfer_commit_cap<Config>(
+    package_name: vector<u8>,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    let commit_cap = package_upgrade::create_commit_cap_for_transfer(
+        string::utf8(package_name),
+        ctx,
+    );
+    package_upgrade::transfer_commit_cap(commit_cap, recipient);
 }
 
 // === Init Access Control Actions ===
