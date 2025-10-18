@@ -482,7 +482,7 @@ public fun collect_protocol_fees<AssetType, StableType>(
 ///
 /// Flow:
 /// 1. Proposal ends → auto_redeem_on_proposal_end() recombines liquidity (TRANSITIONING → WITHDRAW_ONLY)
-/// 2. This crank moves any remaining TRANSITIONING → WITHDRAW_ONLY (edge case: marked during no-proposal period)
+/// 2. This crank moves any remaining leaving → frozen (edge case: marked during no-proposal period)
 /// 3. Users can now call claim_withdrawal() to get their coins
 public entry fun crank_recombine_and_transition<AssetType, StableType>(
     spot_pool: &mut futarchy_markets_core::unified_spot_pool::UnifiedSpotPool<
@@ -490,9 +490,9 @@ public entry fun crank_recombine_and_transition<AssetType, StableType>(
         StableType,
     >,
 ) {
-    // Move all TRANSITIONING bucket amounts to WITHDRAW_ONLY
+    // Move all leaving bucket amounts to frozen claimable
     // This is an atomic batch operation that processes all pending withdrawals
-    futarchy_markets_core::unified_spot_pool::transition_to_withdraw_only(spot_pool);
+    futarchy_markets_core::unified_spot_pool::transition_leaving_to_frozen_claimable(spot_pool);
 }
 
 // === Test Helpers ===

@@ -137,15 +137,16 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
 
     // Get BOTH LIVE and TRANSITIONING bucket reserves
     // WITHDRAW_ONLY bucket stays in spot (frozen, ready for claiming)
-    let (spot_asset_live, spot_stable_live) = unified_spot_pool::get_live_reserves(spot_pool);
-    let spot_lp_live = unified_spot_pool::get_live_lp_supply(spot_pool);
+
+    let (spot_asset_live, spot_stable_live) = unified_spot_pool::get_active_quantum_lp_reserves(spot_pool);
+    let spot_lp_live = unified_spot_pool::get_active_quantum_lp_supply(spot_pool);
 
     // Get TRANSITIONING bucket reserves
     let (
         spot_asset_trans,
         spot_stable_trans,
         spot_lp_trans,
-    ) = unified_spot_pool::get_transitioning_reserves(spot_pool);
+    ) = unified_spot_pool::get_leaving_on_proposal_end_reserves(spot_pool);
 
     // Total LP supply across both buckets
     let total_lp = spot_lp_live + spot_lp_trans;
@@ -197,8 +198,8 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     let market_state = coin_escrow::get_market_state_mut(escrow);
 
     // Add to ALL conditional AMMs (quantum split - same amount to each)
-    // NOTE: We no longer track bucket counters in conditional AMMs
-    // Buckets are derived at redeem time from spot pool ratios
+    // IMPORTANT: This only happens at proposal START when all pools have identical ratios
+    // New LP added DURING proposals stays in spot and participates in the NEXT proposal
     let pools = market_state::borrow_amm_pools_mut(market_state);
     let mut i = 0;
     while (i < pools.length()) {
@@ -213,11 +214,6 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
             clock,
             ctx,
         );
-
-        // Bucket tracking removed - we derive buckets at redeem time
-        // from current reserves + original spot pool LP token ratios
-        // This fixes the desynchronization issue where swaps update reserves
-        // but never updated bucket counters
 
         i = i + 1;
     };
@@ -302,6 +298,10 @@ public fun auto_redeem_on_proposal_end<AssetType, StableType>(
         stable_live,
         stable_transitioning,
     );
+
+    // Merge PENDING bucket into LIVE now that proposal has ended
+    // New LP added during the proposal can now participate in future proposals
+    unified_spot_pool::merge_joining_to_active_quantum_lp(spot_pool);
 
     // Done! User LP tokens are now backed by spot liquidity again.
     // No need to mint new LP tokens - they existed throughout the quantum split.

@@ -61,19 +61,38 @@ public struct UnifiedSpotPool<phantom AssetType, phantom StableType> has key, st
     lp_supply: u64,
     fee_bps: u64,
     minimum_liquidity: u64,
-    // Bucket tracking for LP withdrawal system
-    // LIVE: Will quantum-split for next proposal
-    // TRANSITIONING: Won't quantum-split, but still trades in current proposal
-    // WITHDRAW_ONLY: Frozen, ready to claim (only in spot, not conditionals)
-    asset_live: u64,
-    asset_transitioning: u64,
-    asset_withdraw_only: u64,
-    stable_live: u64,
-    stable_transitioning: u64,
-    stable_withdraw_only: u64,
-    lp_live: u64,
-    lp_transitioning: u64,
-    lp_withdraw_only: u64,
+    // Bucket tracking for LP withdrawal system - HYPER EXPLICIT NAMES
+    //
+    // spot_active_quantum_lp:
+    //   - Normal active LP that quantum-splits when proposals start
+    //   - Can be removed anytime (if no proposal active)
+    //
+    // spot_leave_lp_when_proposal_ends:
+    //   - User marked for exit during active proposal
+    //   - Gets one final quantum-split to conditionals
+    //   - Becomes spot_frozen_claimable_lp when proposal ends
+    //
+    // spot_frozen_claimable_lp:
+    //   - Fully withdrawn, ready for user to claim
+    //   - Does NOT quantum-split (stays in spot)
+    //   - Final destination before burning LP token
+    //
+    // spot_join_quantum_lp_when_proposal_ends:
+    //   - New LP added during active proposal
+    //   - Does NOT quantum-split to current proposal (isolated from outcome)
+    //   - Becomes spot_active_quantum_lp when proposal ends
+    asset_spot_active_quantum_lp: u64,
+    asset_spot_leave_lp_when_proposal_ends: u64,
+    asset_spot_frozen_claimable_lp: u64,
+    asset_spot_join_quantum_lp_when_proposal_ends: u64,
+    stable_spot_active_quantum_lp: u64,
+    stable_spot_leave_lp_when_proposal_ends: u64,
+    stable_spot_frozen_claimable_lp: u64,
+    stable_spot_join_quantum_lp_when_proposal_ends: u64,
+    lp_spot_active_quantum_lp: u64,
+    lp_spot_leave_lp_when_proposal_ends: u64,
+    lp_spot_frozen_claimable_lp: u64,
+    lp_spot_join_quantum_lp_when_proposal_ends: u64,
     // Optional aggregator configuration
     aggregator_config: Option<AggregatorConfig<AssetType, StableType>>,
 }
@@ -194,16 +213,19 @@ public fun new<AssetType, StableType>(
         lp_supply: 0,
         fee_bps,
         minimum_liquidity: MINIMUM_LIQUIDITY,
-        // Initialize all liquidity in LIVE bucket
+        // Initialize all buckets to zero
         asset_live: 0,
         asset_transitioning: 0,
         asset_withdraw_only: 0,
+        asset_pending: 0,
         stable_live: 0,
         stable_transitioning: 0,
         stable_withdraw_only: 0,
+        stable_pending: 0,
         lp_live: 0,
         lp_transitioning: 0,
         lp_withdraw_only: 0,
+        lp_pending: 0,
         aggregator_config: option::none(),
     }
 }
@@ -235,16 +257,19 @@ public fun new_with_aggregator<AssetType, StableType>(
         lp_supply: 0,
         fee_bps,
         minimum_liquidity: MINIMUM_LIQUIDITY,
-        // Initialize all liquidity in LIVE bucket
+        // Initialize all buckets to zero
         asset_live: 0,
         asset_transitioning: 0,
         asset_withdraw_only: 0,
+        asset_pending: 0,
         stable_live: 0,
         stable_transitioning: 0,
         stable_withdraw_only: 0,
+        stable_pending: 0,
         lp_live: 0,
         lp_transitioning: 0,
         lp_withdraw_only: 0,
+        lp_pending: 0,
         aggregator_config: option::some(aggregator_config),
     }
 }
@@ -315,6 +340,12 @@ public fun get_active_escrow_id<AssetType, StableType>(
 // === Core AMM Functions ===
 
 /// Add liquidity to the pool and return LP token
+///
+/// IMPORTANT: LP can be added anytime, including during active proposals.
+/// - If no proposal active: LP goes to LIVE bucket (participates immediately)
+/// - If proposal active: LP goes to PENDING bucket (joins spot pool when proposal ends)
+///
+/// This prevents new LP from unfairly benefiting from conditional market outcomes.
 public fun add_liquidity<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_coin: Coin<AssetType>,
@@ -349,7 +380,9 @@ public fun add_liquidity_and_return<AssetType, StableType>(
         pool.lp_supply = pool.minimum_liquidity;
         initial_lp - pool.minimum_liquidity
     } else {
-        // Proportional liquidity
+        // Proportional liquidity based on current reserves
+        // NOTE: This function is now blocked during active proposals,
+        // so we always use actual spot reserves (no quantum-split complexity)
         let asset_reserve = balance::value(&pool.asset_reserve);
         let stable_reserve = balance::value(&pool.stable_reserve);
 
@@ -369,10 +402,19 @@ public fun add_liquidity_and_return<AssetType, StableType>(
 
     pool.lp_supply = pool.lp_supply + lp_amount;
 
-    // Add to LIVE bucket (new liquidity is always added to LIVE)
-    pool.asset_live = pool.asset_live + asset_amount;
-    pool.stable_live = pool.stable_live + stable_amount;
-    pool.lp_live = pool.lp_live + lp_amount;
+    // Route to appropriate bucket based on proposal status
+    if (is_locked_for_proposal(pool)) {
+        // Proposal is active - add to PENDING bucket
+        // This LP will merge into LIVE when proposal ends
+        pool.asset_pending = pool.asset_pending + asset_amount;
+        pool.stable_pending = pool.stable_pending + stable_amount;
+        pool.lp_pending = pool.lp_pending + lp_amount;
+    } else {
+        // No active proposal - add to LIVE bucket
+        pool.asset_live = pool.asset_live + asset_amount;
+        pool.stable_live = pool.stable_live + stable_amount;
+        pool.lp_live = pool.lp_live + lp_amount;
+    };
 
     // Create and return LP token (unlocked, normal mode by default)
     LPToken<AssetType, StableType> {
@@ -382,6 +424,21 @@ public fun add_liquidity_and_return<AssetType, StableType>(
         locked_in_proposal: option::none(),
         withdraw_mode: false,
     }
+}
+
+/// Merge PENDING bucket into LIVE bucket
+/// Called after proposal ends to activate LP that was added during the proposal
+public(package) fun merge_joining_to_active_quantum_lp<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+) {
+    pool.asset_live = pool.asset_live + pool.asset_pending;
+    pool.stable_live = pool.stable_live + pool.stable_pending;
+    pool.lp_live = pool.lp_live + pool.lp_pending;
+
+    // Reset pending buckets to zero
+    pool.asset_pending = 0;
+    pool.stable_pending = 0;
+    pool.lp_pending = 0;
 }
 
 /// Remove liquidity from the pool
@@ -588,7 +645,7 @@ public fun withdraw_lp<AssetType, StableType>(
 /// Transition all TRANSITIONING bucket amounts to WITHDRAW_ONLY
 /// Called by crank when proposal finalizes
 /// This is an atomic batch operation that makes all marked LPs claimable
-public fun transition_to_withdraw_only<AssetType, StableType>(
+public(package) fun transition_leaving_to_claimable<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
 ) {
     // Move all TRANSITIONING amounts to WITHDRAW_ONLY
@@ -699,28 +756,28 @@ public fun lp_supply<AssetType, StableType>(pool: &UnifiedSpotPool<AssetType, St
 }
 
 /// Get LIVE bucket reserves (will quantum-split for next proposal)
-public fun get_live_reserves<AssetType, StableType>(
+public fun get_active_quantum_lp_reserves<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
 ): (u64, u64) {
     (pool.asset_live, pool.stable_live)
 }
 
 /// Get LIVE bucket LP supply
-public fun get_live_lp_supply<AssetType, StableType>(
+public fun get_active_quantum_lp_supply<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
 ): u64 {
     pool.lp_live
 }
 
 /// Get TRANSITIONING bucket reserves (will move to WITHDRAW_ONLY when proposal ends)
-public fun get_transitioning_reserves<AssetType, StableType>(
+public fun get_leaving_on_proposal_end_reserves<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
 ): (u64, u64, u64) {
     (pool.asset_transitioning, pool.stable_transitioning, pool.lp_transitioning)
 }
 
 /// Get WITHDRAW_ONLY bucket reserves (frozen, ready for claiming)
-public fun get_withdraw_only_reserves<AssetType, StableType>(
+public fun get_frozen_claimable_lp_reserves<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
 ): (u64, u64, u64) {
     (pool.asset_withdraw_only, pool.stable_withdraw_only, pool.lp_withdraw_only)
