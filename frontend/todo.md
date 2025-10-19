@@ -24,3 +24,5 @@ get in here
 - [ ] show exact time of trade on frontend
 - [ ] start on proposal descrption tab not your coins?
 - [ ] we are only cahing actions
+- [ ] base trading price UI argins TWAPs, spot
+- [ ] make CA visable in UI

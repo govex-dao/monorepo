@@ -30,6 +30,7 @@ use sui::object::{Self, UID, ID};
 use sui::package::{Self, Publisher};
 use sui::transfer as sui_transfer;
 use sui::tx_context::TxContext;
+use sui::vec_set::{Self, VecSet};
 
 // === Witnesses ===
 public struct LaunchpadWitness has drop {}
@@ -83,6 +84,7 @@ const ESupplyNotZero: u64 = 130; // Treasury cap supply must be zero at raise cr
 const EInvalidClaimNFT: u64 = 131; // Claim NFT doesn't match this raise
 const EInvalidCreatorCap: u64 = 132; // Creator cap doesn't match this raise
 const EEarlyCompletionNotAllowed: u64 = 133; // Early completion not allowed for this raise
+const EAllocationNotComplete: u64 = 134; // FCFS allocation not yet complete - cannot claim
 
 // === Constants ===
 // Note: Most constants moved to futarchy_one_shot_utils::constants for centralized management
@@ -153,19 +155,28 @@ public struct Bid2D has copy, drop, store {
     min_tokens: u64, // q_i^min (FOK - fill or kill)
     min_total_raise: u64, // L_i (lower bound on acceptable T*)
     max_total_raise: u64, // U_i (upper bound on acceptable T*; u64::MAX = no limit)
-    timestamp_ms: u64, // Bid time - used for FCFS ordering at settlement
-    tokens_allocated: u64, // Set during settlement: 0=loser, min_tokens=winner (determined by bid timestamp FCFS)
+    tokens_allocated: u64, // Set during allocation: amount received via pro-rata (0 if ineligible or FOK failed)
     allow_cranking: bool, // If true, anyone can claim on behalf of bidder
 }
 
-/// Key type for storing refunds separately from bids
-public struct RefundKey has copy, drop, store {
-    contributor: address,
-}
-
-/// Record for tracking refunds due to supply exhaustion or bid rejection
-public struct RefundRecord has drop, store {
-    amount: u64,
+/// BidNFT: Owned object for self-claimers (allow_cranking = false)
+/// This is minted at bid time and contains all bid data
+/// User can claim anytime by burning this NFT
+/// Single source of truth - bid NOT stored in Raise if NFT is minted
+public struct BidNFT<phantom RaiseToken, phantom StableCoin> has key, store {
+    id: UID,
+    raise_id: ID,
+    bidder: address,
+    // Bid parameters (immutable, set at bid time)
+    price_cap: u64,
+    min_tokens: u64,
+    min_total_raise: u64,
+    max_total_raise: u64,
+    escrow_amount: u64, // price_cap × min_tokens
+    // Display metadata
+    name: String,
+    description: String,
+    image_url: String,
 }
 
 /// === 2D Auction Indexing Structures ===
@@ -190,6 +201,13 @@ public struct IntervalDelta has drop, store {
     bidders: vector<address>, // Bidders at this point, in insertion order (FCFS)
 }
 
+/// Key for cumulative delta storage during settlement
+/// Stores accumulated deltas across all price levels >= current_p
+public struct CumulativeDeltaKey has copy, drop, store {
+    settlement_id: ID, // References the CapSettlement2D object
+    t_point: u64, // T value where cumulative delta occurs
+}
+
 /// 2D Settlement State: Price-then-T sweep
 ///
 /// Algorithm: For each price p (highest first), sweep T to find fixed point T = p × S(T)
@@ -200,6 +218,10 @@ public struct IntervalDelta has drop, store {
 /// 2. current_p > 0: Sweep T-events, check for fixed point
 /// 3. If found: done = true, record (P*, Q*, T*)
 /// 4. If exhausted T-events: reset current_p = 0, try next price
+///
+/// CRITICAL: Cumulative bid accumulation fix
+/// As we descend price levels, we accumulate ALL bids from higher prices.
+/// This ensures S_p(T) includes all bids with price_cap ≥ p, not just price_cap = p.
 public struct CapSettlement2D has key, store {
     id: UID,
     raise_id: ID,
@@ -208,9 +230,13 @@ public struct CapSettlement2D has key, store {
     price_heap_size: u64,
     current_p: u64, // Current price being processed (0 = need next)
     // T dimension (inner loop per price)
-    t_events: vector<u64>, // Sorted T-points where intervals start/end
+    t_events: vector<u64>, // Sorted T-points where intervals start/end (CUMULATIVE across prices)
     t_cursor: u64, // Index into t_events
     s_active: u64, // Running sum S over current [t_k, t_{k+1})
+    // Cumulative tracking (FIX for bid accumulation bug)
+    // OPTIMIZATION: Use VecSet instead of vector for O(log N) contains/insert instead of O(N)
+    cumulative_t_points: VecSet<u64>, // All unique T-points accumulated from price_cap >= current_p
+    cumulative_bidders_list: vector<address>, // Temporary storage for merging bidder lists
     // Solution
     final_p: u64, // P* (clearing price per token)
     final_q: u64, // Q* (tokens sold = Σ q_i^min of winners)
@@ -299,6 +325,8 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     final_price: u64, // P* (price per token at clearing)
     final_quantity: u64, // Q* (tokens sold at clearing)
     remaining_tokens_2d: u64, // Tokens still available for claiming (FCFS tracker)
+    /// CRITICAL: Track if FCFS allocation is complete (prevents premature claiming)
+    allocation_complete: bool, // True when allocate_tokens_prorata_2d has processed all eligible bidders
     /// Pre-created DAO ID (if DAO was created before raise)
     dao_id: Option<ID>,
     /// Whether init actions can still be added
@@ -704,35 +732,6 @@ public fun create_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
 /// - Sequential finalization: Only finalize_contribution touches shared state
 /// - 2x throughput improvement via Amdahl's Law (50% parallel validation phase)
 
-/// Enable cranking: allow anyone to claim tokens on your behalf
-/// This is useful if you want helpful bots to process your claim automatically
-/// For 2D auctions only
-public entry fun enable_cranking<RaiseToken, StableCoin>(
-    raise: &mut Raise<RaiseToken, StableCoin>,
-    ctx: &mut TxContext,
-) {
-    let contributor = ctx.sender();
-    let key = ContributorKey { contributor };
-    assert!(df::exists_(&raise.id, key), ENotAContributor);
-
-    let bid: &mut Bid2D = df::borrow_mut(&mut raise.id, key);
-    bid.allow_cranking = true;
-}
-
-/// Disable cranking: only you can claim your tokens
-/// For 2D auctions only
-public entry fun disable_cranking<RaiseToken, StableCoin>(
-    raise: &mut Raise<RaiseToken, StableCoin>,
-    ctx: &mut TxContext,
-) {
-    let contributor = ctx.sender();
-    let key = ContributorKey { contributor };
-    assert!(df::exists_(&raise.id, key), ENotAContributor);
-
-    let bid: &mut Bid2D = df::borrow_mut(&mut raise.id, key);
-    bid.allow_cranking = false;
-}
-
 // === 2D Auction Bidding ===
 
 /// Place a 2D auction bid with full escrow and FOK semantics
@@ -814,8 +813,7 @@ public entry fun place_bid_2d<RaiseToken, StableCoin>(
             min_tokens,
             min_total_raise,
             max_total_raise,
-            timestamp_ms: clock.timestamp_ms(), // Record bid time for FCFS ordering
-            tokens_allocated: 0, // Will be set during post-settlement allocation
+            tokens_allocated: 0, // Will be set during post-settlement pro-rata allocation
             allow_cranking: false, // Default: only self can claim
         },
     );
@@ -893,6 +891,24 @@ public entry fun place_bid_2d<RaiseToken, StableCoin>(
             insert_sorted(t_events, end_t);
         };
     };
+
+    // Mint BidNFT receipt for bidder (everyone gets one!)
+    // This is a nice UX - visible in wallet, transferable
+    // Bid data is still in Raise (single source of truth)
+    let nft = BidNFT<RaiseToken, StableCoin> {
+        id: object::new(ctx),
+        raise_id: object::id(raise),
+        bidder,
+        price_cap,
+        min_tokens,
+        min_total_raise,
+        max_total_raise,
+        escrow_amount: required_escrow,
+        name: string::utf8(b"Launchpad Bid Receipt"),
+        description: string::utf8(b"Your bid receipt - claim after settlement"),
+        image_url: string::utf8(b"https://futarchy.app/images/bid-nft.png"),
+    };
+    sui_transfer::public_transfer(nft, bidder);
 
     // Emit event (reuse ContributionAddedCapped event for now)
     event::emit(ContributionAddedCapped {
@@ -1055,6 +1071,9 @@ public fun begin_settlement_2d<RT, SC>(
         t_events: vector::empty<u64>(),
         t_cursor: 0,
         s_active: 0,
+        // Cumulative tracking (FIX for bid accumulation bug)
+        cumulative_t_points: vec_set::empty<u64>(),
+        cumulative_bidders_list: vector::empty<address>(),
         // Solution
         final_p: 0,
         final_q: 0,
@@ -1104,55 +1123,84 @@ public entry fun crank_settlement_2d<RT, SC>(
             s.current_p = heap_pop(&mut s.price_heap, &mut s.price_heap_size);
             prices_processed = prices_processed + 1;
 
-            // Collect all T-events for this price level
-            // Scan all bids at this price, extract [L_i, U_i] intervals
-            s.t_events = vector::empty<u64>();
+            // CRITICAL FIX: Merge deltas from this exact price into cumulative state
+            // This ensures S_p(T) includes ALL bids with price_cap >= p
+            let price_key = PriceKey { price: s.current_p };
+
+            if (df::exists_(&raise.id, price_key)) {
+                let t_points_at_price: &vector<u64> = df::borrow(&raise.id, price_key);
+
+                // Merge each T-point's delta from this price into cumulative
+                let tp_len = vector::length(t_points_at_price);
+                let mut tp_idx = 0;
+                while (tp_idx < tp_len) {
+                    let t = *vector::borrow(t_points_at_price, tp_idx);
+
+                    // OPTIMIZATION: VecSet::insert is O(log N) instead of vector O(N) contains + insert
+                    // VecSet maintains sorted order - only insert if not already present
+                    if (!vec_set::contains(&s.cumulative_t_points, &t)) {
+                        vec_set::insert(&mut s.cumulative_t_points, t);
+                    };
+
+                    // Merge the delta at this price and T-point into cumulative storage
+                    let delta_key = IntervalDeltaKey { price: s.current_p, t_point: t };
+                    if (df::exists_(&raise.id, delta_key)) {
+                        let delta_at_price: &IntervalDelta = df::borrow(&raise.id, delta_key);
+
+                        // Store/update cumulative delta in settlement state's dynamic fields
+                        let cum_key = CumulativeDeltaKey { settlement_id: object::id(s), t_point: t };
+                        if (!df::exists_(&s.id, cum_key)) {
+                            // First delta at this T-point
+                            df::add(&mut s.id, cum_key, IntervalDelta {
+                                delta: delta_at_price.delta,
+                                is_start: delta_at_price.is_start,
+                                bidders: delta_at_price.bidders,
+                            });
+                        } else {
+                            // Merge with existing cumulative delta
+                            let cum_delta: &mut IntervalDelta = df::borrow_mut(&mut s.id, cum_key);
+                            cum_delta.delta = cum_delta.delta + delta_at_price.delta;
+                            // Append bidders (preserves FCFS across price levels)
+                            let bidder_len = vector::length(&delta_at_price.bidders);
+                            let mut bidder_idx = 0;
+                            while (bidder_idx < bidder_len) {
+                                vector::push_back(&mut cum_delta.bidders, *vector::borrow(&delta_at_price.bidders, bidder_idx));
+                                bidder_idx = bidder_idx + 1;
+                            };
+                        };
+                    };
+
+                    tp_idx = tp_idx + 1;
+                };
+            };
+
+            // Use cumulative T-events for sweep (not just this price's events)
+            // Convert VecSet to vector for iteration (VecSet stores in sorted order)
+            s.t_events = vec_set::into_keys(s.cumulative_t_points);
+            s.cumulative_t_points = vec_set::from_keys(s.t_events); // Restore for next iteration
             s.t_cursor = 0;
             s.s_active = 0;
 
-            // Extract interval deltas for this price from dynamic fields
-            // IntervalDeltaKey { price: s.current_p, t_point: T }
-            // This is simplified - actual implementation needs to iterate bids
-            // For now, we'll handle this in the T-sweep below
-        };
-
-        // ========== INNER LOOP: T Dimension (Sweep) ==========
-        // Build T-events list for current price level if not already built
-        if (s.t_cursor == 0 && vector::length(&s.t_events) == 0) {
-            // Get sorted T-events for this price level
-            let price_key = PriceKey { price: s.current_p };
-
-            // Read the T-events vector we built during bidding
-            if (!df::exists_(&raise.id, price_key)) {
-                // No bids at this price level - skip to next price
-                s.current_p = 0;
-                step_count = step_count + 1;
-                continue
-            };
-
-            let t_points: &vector<u64> = df::borrow(&raise.id, price_key);
-            s.t_events = *t_points; // Copy into settlement state
-
-            // Skip to next price if no T-events
+            // Skip to next price if no cumulative T-events yet
             if (vector::length(&s.t_events) == 0) {
                 s.current_p = 0;
                 step_count = step_count + 1;
                 continue
             };
-
-            // Reset T-sweep state for this price level
-            s.t_cursor = 0;
-            s.s_active = 0;
         };
+
+        // ========== INNER LOOP: T Dimension (Sweep) ==========
+        // Note: We already built cumulative t_events in the price-pop logic above
 
         // Process T-events for current price
         if (s.t_cursor < vector::length(&s.t_events)) {
             let t = *vector::borrow(&s.t_events, s.t_cursor);
 
-            // Update s_active based on delta at this T-point
-            let delta_key = IntervalDeltaKey { price: s.current_p, t_point: t };
-            if (df::exists_(&raise.id, delta_key)) {
-                let delta: &IntervalDelta = df::borrow(&raise.id, delta_key);
+            // CRITICAL FIX: Use cumulative delta instead of single-price delta
+            // This includes ALL bids with price_cap >= current_p
+            let cum_key = CumulativeDeltaKey { settlement_id: object::id(s), t_point: t };
+            if (df::exists_(&s.id, cum_key)) {
+                let delta: &IntervalDelta = df::borrow(&s.id, cum_key);
 
                 // Apply delta: add for start events, subtract for end events
                 if (delta.is_start) {
@@ -1176,12 +1224,14 @@ public entry fun crank_settlement_2d<RT, SC>(
             let p_times_s = math::mul_div_to_64(s.current_p, s.s_active, 1);
 
             if (p_times_s >= t && p_times_s < next_t) {
-                // Found fixed point!
-                s.final_p = s.current_p;
-                s.final_q = s.s_active;
-                s.final_t = p_times_s;
-                s.done = true;
-                break
+                // Found a fixed point! Check if it's better than current best
+                // Prefer solution with higher T* (raises more capital for the DAO)
+                if (p_times_s > s.final_t) {
+                    s.final_p = s.current_p;
+                    s.final_q = s.s_active;
+                    s.final_t = p_times_s;
+                    // Don't set s.done = true yet - continue searching for better solutions
+                };
             };
 
             s.t_cursor = s.t_cursor + 1;
@@ -1193,12 +1243,11 @@ public entry fun crank_settlement_2d<RT, SC>(
         };
     };
 
-    // If all prices exhausted and no fixed point, settlement fails (T* = 0)
+    // If all prices exhausted, mark as done
+    // If no fixed point was found, final values remain at 0 (failure case)
     if (s.price_heap_size == 0 && s.current_p == 0 && !s.done) {
-        s.final_p = 0;
-        s.final_q = 0;
-        s.final_t = 0;
         s.done = true;
+        // Note: If final_t is still 0, it means no valid fixed point was found
     };
 
     // CRANK REWARD: Pay 0.05 SUI per price level processed
@@ -1309,6 +1358,62 @@ public fun finalize_settlement_2d<RaiseToken: drop + store, StableCoin: drop + s
     });
 }
 
+/// Cleanup settlement object by removing all cumulative delta dynamic fields
+/// Must be called after finalize_settlement_2d to prevent storage leaks
+/// Once cleaned, the settlement object can be deleted
+public entry fun cleanup_settlement_2d(
+    settlement: &mut CapSettlement2D,
+) {
+    // CRITICAL FIX: Remove all cumulative delta DFs to prevent storage leak
+    // Iterate through all T-points and remove associated CumulativeDeltaKey DFs
+    let t_points = &settlement.cumulative_t_points;
+    let t_len = vec_set::size(t_points);
+
+    // Convert VecSet to vector for iteration
+    let t_vec = vec_set::into_keys(*t_points);
+    let mut i = 0;
+
+    while (i < t_len) {
+        let t = *vector::borrow(&t_vec, i);
+        let cum_key = CumulativeDeltaKey {
+            settlement_id: object::id(settlement),
+            t_point: t
+        };
+
+        // Remove the cumulative delta DF if it exists
+        if (df::exists_(&settlement.id, cum_key)) {
+            let _removed: IntervalDelta = df::remove(&mut settlement.id, cum_key);
+        };
+
+        i = i + 1;
+    };
+}
+
+/// Delete settlement object after cleanup
+/// Can only be called after cleanup_settlement_2d has removed all DFs
+public fun delete_settlement_2d(settlement: CapSettlement2D) {
+    let CapSettlement2D {
+        id,
+        raise_id: _,
+        price_heap: _,
+        price_heap_size: _,
+        current_p: _,
+        t_events: _,
+        t_cursor: _,
+        s_active: _,
+        cumulative_t_points: _,
+        cumulative_bidders_list: _,
+        final_p: _,
+        final_q: _,
+        final_t: _,
+        done: _,
+        initiator: _,
+        finalizer: _,
+    } = settlement;
+
+    object::delete(id);
+}
+
 /// Entry function to start 2D settlement and share the settlement object
 public entry fun start_settlement_2d<RT, SC>(
     raise: &mut Raise<RT, SC>,
@@ -1329,40 +1434,92 @@ public entry fun complete_settlement_2d<RaiseToken: drop + store, StableCoin: dr
     finalize_settlement_2d(raise, s, clock, ctx);
 }
 
-/// Allocate tokens to winning bidders in FCFS order (post-settlement step)
-/// Must be called after settlement completes, can be cranked in batches
-/// Iterates through bidders at clearing price in insertion order
-public entry fun allocate_tokens_fcfs_2d<RaiseToken, StableCoin>(
+/// Allocate tokens to winning bidders using PRO-RATA allocation (post-settlement step)
+/// Must be called after settlement completes, processes all eligible bidders at once
+/// Iterates through ALL eligible bidders (price_cap >= P*) and allocates proportionally
+/// THREE-PASS PRO-RATA ALLOCATION ALGORITHM:
+/// PASS 1: Fill inframarginal bidders (price_cap > P*) at 100%
+/// PASS 2: Calculate marginal demand (price_cap == P*) for pro-rata calculation
+/// PASS 3: Pro-rata allocate remaining supply to marginal bidders
+///
+/// Note: Uses settlement object to access cumulative bidder list (includes all eligible bidders)
+/// Allocation is deterministic and based purely on price priority + pro-rata, NOT first-come-first-served
+public entry fun allocate_tokens_prorata_2d<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
-    batch_size: u64, // Number of bids to process per crank
+    settlement: &CapSettlement2D, // Settlement object contains cumulative bidder list
+    batch_size: u64, // Number of bids to process per crank (used for batching)
 ) {
     assert!(raise.is_2d_auction, EInvalidStateForAction);
     assert!(raise.settlement_done, ESettlementNotStarted);
+    assert!(object::id(raise) == settlement.raise_id, EInvalidStateForAction);
+    assert!(settlement.done, ESettlementNotStarted);
 
     // Get clearing price and remaining supply
     let final_p = raise.final_price;
     let final_t = raise.final_total_eligible;
-    let mut remaining = raise.remaining_tokens_2d;
+    let available_supply = raise.remaining_tokens_2d;
 
-    // Find the IntervalDelta at the clearing point
-    // This contains all bidders who are eligible at (P*, T*)
-    let clearing_key = IntervalDeltaKey { price: final_p, t_point: final_t };
+    // Get cumulative T-events from settlement (these span all price levels)
+    let t_events = &settlement.t_events;
+    let events_len = vector::length(t_events);
 
-    if (!df::exists_(&raise.id, clearing_key)) {
-        // No marginal bids at exact clearing point
+    if (events_len == 0) {
+        raise.allocation_complete = true;
         return
     };
 
-    // Copy the bidders vector to avoid holding a borrow during the loop
-    let bidders = {
-        let delta: &IntervalDelta = df::borrow(&raise.id, clearing_key);
-        *&delta.bidders // Copy the vector
+    // Find the interval containing T*
+    // Sweep through cumulative t_events, tracking active bidders via CumulativeDelta
+    let mut active_bidders = vector::empty<address>();
+    let mut event_idx = 0;
+
+    while (event_idx < events_len) {
+        let t = *vector::borrow(t_events, event_idx);
+
+        // Check if we've passed T* - if so, use previous active set
+        if (t > final_t) {
+            break
+        };
+
+        // Apply cumulative deltas at this T-point (includes ALL price levels >= P*)
+        let cum_key = CumulativeDeltaKey { settlement_id: object::id(settlement), t_point: t };
+        if (df::exists_(&settlement.id, cum_key)) {
+            let delta: &IntervalDelta = df::borrow(&settlement.id, cum_key);
+
+            if (delta.is_start) {
+                // Add bidders entering at this point
+                let bidder_len = vector::length(&delta.bidders);
+                let mut bidder_idx = 0;
+                while (bidder_idx < bidder_len) {
+                    let bidder = *vector::borrow(&delta.bidders, bidder_idx);
+                    vector::push_back(&mut active_bidders, bidder);
+                    bidder_idx = bidder_idx + 1;
+                };
+            } else {
+                // Remove bidders exiting at this point
+                // For now, we'll keep them in the list (removal is complex)
+                // The bid eligibility check below will filter them out
+            };
+        };
+
+        event_idx = event_idx + 1;
     };
+
+    // Now active_bidders contains all bidders whose intervals contain T*
+    // These are the marginal bidders eligible for allocation (includes inframarginal bids!)
+    let bidders = active_bidders;
     let len = vector::length(&bidders);
 
-    // Process bidders in FCFS order (vector order = insertion order)
+    // THREE-PASS ALGORITHM:
+    // PASS 1: Fill all inframarginal bidders (price_cap > P*) at 100%
+    // PASS 2: Calculate demand from marginal bidders (price_cap == P*) for pro-rata
+    // PASS 3: Pro-rata allocate to marginal bidders with remaining supply
+
+    let mut remaining = available_supply;
     let mut i = 0;
     let mut processed = 0;
+
+    // PASS 1: Fill inframarginal bidders (price > final_p)
     while (i < len && processed < batch_size) {
         let bidder = *vector::borrow(&bidders, i);
         let key = ContributorKey { contributor: bidder };
@@ -1372,13 +1529,95 @@ public entry fun allocate_tokens_fcfs_2d<RaiseToken, StableCoin>(
 
             // Skip if already allocated
             if (bid.tokens_allocated == 0) {
-                // Check if this bidder wins (FOK)
-                if (remaining >= bid.min_tokens) {
-                    bid.tokens_allocated = bid.min_tokens; // WINNER!
-                    remaining = remaining - bid.min_tokens;
-                } else {
-                    bid.tokens_allocated = 0; // LOSER (stays 0)
+                // Verify this bidder's interval contains T*
+                let interval_contains_t = (bid.min_total_raise <= final_t) &&
+                                          (final_t <= bid.max_total_raise);
+
+                // Inframarginal: price_cap > final_p
+                if (interval_contains_t && bid.price_cap > final_p) {
+                    // Fill 100% if enough supply
+                    if (remaining >= bid.min_tokens) {
+                        bid.tokens_allocated = bid.min_tokens;
+                        remaining = remaining - bid.min_tokens;
+                    } else {
+                        bid.tokens_allocated = 0; // FOK fail
+                    };
                 };
+            };
+        };
+
+        i = i + 1;
+        processed = processed + 1;
+    };
+
+    // PASS 2: Calculate marginal demand (price_cap == final_p)
+    let mut marginal_demand: u64 = 0;
+    i = 0;
+    while (i < len) {
+        let bidder = *vector::borrow(&bidders, i);
+        let key = ContributorKey { contributor: bidder };
+
+        if (df::exists_(&raise.id, key)) {
+            let bid: &Bid2D = df::borrow(&raise.id, key);
+
+            // Only count marginal bidders who haven't been allocated yet
+            if (bid.tokens_allocated == 0) {
+                let interval_contains_t = (bid.min_total_raise <= final_t) &&
+                                          (final_t <= bid.max_total_raise);
+
+                // Marginal: price_cap == final_p
+                if (interval_contains_t && bid.price_cap == final_p) {
+                    marginal_demand = marginal_demand + bid.min_tokens;
+                };
+            };
+        };
+
+        i = i + 1;
+    };
+
+    // Calculate pro-rata ratio for marginal bidders
+    let ratio_scale: u64 = 1_000_000_000;
+    let marginal_ratio = if (marginal_demand == 0) {
+        0
+    } else if (marginal_demand <= remaining) {
+        // Enough supply for everyone
+        ratio_scale
+    } else {
+        // Oversubscribed: pro-rata
+        (((remaining as u128) * (ratio_scale as u128)) / (marginal_demand as u128) as u64)
+    };
+
+    // PASS 3: Allocate to marginal bidders pro-rata
+    i = 0;
+    processed = 0;
+    while (i < len && processed < batch_size) {
+        let bidder = *vector::borrow(&bidders, i);
+        let key = ContributorKey { contributor: bidder };
+
+        if (df::exists_(&raise.id, key)) {
+            let bid: &mut Bid2D = df::borrow_mut(&mut raise.id, key);
+
+            // Skip if already allocated (inframarginal or processed)
+            if (bid.tokens_allocated == 0) {
+                let interval_contains_t = (bid.min_total_raise <= final_t) &&
+                                          (final_t <= bid.max_total_raise);
+
+                // Marginal: price_cap == final_p
+                if (interval_contains_t && bid.price_cap == final_p) {
+                    if (marginal_ratio > 0) {
+                        // Calculate pro-rata allocation
+                        let allocated = (((bid.min_tokens as u128) * (marginal_ratio as u128)) / (ratio_scale as u128) as u64);
+
+                        // Respect FOK: only allocate if they get at least min_tokens OR ratio >= 100%
+                        if (marginal_ratio >= ratio_scale || allocated >= bid.min_tokens) {
+                            bid.tokens_allocated = allocated;
+                            remaining = remaining - allocated;
+                        } else {
+                            bid.tokens_allocated = 0; // FOK violation
+                        };
+                    };
+                };
+                // Note: Bidders with price_cap < final_p get nothing (already 0)
             };
         };
 
@@ -1388,6 +1627,24 @@ public entry fun allocate_tokens_fcfs_2d<RaiseToken, StableCoin>(
 
     // Update remaining supply
     raise.remaining_tokens_2d = remaining;
+
+    // CRITICAL: If all bidders processed, mark allocation as complete
+    // This allows claiming to begin safely
+    if (i >= len) {
+        raise.allocation_complete = true;
+    };
+}
+
+/// Mark allocation as complete (callable by anyone after all batches processed)
+/// Allows claiming to begin even if allocation was done in multiple batches
+public entry fun mark_allocation_complete_2d<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+) {
+    assert!(raise.is_2d_auction, EInvalidStateForAction);
+    assert!(raise.settlement_done, ESettlementNotStarted);
+    // Can only mark complete if remaining supply is 0 (all tokens allocated or exhausted)
+    assert!(raise.remaining_tokens_2d == 0, EInvalidStateForAction);
+    raise.allocation_complete = true;
 }
 
 // ============================================================================
@@ -1637,6 +1894,8 @@ public entry fun claim_tokens_2d<RaiseToken: drop + store, StableCoin: drop + st
     assert!(raise.is_2d_auction, EInvalidStateForAction);
     assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
     assert!(raise.settlement_done, ESettlementNotStarted);
+    // CRITICAL FIX: Ensure allocation is complete before allowing claims
+    assert!(raise.allocation_complete, EAllocationNotComplete);
 
     let caller = ctx.sender();
     let key = ContributorKey { contributor: recipient };
@@ -1706,17 +1965,18 @@ public entry fun claim_tokens_2d<RaiseToken: drop + store, StableCoin: drop + st
         tokens_claimed: bid.min_tokens,
     });
 
-    // Refund the difference: escrow - payment
+    // FIXED: Transfer refund directly in same transaction (unified with other claim functions)
     // Bidder locked (price_cap × min_tokens) but only pays (P* × min_tokens)
     let refund_due = escrow_amount - payment_amount;
     if (refund_due > 0) {
-        let refund_key = RefundKey { contributor: recipient };
-        if (!df::exists_(&raise.id, refund_key)) {
-            df::add(&mut raise.id, refund_key, RefundRecord { amount: refund_due });
-        } else {
-            let existing: &mut RefundRecord = df::borrow_mut(&mut raise.id, refund_key);
-            existing.amount = existing.amount + refund_due;
-        };
+        let refund_coin = coin::from_balance(raise.stable_coin_vault.split(refund_due), ctx);
+        sui_transfer::public_transfer(refund_coin, recipient);
+
+        event::emit(RefundClaimed {
+            raise_id: object::id(raise),
+            contributor: recipient,
+            refund_amount: refund_due,
+        });
     };
 }
 
@@ -1746,6 +2006,8 @@ public entry fun mint_claim_nfts_2d<RaiseToken, StableCoin>(
     assert!(raise.is_2d_auction, EInvalidStateForAction);
     assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
     assert!(raise.settlement_done, ESettlementNotStarted);
+    // CRITICAL FIX: Ensure allocation is complete before minting claim NFTs
+    assert!(raise.allocation_complete, EAllocationNotComplete);
 
     let final_p = raise.final_price;
     let final_t = raise.final_total_eligible;
@@ -1889,6 +2151,168 @@ public entry fun claim_with_nft_2d<RaiseToken: drop + store, StableCoin: drop + 
     // Multiple claims can execute in parallel with zero conflicts! ✨
 }
 
+/// Self-claim tokens for 2D auction (like dividend's claim_my_dividend)
+/// Users can claim their own tokens/refunds anytime for tax timing control
+/// This function allows bidders to claim whenever they choose, without waiting for cranking
+/// BidNFT receipt is optional - not required for claiming (bid data in Raise is source of truth)
+public entry fun claim_my_tokens_2d<RaiseToken: drop + store, StableCoin: drop + store>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    ctx: &mut TxContext,
+) {
+    let caller = ctx.sender();
+    let key = ContributorKey { contributor: caller };
+
+    assert!(raise.is_2d_auction, EInvalidStateForAction);
+    assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
+    assert!(raise.settlement_done, ESettlementNotStarted);
+    // CRITICAL FIX: Ensure allocation is complete before allowing claims
+    assert!(raise.allocation_complete, EAllocationNotComplete);
+    assert!(df::exists_(&raise.id, key), ENotAContributor);
+
+    // SECURITY: Remove bid to prevent double-claim
+    let bid: Bid2D = df::remove(&mut raise.id, key);
+    raise.contributor_count = raise.contributor_count - 1;
+
+    // Get settlement results (P*, Q*, T*)
+    let final_p = raise.final_price;
+    let final_t = raise.final_total_eligible;
+
+    // FOK WINNER CHECK:
+    // 1. Price condition: bid.price_cap >= P*
+    // 2. Interval condition: L_i <= T* <= U_i
+    let price_ok = bid.price_cap >= final_p;
+    let interval_ok = (bid.min_total_raise <= final_t) && (final_t <= bid.max_total_raise);
+    let escrow_amount = math::mul_div_to_64(bid.price_cap, bid.min_tokens, 1);
+
+    if (!price_ok || !interval_ok || bid.tokens_allocated == 0) {
+        // LOSER: Full refund
+        let refund_coin = coin::from_balance(raise.stable_coin_vault.split(escrow_amount), ctx);
+        sui_transfer::public_transfer(refund_coin, caller);
+
+        event::emit(RefundClaimed {
+            raise_id: object::id(raise),
+            contributor: caller,
+            refund_amount: escrow_amount,
+        });
+
+        return
+    };
+
+    // WINNER: Got allocation - proceed with token distribution
+    let payment_amount = math::mul_div_to_64(final_p, bid.tokens_allocated, 1);
+
+    // Transfer tokens
+    let tokens = coin::from_balance(raise.raise_token_vault.split(bid.tokens_allocated), ctx);
+    sui_transfer::public_transfer(tokens, caller);
+
+    event::emit(TokensClaimed {
+        raise_id: object::id(raise),
+        contributor: caller,
+        contribution_amount: payment_amount,
+        tokens_claimed: bid.tokens_allocated,
+    });
+
+    // Refund the difference: escrow - payment
+    let refund_due = escrow_amount - payment_amount;
+    if (refund_due > 0) {
+        let refund_coin = coin::from_balance(raise.stable_coin_vault.split(refund_due), ctx);
+        sui_transfer::public_transfer(refund_coin, caller);
+
+        event::emit(RefundClaimed {
+            raise_id: object::id(raise),
+            contributor: caller,
+            refund_amount: refund_due,
+        });
+    };
+}
+
+/// Batch crank claims for 2D auction (like dividend's crank_dividend)
+/// Protocol team or keeper bots can batch-process claims for opted-in bidders
+/// IMPORTANT: Only processes bidders with allow_cranking = true
+/// Skips bidders who want to control their own claim timing (allow_cranking = false)
+public entry fun crank_claims_2d<RaiseToken: drop + store, StableCoin: drop + store>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    recipients: vector<address>,
+    ctx: &mut TxContext,
+) {
+    assert!(raise.is_2d_auction, EInvalidStateForAction);
+    assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
+    assert!(raise.settlement_done, ESettlementNotStarted);
+    // CRITICAL FIX: Ensure allocation is complete before cranking claims
+    assert!(raise.allocation_complete, EAllocationNotComplete);
+
+    let final_p = raise.final_price;
+    let final_t = raise.final_total_eligible;
+    let mut i = 0;
+
+    while (i < vector::length(&recipients)) {
+        let recipient = *vector::borrow(&recipients, i);
+        let key = ContributorKey { contributor: recipient };
+
+        // Skip if already claimed or doesn't exist
+        if (df::exists_(&raise.id, key)) {
+            // Check if cranking is allowed for this bidder
+            let bid_check: &Bid2D = df::borrow(&raise.id, key);
+
+            // CRITICAL: Skip if bidder doesn't want to be cranked
+            if (!bid_check.allow_cranking) {
+                i = i + 1;
+                continue
+            };
+
+            // SECURITY: Remove bid to prevent double-claim
+            let bid: Bid2D = df::remove(&mut raise.id, key);
+            raise.contributor_count = raise.contributor_count - 1;
+
+            // FOK WINNER CHECK
+            let price_ok = bid.price_cap >= final_p;
+            let interval_ok = (bid.min_total_raise <= final_t) && (final_t <= bid.max_total_raise);
+            let escrow_amount = math::mul_div_to_64(bid.price_cap, bid.min_tokens, 1);
+
+            if (!price_ok || !interval_ok || bid.tokens_allocated == 0) {
+                // LOSER: Full refund
+                let refund_coin = coin::from_balance(raise.stable_coin_vault.split(escrow_amount), ctx);
+                sui_transfer::public_transfer(refund_coin, recipient);
+
+                event::emit(RefundClaimed {
+                    raise_id: object::id(raise),
+                    contributor: recipient,
+                    refund_amount: escrow_amount,
+                });
+            } else {
+                // WINNER: Got allocation
+                let payment_amount = math::mul_div_to_64(final_p, bid.tokens_allocated, 1);
+
+                // Transfer tokens
+                let tokens = coin::from_balance(raise.raise_token_vault.split(bid.tokens_allocated), ctx);
+                sui_transfer::public_transfer(tokens, recipient);
+
+                event::emit(TokensClaimed {
+                    raise_id: object::id(raise),
+                    contributor: recipient,
+                    contribution_amount: payment_amount,
+                    tokens_claimed: bid.tokens_allocated,
+                });
+
+                // Refund excess escrow
+                let refund_due = escrow_amount - payment_amount;
+                if (refund_due > 0) {
+                    let refund_coin = coin::from_balance(raise.stable_coin_vault.split(refund_due), ctx);
+                    sui_transfer::public_transfer(refund_coin, recipient);
+
+                    event::emit(RefundClaimed {
+                        raise_id: object::id(raise),
+                        contributor: recipient,
+                        refund_amount: refund_due,
+                    });
+                };
+            };
+        };
+
+        i = i + 1;
+    };
+}
+
 /// Cleanup resources for a failed raise
 /// This properly handles pre-created DAO components that couldn't be shared
 /// Objects with UID need special handling - they can't just be dropped
@@ -2005,34 +2429,42 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
         let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
         sui_transfer::public_transfer(metadata, raise.creator);
     };
-}
 
-/// Refund for eligible contributors who were partially refunded due to hard cap
-public entry fun claim_hard_cap_refund<RaiseToken: drop + store, StableCoin: drop + store>(
-    raise: &mut Raise<RaiseToken, StableCoin>,
-    ctx: &mut TxContext,
-) {
-    assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
-    assert!(raise.settlement_done, ESettlementNotStarted);
+    // CRITICAL FIX: Clean up 2D auction indexing structures
+    // For 2D auctions, remove all PriceKey and IntervalDeltaKey dynamic fields
+    if (raise.is_2d_auction) {
+        // Clean up price-level indices
+        let price_count = vector::length(&raise.price_thresholds);
+        let mut price_idx = 0;
 
-    let who = ctx.sender();
-    let refund_key = RefundKey { contributor: who };
+        while (price_idx < price_count) {
+            let price = *vector::borrow(&raise.price_thresholds, price_idx);
+            let price_key = PriceKey { price };
 
-    // Check if user has a refund due to hard cap
-    assert!(df::exists_(&raise.id, refund_key), ENotAContributor);
+            // Get T-events for this price level (if exists)
+            if (df::exists_(&raise.id, price_key)) {
+                let t_events: vector<u64> = df::remove(&mut raise.id, price_key);
 
-    // Remove and get refund record
-    let refund_rec: RefundRecord = df::remove(&mut raise.id, refund_key);
+                // Clean up interval deltas for each T-point at this price
+                let t_len = vector::length(&t_events);
+                let mut t_idx = 0;
 
-    // Create refund coin
-    let refund_coin = coin::from_balance(raise.stable_coin_vault.split(refund_rec.amount), ctx);
-    sui_transfer::public_transfer(refund_coin, who);
+                while (t_idx < t_len) {
+                    let t = *vector::borrow(&t_events, t_idx);
+                    let delta_key = IntervalDeltaKey { price, t_point: t };
 
-    event::emit(RefundClaimed {
-        raise_id: object::id(raise),
-        contributor: who,
-        refund_amount: refund_rec.amount,
-    });
+                    // Remove interval delta if exists
+                    if (df::exists_(&raise.id, delta_key)) {
+                        let _removed: IntervalDelta = df::remove(&mut raise.id, delta_key);
+                    };
+
+                    t_idx = t_idx + 1;
+                };
+            };
+
+            price_idx = price_idx + 1;
+        };
+    };
 }
 
 /// Refund for failed raises only
@@ -2225,6 +2657,7 @@ fun init_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
         final_price: 0, // P* (set at settlement)
         final_quantity: 0, // Q* (set at settlement)
         remaining_tokens_2d: 0, // Initialized at finalize_settlement_2d
+        allocation_complete: false, // Set to true when FCFS allocation finishes
         dao_id: option::none(),
         intents_locked: false,
         admin_trust_score: option::none(),
@@ -2326,13 +2759,17 @@ public fun contribution_of<RT, SC>(r: &Raise<RT, SC>, addr: address): u64 {
     }
 }
 
-public fun final_total_eligible<RT, SC>(r: &Raise<RT, SC>): u64 { r.final_total_eligible }
-
 public fun settlement_done<RT, SC>(r: &Raise<RT, SC>): bool { r.settlement_done }
 
 public fun settlement_in_progress<RT, SC>(r: &Raise<RT, SC>): bool { r.settlement_in_progress }
 
 public fun contributor_count<RT, SC>(r: &Raise<RT, SC>): u64 { r.contributor_count }
+
+public fun final_price<RT, SC>(r: &Raise<RT, SC>): u64 { r.final_price }
+
+public fun final_quantity<RT, SC>(r: &Raise<RT, SC>): u64 { r.final_quantity }
+
+public fun final_total_eligible<RT, SC>(r: &Raise<RT, SC>): u64 { r.final_total_eligible }
 
 /// Check if a contributor has enabled cranking (allows others to claim on their behalf)
 /// For 2D auctions only

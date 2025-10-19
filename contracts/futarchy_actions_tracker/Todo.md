@@ -394,6 +394,7 @@ like walrus deep book and leading lending protocols etc
 main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big ones on defillama
 
 # Consider for V3
+- [ ] Hybrid: Fork Deepbook CritBit tree, keep auction math (2 weeks)
 - [ ] heiarchy / deadman switch for multisgis
 - [ ] amm asubsidy actios
 - [ ] allow daos and launchapd to be verified by anyone not jsut us

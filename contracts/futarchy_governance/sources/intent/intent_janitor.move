@@ -9,7 +9,7 @@ module futarchy_governance::intent_janitor;
 use account_protocol::account::{Self, Account};
 use account_protocol::intents::{Self, Expired};
 use futarchy_actions::config_actions;
-use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_core::version;
 use std::string::{Self as string, String};
 use sui::clock::Clock;
@@ -260,16 +260,17 @@ fun try_delete_expired_futarchy_intent(
         return false
     };
 
-    let key_for_index = string::clone(&key);
+    let key_for_index = key;
     let expired = account::delete_expired_intent<FutarchyConfig, FutarchyOutcome>(
         account,
         key,
         clock,
+        ctx,
     );
     destroy_expired(expired);
-    
+
     remove_from_index(account, key_for_index, ctx);
-    
+
     true
 }
 

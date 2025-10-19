@@ -86,8 +86,50 @@ public fun delete_slash_distribution(expired: &mut Expired) {
     config_actions::delete_slash_distribution_update<FutarchyConfig>(expired);
 }
 
+// === Security Council Actions ===
+// These are stub implementations since council/policy actions are not yet implemented
+public fun delete_create_council(_expired: &mut Expired) {
+    // Stub: Council actions module not yet implemented
+}
+
+public fun delete_update_council_membership(_expired: &mut Expired) {
+    // Stub: Council actions module not yet implemented
+}
+
+public fun delete_approve_policy_change(_expired: &mut Expired) {
+    // Stub: Council actions module not yet implemented
+}
+
+// === Policy Actions ===
+public fun delete_set_policy(_expired: &mut Expired) {
+    // Stub: Policy actions module not yet implemented
+}
+
+public fun delete_remove_policy(_expired: &mut Expired) {
+    // Stub: Policy actions module not yet implemented
+}
+
+public fun delete_register_council(_expired: &mut Expired) {
+    // Stub: Council actions module not yet implemented
+}
+
+public fun delete_set_object_policy(_expired: &mut Expired) {
+    // Stub: Policy actions module not yet implemented
+}
+
+public fun delete_remove_object_policy(_expired: &mut Expired) {
+    // Stub: Policy actions module not yet implemented
+}
+
 // === Vault/Custody Actions ===
 // REMOVED: custody_actions deleted, add/remove coin type actions deleted
+public fun delete_add_coin_type<CoinType>(_expired: &mut Expired) {
+    // Stub: Coin type management actions not yet implemented
+}
+
+public fun delete_remove_coin_type<CoinType>(_expired: &mut Expired) {
+    // Stub: Coin type management actions not yet implemented
+}
 
 // === Liquidity Actions ===
 public fun delete_add_liquidity<AssetType, StableType>(expired: &mut Expired) {
@@ -235,12 +277,12 @@ public fun delete_challenge_withdrawals(expired: &mut Expired) {
     stream_actions::delete_challenge_withdrawals(expired);
 }
 
-public fun delete_process_pending_withdrawal<CoinType>(expired: &mut Expired) {
-    stream_actions::delete_process_pending_withdrawal<CoinType>(expired);
+public fun delete_process_pending_withdrawal<CoinType>(_expired: &mut Expired) {
+    // Stub: Function not yet implemented in stream_actions
 }
 
-public fun delete_cancel_challenged_withdrawals(expired: &mut Expired) {
-    stream_actions::delete_cancel_challenged_withdrawals(expired);
+public fun delete_cancel_challenged_withdrawals(_expired: &mut Expired) {
+    // Stub: Function not yet implemented in stream_actions
 }
 
 // === Governance Actions ===

@@ -24,7 +24,6 @@ use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_one_shot_utils::strategy;
 use futarchy_types::init_action_specs::InitActionSpecs;
 use futarchy_types::signed::{Self as signed};
-use futarchy_vault::futarchy_vault;
 use std::option;
 use std::string::String;
 use std::vector;
@@ -75,6 +74,21 @@ public struct ProposalIntentExecuted has copy, drop {
     timestamp: u64,
 }
 
+/// Create a ProposalIntentExecuted event
+public(package) fun new_proposal_intent_executed(
+    proposal_id: ID,
+    dao_id: ID,
+    intent_key: String,
+    timestamp: u64,
+): ProposalIntentExecuted {
+    ProposalIntentExecuted {
+        proposal_id,
+        dao_id,
+        intent_key,
+        timestamp,
+    }
+}
+
 /// Emitted when a proposal is resolved early
 public struct ProposalEarlyResolvedEvent has copy, drop {
     proposal_id: ID,
@@ -83,28 +97,6 @@ public struct ProposalEarlyResolvedEvent has copy, drop {
     keeper: address,
     keeper_reward: u64,
     timestamp: u64,
-}
-
-/// Convenience wrapper that returns the governance executable for PTB composition.
-/// Prefer calling `futarchy_governance::ptb_executor::begin_execution` directly.
-public entry fun execute_approved_proposal_with_fee<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
-    proposal: &mut Proposal<AssetType, StableType>,
-    market: &MarketState,
-    fee_manager: &mut ProposalFeeManager,
-    fee_coin: Coin<sui::sui::SUI>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) -> Executable<FutarchyOutcome> {
-    futarchy_governance::ptb_executor::begin_execution(
-        account,
-        proposal,
-        market,
-        fee_manager,
-        fee_coin,
-        clock,
-        ctx,
-    )
 }
 
 /// Emitted when the next proposal is reserved (locked) into PREMARKET
@@ -278,6 +270,7 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
+    _is_early_resolution: bool,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {

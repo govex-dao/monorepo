@@ -103,12 +103,12 @@ public entry fun finalize_execution<AssetType, StableType>(
 
     intent_janitor::cleanup_all_expired_intents(account, clock, ctx);
 
-    event::emit(proposal_lifecycle::ProposalIntentExecuted {
-        proposal_id: proposal::get_id(proposal),
-        dao_id: proposal::get_dao_id(proposal),
+    event::emit(proposal_lifecycle::new_proposal_intent_executed(
+        proposal::get_id(proposal),
+        proposal::get_dao_id(proposal),
         intent_key,
-        timestamp: clock.timestamp_ms(),
-    });
+        clock.timestamp_ms(),
+    ));
 }
 
 /// Build a human-readable hint for the temporary outcome metadata.

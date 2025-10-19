@@ -11,6 +11,7 @@ use std::string::String;
 use std::vector;
 use sui::clock::Clock;
 use sui::sui::SUI;
+use sui::tx_context::TxContext;
 
 /// Drain an `Expired` bag by invoking all futarchy delete hooks.
 /// This handles all non-generic and common generic actions.
@@ -196,11 +197,13 @@ public fun delete_expired_by_key(
     account: &mut Account<FutarchyConfig>,
     key: String,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     let mut expired = account::delete_expired_intent<FutarchyConfig, FutarchyOutcome>(
         account,
         key,
         clock,
+        ctx,
     );
     drain_all_with_account(account, &mut expired);
     intents::destroy_empty_expired(expired);
@@ -213,6 +216,7 @@ public fun sweep_expired_intents(
     keys: vector<String>,
     max_n: u64,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     let mut i = 0u64;
     let len = vector::length(&keys);
@@ -224,7 +228,7 @@ public fun sweep_expired_intents(
         // Try to delete the intent if it's expired
         // The delete_expired_intent will fail if not expired, so we catch that
         if (is_intent_expired(account, &key, clock)) {
-            delete_expired_by_key(account, key, clock);
+            delete_expired_by_key(account, key, clock, ctx);
         };
 
         i = i + 1;
@@ -286,8 +290,9 @@ public entry fun cleanup_expired_intent(
     account: &mut Account<FutarchyConfig>,
     key: String,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
-    delete_expired_by_key(account, key, clock);
+    delete_expired_by_key(account, key, clock, ctx);
 }
 
 /// Entry function to sweep multiple expired intents
@@ -295,7 +300,8 @@ public entry fun cleanup_expired_intents(
     account: &mut Account<FutarchyConfig>,
     keys: vector<String>,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     // Process up to 10 intents per transaction to avoid gas limits
-    sweep_expired_intents(account, keys, 10, clock);
+    sweep_expired_intents(account, keys, 10, clock, ctx);
 }

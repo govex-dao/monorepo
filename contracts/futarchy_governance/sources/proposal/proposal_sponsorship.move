@@ -10,6 +10,8 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::proposal_quota_registry::{Self, ProposalQuotaRegistry};
 use futarchy_core::dao_config;
 use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_types::signed;
+use std::string::String;
 use sui::clock::Clock;
 use sui::event;
 
@@ -92,7 +94,7 @@ public entry fun sponsor_proposal<AssetType, StableType>(
     assert!(has_quota, ENoSponsorQuota);
 
     // Get sponsored threshold from config
-    let sponsored_threshold = *dao_config::sponsored_threshold(sponsor_config);
+    let sponsored_threshold = dao_config::sponsored_threshold(sponsor_config);
 
     // Apply sponsorship to proposal
     proposal::set_sponsorship(proposal, sponsor, sponsored_threshold);
@@ -107,7 +109,6 @@ public entry fun sponsor_proposal<AssetType, StableType>(
     );
 
     // Emit event
-    use futarchy_types::signed;
     event::emit(ProposalSponsored {
         proposal_id,
         dao_id,
@@ -170,7 +171,6 @@ public entry fun sponsor_proposal_to_zero<AssetType, StableType>(
     // NO quota usage - this is free for team members
 
     // Emit event
-    use futarchy_types::signed;
     event::emit(ProposalSponsored {
         proposal_id,
         dao_id,

@@ -307,7 +307,7 @@ fun test_request_and_finalize_reclaim() {
 
     // Now finalize reclaim (cleanup)
     let auth = account.new_auth(version::current(), Witness());
-    pkg_upgrade::finalize_reclaim(auth, &mut account, package_name, &clock);
+    pkg_upgrade::clear_reclaim_request(auth, &mut account, package_name, &clock);
 
     // Verify request is cleared
     assert!(!pkg_upgrade::has_reclaim_request(&account, package_name));
@@ -333,14 +333,14 @@ fun test_finalize_reclaim_too_early_fails() {
 
     // Try to finalize immediately (should fail)
     let auth = account.new_auth(version::current(), Witness());
-    pkg_upgrade::finalize_reclaim(auth, &mut account, package_name, &clock);
+    pkg_upgrade::clear_reclaim_request(auth, &mut account, package_name, &clock);
 
     end(scenario, extensions, account, clock);
 }
 
 #[test]
 fun test_get_reclaim_available_time() {
-    let (mut scenario, extensions, mut account, clock) = start();
+    let (mut scenario, extensions, mut account, mut clock) = start();
     let package_name = b"test_package".to_string();
     let six_months_ms = 15552000000;
     let start_time = 1000000;

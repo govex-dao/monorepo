@@ -295,7 +295,7 @@ public fun has_escrow_receipt<AssetType, StableType>(
     outcome_index: u64,
 ): bool {
     let key = OutcomeEscrowKey { outcome_index };
-    dynamic_field::exists_<OutcomeEscrowKey, EscrowReceipt<AssetType>>(
+    dynamic_field::exists_<OutcomeEscrowKey>(
         futarchy_markets_core::proposal::borrow_uid(proposal),
         key
     )

@@ -155,8 +155,9 @@ public entry fun init_lock_upgrade_cap(
     cap: UpgradeCap,
     package_name: vector<u8>,
     delay_ms: u64,
+    reclaim_delay_ms: u64,
 ) {
-    init_actions::init_lock_upgrade_cap(account, cap, package_name, delay_ms);
+    init_actions::init_lock_upgrade_cap(account, cap, package_name, delay_ms, reclaim_delay_ms);
 }
 
 // === Access Control Actions ===

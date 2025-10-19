@@ -1917,8 +1917,8 @@ public fun is_sponsored<AssetType, StableType>(
 
 /// Set sponsorship information on a proposal
 /// Can be called at any time before proposal is finalized
-/// SECURITY: This is public(package) - only callable by governance/lifecycle modules
-public(package) fun set_sponsorship<AssetType, StableType>(
+/// SECURITY: Only callable before proposal is finalized
+public fun set_sponsorship<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     sponsor: address,
     threshold_reduction: SignedU128,
@@ -1934,8 +1934,8 @@ public(package) fun set_sponsorship<AssetType, StableType>(
 }
 
 /// Clear sponsorship information (for refunds on eviction/cancellation)
-/// SECURITY: This is public(package) - only callable by governance/lifecycle modules
-public(package) fun clear_sponsorship<AssetType, StableType>(
+/// SECURITY: Can be called to reset sponsorship
+public fun clear_sponsorship<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
 ) {
     proposal.sponsored_by = option::none();
