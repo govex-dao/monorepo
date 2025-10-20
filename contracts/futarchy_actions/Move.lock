@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "8932C5ACF7D2F40158C2F3A8D8DF7A98581F0217FD7252FF3D333ABF2F464FBE"
-deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
+manifest_digest = "612F96D3AD632662770E6D94298A5F42D6E9B7438DA12F6226150A3E5136FFA6"
+deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -11,6 +11,8 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "WAL", name = "WAL" },
+  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
@@ -83,6 +85,23 @@ source = { git = "https://github.com/MystenLabs/sui.git", rev = "f63c9fc78e2171f
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "WAL"
+source = { local = "../walrus_wal" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "Walrus"
+source = { local = "../walrus_walrus" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "WAL", name = "WAL" },
 ]
 
 [[move.package]]
@@ -163,3 +182,8 @@ source = { local = "../futarchy_types" }
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.57.2"
+edition = "2024.beta"
+flavor = "sui"

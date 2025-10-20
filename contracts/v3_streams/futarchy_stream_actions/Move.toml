@@ -4,14 +4,14 @@ edition = "2024.beta"
 published-at  = "0x0"
 
 [dependencies]
-AccountExtensions = { local = "../move-framework/packages/extensions" }
-AccountActions = { local = "../move-framework/packages/actions" }
-futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
-futarchy_types = { local = "../futarchy_types" }
-futarchy_core = { local = "../futarchy_core" }
-futarchy_markets_core = { local = "../futarchy_markets_core" }
-futarchy_markets_operations = { local = "../futarchy_markets_operations" }
-AccountProtocol = { local = "../move-framework/packages/protocol" }
+AccountExtensions = { local = "../../move-framework/packages/extensions" }
+AccountActions = { local = "../../move-framework/packages/actions" }
+futarchy_one_shot_utils = { local = "../../futarchy_one_shot_utils" }
+futarchy_types = { local = "../../futarchy_types" }
+futarchy_core = { local = "../../futarchy_core" }
+futarchy_markets_core = { local = "../../futarchy_markets_core" }
+futarchy_markets_operations = { local = "../../futarchy_markets_operations" }
+AccountProtocol = { local = "../../move-framework/packages/protocol" }
 [addresses]
 futarchy_stream_actions = "0x8e2848ba3f7102ad614266040f7c4d83cec193dbf91c907365e523b63090915b"
 futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"

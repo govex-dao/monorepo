@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// Pure configuration struct for Futarchy governance systems
-/// This is the configuration object used with Account<FutarchyConfig>
+/// This is the configuration object used with Account
 /// All dynamic state and object references are stored as dynamic fields on the Account
 module futarchy_core::futarchy_config;
 
@@ -172,7 +172,7 @@ public fun early_resolve_twap_scaling_enabled(config: &EarlyResolveConfig): bool
 }
 
 /// Pure Futarchy configuration struct
-/// All dynamic state and object references are stored on the Account<FutarchyConfig> object
+/// All dynamic state and object references are stored on the Account object
 public struct FutarchyConfig has copy, drop, store {
     // Type information
     asset_type: String,
@@ -208,7 +208,7 @@ public struct FutarchyConfig has copy, drop, store {
     refund_quota_on_eviction: bool,
 }
 
-/// Dynamic state stored on Account<FutarchyConfig> via dynamic fields
+/// Dynamic state stored on Account via dynamic fields
 /// This is not part of the config itself but tracked separately
 public struct DaoState has store {
     operational_state: u8,
@@ -708,7 +708,7 @@ public fun state_terminated(): u8 {
 }
 
 public fun internal_config_mut(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: account_protocol::version_witness::VersionWitness,
 ): &mut FutarchyConfig {
     account::config_mut<FutarchyConfig, ConfigWitness>(account, version, ConfigWitness {})
@@ -716,7 +716,7 @@ public fun internal_config_mut(
 
 /// Get mutable access to the DaoState stored as a dynamic field on the Account
 /// This requires access to the Account object, not just the FutarchyConfig
-public fun state_mut_from_account(account: &mut Account<FutarchyConfig>): &mut DaoState {
+public fun state_mut_from_account(account: &mut Account): &mut DaoState {
     account::borrow_managed_data_mut(account, DaoStateKey {}, version::current())
 }
 
@@ -927,7 +927,7 @@ public fun new_with_extensions(
     extensions: &Extensions,
     config: FutarchyConfig,
     ctx: &mut TxContext,
-): Account<FutarchyConfig> {
+): Account {
     // Create dependencies using Extensions for validation
     let deps = deps::new_latest_extensions(
         extensions,
@@ -946,7 +946,7 @@ public fun new_with_extensions(
 
 /// Test version that creates account without Extensions validation
 #[test_only]
-public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Account<FutarchyConfig> {
+public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Account {
     // Create dependencies for testing without Extensions
     // Must include futarchy_core because version::current() creates a VersionWitness
     // with the @futarchy_core package address
@@ -967,7 +967,7 @@ public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Accoun
 
 /// Get mutable access to internal config for test scenarios
 #[test_only]
-public fun internal_config_mut_test(account: &mut Account<FutarchyConfig>): &mut FutarchyConfig {
+public fun internal_config_mut_test(account: &mut Account): &mut FutarchyConfig {
     account::config_mut<FutarchyConfig, ConfigWitness>(
         account,
         version::current(),
@@ -978,7 +978,7 @@ public fun internal_config_mut_test(account: &mut Account<FutarchyConfig>): &mut
 #[test_only]
 /// Create Auth for testing
 public fun new_auth_for_testing(
-    account: &Account<FutarchyConfig>,
+    account: &Account,
 ): account_protocol::account::Auth {
     account::new_auth<FutarchyConfig, ConfigWitness>(
         account,
@@ -988,7 +988,7 @@ public fun new_auth_for_testing(
 }
 
 /// Set the proposal queue ID as a dynamic field on the account
-public fun set_proposal_queue_id(account: &mut Account<FutarchyConfig>, queue_id: Option<ID>) {
+public fun set_proposal_queue_id(account: &mut Account, queue_id: Option<ID>) {
     if (queue_id.is_some()) {
         account::add_managed_data(
             account,
@@ -999,7 +999,7 @@ public fun set_proposal_queue_id(account: &mut Account<FutarchyConfig>, queue_id
     } else {
         // Remove the field if setting to none
         if (
-            account::has_managed_data<FutarchyConfig, ProposalQueueKey>(
+            account::has_managed_data<ProposalQueueKey>(
                 account,
                 ProposalQueueKey {},
             )
@@ -1014,8 +1014,8 @@ public fun set_proposal_queue_id(account: &mut Account<FutarchyConfig>, queue_id
 }
 
 /// Get the proposal queue ID from dynamic field
-public fun get_proposal_queue_id(account: &Account<FutarchyConfig>): Option<ID> {
-    if (account::has_managed_data<FutarchyConfig, ProposalQueueKey>(account, ProposalQueueKey {})) {
+public fun get_proposal_queue_id(account: &Account): Option<ID> {
+    if (account::has_managed_data<ProposalQueueKey>(account, ProposalQueueKey {})) {
         option::some(
             *account::borrow_managed_data(account, ProposalQueueKey {}, version::current()),
         )
@@ -1025,7 +1025,7 @@ public fun get_proposal_queue_id(account: &Account<FutarchyConfig>): Option<ID> 
 }
 
 /// Create auth witness for this account config
-public fun authenticate(account: &Account<FutarchyConfig>, ctx: &TxContext): ConfigWitness {
+public fun authenticate(account: &Account, ctx: &TxContext): ConfigWitness {
     let _ = account;
     let _ = ctx;
     ConfigWitness {}

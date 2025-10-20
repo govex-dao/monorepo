@@ -27,9 +27,9 @@ public struct VestingControlIntent() has copy, drop;
 // === Public Functions ===
 
 /// Request to toggle vesting pause (pause or resume)
-public fun request_toggle_vesting_pause<Config, Outcome: store>(
+public fun request_toggle_vesting_pause<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     vesting_id: ID,
@@ -52,9 +52,9 @@ public fun request_toggle_vesting_pause<Config, Outcome: store>(
 }
 
 /// Request to toggle vesting emergency freeze
-public fun request_toggle_vesting_freeze<Config, Outcome: store>(
+public fun request_toggle_vesting_freeze<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     vesting_id: ID,
@@ -77,9 +77,9 @@ public fun request_toggle_vesting_freeze<Config, Outcome: store>(
 }
 
 /// Request to cancel a vesting
-public fun request_cancel_vesting<Config, Outcome: store>(
+public fun request_cancel_vesting<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     vesting_id: ID,
@@ -101,9 +101,9 @@ public fun request_cancel_vesting<Config, Outcome: store>(
 }
 
 /// Executes toggle vesting pause action
-public fun execute_toggle_vesting_pause<Config, Outcome: store, CoinType>(
+public fun execute_toggle_vesting_pause<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vesting: &mut vesting::Vesting<CoinType>,
     clock: &sui::clock::Clock,
     ctx: &mut TxContext,
@@ -113,7 +113,7 @@ public fun execute_toggle_vesting_pause<Config, Outcome: store, CoinType>(
         version::current(),
         VestingControlIntent(),
         |executable, iw| {
-            vesting::do_toggle_vesting_pause<_, _, CoinType, _>(
+            vesting::do_toggle_vesting_pause<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 vesting,
@@ -127,9 +127,9 @@ public fun execute_toggle_vesting_pause<Config, Outcome: store, CoinType>(
 }
 
 /// Executes toggle vesting freeze action
-public fun execute_toggle_vesting_freeze<Config, Outcome: store, CoinType>(
+public fun execute_toggle_vesting_freeze<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vesting: &mut vesting::Vesting<CoinType>,
     clock: &sui::clock::Clock,
     ctx: &mut TxContext,
@@ -139,7 +139,7 @@ public fun execute_toggle_vesting_freeze<Config, Outcome: store, CoinType>(
         version::current(),
         VestingControlIntent(),
         |executable, iw| {
-            vesting::do_toggle_vesting_freeze<_, _, CoinType, _>(
+            vesting::do_toggle_vesting_freeze<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 vesting,
@@ -152,9 +152,9 @@ public fun execute_toggle_vesting_freeze<Config, Outcome: store, CoinType>(
 }
 
 /// Executes cancel vesting action
-public fun execute_cancel_vesting<Config, Outcome: store, CoinType: drop>(
+public fun execute_cancel_vesting<Config: store, Outcome: store, CoinType: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vesting: vesting::Vesting<CoinType>,
     clock: &sui::clock::Clock,
     ctx: &mut TxContext,
@@ -164,7 +164,7 @@ public fun execute_cancel_vesting<Config, Outcome: store, CoinType: drop>(
         version::current(),
         VestingControlIntent(),
         |executable, iw| {
-            vesting::cancel_vesting<_, _, CoinType, _>(
+            vesting::cancel_vesting<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 vesting,

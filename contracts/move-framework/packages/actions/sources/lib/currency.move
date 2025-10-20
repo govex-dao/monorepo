@@ -121,15 +121,15 @@ public struct UpdateAction<phantom CoinType> has store, drop {
 // === Public functions ===
 
 /// Authenticated users can lock a TreasuryCap.
-public fun lock_cap<Config, CoinType>(
+public fun lock_cap<CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     treasury_cap: TreasuryCap<CoinType>,
     max_supply: Option<u64>,
 ) {
     account.verify(auth);
 
-    let rules = CurrencyRules<CoinType> { 
+    let rules = CurrencyRules<CoinType> {
         max_supply,
         total_minted: 0,
         total_burned: 0,
@@ -148,8 +148,8 @@ public fun lock_cap<Config, CoinType>(
 /// This function is for use during account creation, before the account is shared.
 /// SAFETY: This function MUST only be called on unshared Accounts.
 /// Calling this on a shared Account bypasses Auth checks.
-public(package) fun do_lock_cap_unshared<Config, CoinType>(
-    account: &mut Account<Config>,
+public(package) fun do_lock_cap_unshared< CoinType>(
+    account: &mut Account,
     treasury_cap: TreasuryCap<CoinType>,
 ) {
     // SAFETY REQUIREMENT: Account must be unshared
@@ -173,8 +173,8 @@ public(package) fun do_lock_cap_unshared<Config, CoinType>(
 /// Transfers minted coins directly to recipient
 /// SAFETY: This function MUST only be called on unshared Accounts.
 /// Calling this on a shared Account bypasses Auth checks.
-public(package) fun do_mint_unshared<Config, CoinType>(
-    account: &mut Account<Config>,
+public(package) fun do_mint_unshared< CoinType>(
+    account: &mut Account,
     amount: u64,
     recipient: address,
     ctx: &mut TxContext,
@@ -200,8 +200,8 @@ public(package) fun do_mint_unshared<Config, CoinType>(
 
 /// Mint coins to Coin object during initialization - works on unshared Accounts
 /// Returns Coin for further use in the same transaction
-public(package) fun do_mint_to_coin_unshared<Config, CoinType>(
-    account: &mut Account<Config>,
+public(package) fun do_mint_to_coin_unshared< CoinType>(
+    account: &mut Account,
     amount: u64,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
@@ -223,8 +223,8 @@ public(package) fun do_mint_to_coin_unshared<Config, CoinType>(
 }
 
 /// Checks if a TreasuryCap exists for a given coin type.
-public fun has_cap<Config, CoinType>(
-    account: &Account<Config>
+public fun has_cap<CoinType>(
+    account: &Account
 ): bool {
     account.has_managed_asset(TreasuryCapKey<CoinType>())
 }
@@ -232,22 +232,22 @@ public fun has_cap<Config, CoinType>(
 /// Borrows a mutable reference to the TreasuryCap for a given coin type.
 /// This is used by oracle mints and other patterns that need direct cap access
 /// to bypass object-level policies (only Account access matters).
-public fun borrow_treasury_cap_mut<Config, CoinType>(
-    account: &mut Account<Config>
+public fun borrow_treasury_cap_mut<CoinType>(
+    account: &mut Account
 ): &mut TreasuryCap<CoinType> {
     account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current())
 }
 
 /// Borrows the CurrencyRules for a given coin type.
-public fun borrow_rules<Config, CoinType>(
-    account: &Account<Config>
+public fun borrow_rules<CoinType>(
+    account: &Account
 ): &CurrencyRules<CoinType> {
     account.borrow_managed_data(CurrencyRulesKey<CoinType>(), version::current())
 }
 
 /// Returns the total supply of a given coin type.
-public fun coin_type_supply<Config, CoinType>(account: &Account<Config>): u64 {
-    let cap: &TreasuryCap<CoinType> = 
+public fun coin_type_supply<CoinType>(account: &Account): u64 {
+    let cap: &TreasuryCap<CoinType> =
         account.borrow_managed_asset(TreasuryCapKey<CoinType>(), version::current());
     cap.total_supply()
 }
@@ -313,8 +313,8 @@ public fun read_coin_metadata<CoinType>(
 }
 
 /// Anyone can burn coins they own if enabled.
-public fun public_burn<Config, CoinType>(
-    account: &mut Account<Config>,
+public fun public_burn<Config: store, CoinType>(
+    account: &mut Account,
     coin: Coin<CoinType>
 ) {
     let rules_mut: &mut CurrencyRules<CoinType> =
@@ -369,9 +369,9 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
 }
 
 /// Processes a DisableAction and disables the permissions marked as true.
-public fun do_disable<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_disable<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -450,9 +450,9 @@ public fun new_update<Outcome, CoinType, IW: drop>(
 }
 
 /// Processes an UpdateAction, updates the CoinMetadata.
-public fun do_update<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_update<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     metadata: &mut CoinMetadata<CoinType>,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -554,9 +554,9 @@ public fun new_mint<Outcome, CoinType, IW: drop>(
 }
 
 /// Processes a MintAction, mints and returns new coins.
-public fun do_mint<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_mint<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     version_witness: VersionWitness,
     _intent_witness: IW,
     ctx: &mut TxContext
@@ -584,7 +584,7 @@ public fun do_mint<Config, Outcome: store, CoinType, IW: drop>(
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    let total_supply = currency::coin_type_supply<_, CoinType>(account);
+    let total_supply = currency::coin_type_supply<CoinType>(account);
     let rules_mut: &mut CurrencyRules<CoinType> =
         account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
 
@@ -636,9 +636,9 @@ public fun new_burn<Outcome, CoinType, IW: drop>(
 }
 
 /// Processes a BurnAction, burns coins and returns the amount burned.
-public fun do_burn<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_burn<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     coin: Coin<CoinType>,
     version_witness: VersionWitness,
     _intent_witness: IW,

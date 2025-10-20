@@ -112,7 +112,7 @@ public struct ProposalReserved has copy, drop {
 /// Activates a proposal from the queue and initializes its market
 /// This is called when there's an available slot and a proposal can be activated
 public fun activate_proposal_from_queue<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     queue: &mut ProposalQueue<StableType>,
     proposal_fee_manager: &mut ProposalFeeManager,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>, // Added: For marking liquidity movement
@@ -240,7 +240,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
 /// Finalizes a proposal's market and determines the winning outcome
 /// This should be called after trading has ended and TWAP prices are calculated
 public fun finalize_proposal_market<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
@@ -264,7 +264,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
 
 /// Internal implementation shared by both finalization functions
 fun finalize_proposal_market_internal<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
@@ -432,7 +432,7 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
 /// Try to resolve a proposal early if it meets eligibility criteria
 /// This function can be called by anyone (typically keepers) to trigger early resolution
 public entry fun try_early_resolve<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
@@ -549,7 +549,7 @@ public entry fun try_early_resolve<AssetType, StableType>(
 /// Reserve the next proposal into PREMARKET (no liquidity), only if the current
 /// proposal's trading end is within the premarket threshold.
 public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     queue: &mut ProposalQueue<StableType>,
     proposal_fee_manager: &mut ProposalFeeManager,
     current_market: &MarketState,
@@ -700,7 +700,7 @@ public entry fun finalize_premarket_initialization<AssetType, StableType>(
 /// CRITICAL: Respects withdraw_only_mode flag to prevent auto-reinvestment
 /// If previous proposal has withdraw_only_mode=true, its liquidity will NOT be quantum-split
 public entry fun advance_proposal_state<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
@@ -747,7 +747,7 @@ public entry fun advance_proposal_state<AssetType, StableType>(
 /// This is a convenience function for testing - in production these steps happen at different times
 #[test_only]
 public fun run_complete_proposal_lifecycle<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     queue: &mut ProposalQueue<StableType>,
     proposal_fee_manager: &mut ProposalFeeManager,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,

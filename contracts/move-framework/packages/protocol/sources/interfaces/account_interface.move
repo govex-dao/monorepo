@@ -33,7 +33,7 @@ use sui::clock::Clock;
 /// public fun new_account(
 ///     extensions: &Extensions,
 ///     ctx: &mut TxContext,
-/// ): Account<Config> {
+/// ): Account {
 ///     fees.process(coin);
 ///
 ///     let config = Config {
@@ -52,13 +52,13 @@ use sui::clock::Clock;
 /// ```
 
 /// Returns a new Account object with a specific config and initialize dependencies.
-public macro fun create_account<$Config, $CW: drop>(
+public macro fun create_account<$Config: store, $CW: drop>(
     $config: $Config,
     $version_witness: VersionWitness,
     $config_witness: $CW,
     $ctx: &mut TxContext,
     $init_deps: || -> Deps,
-): Account<$Config> {
+): Account {
     let deps = $init_deps();
     account::new<$Config, $CW>($config, deps, $version_witness, $config_witness, $ctx)
 }
@@ -68,22 +68,22 @@ public macro fun create_account<$Config, $CW: drop>(
 /// ```move
 ///
 /// public fun authenticate(
-///     account: &Account<Multisig, Approvals>,
+///     account: &Account,
 ///     ctx: &TxContext
 /// ): Auth {
 ///     authenticate!(
 ///        account,
 ///        version::current(),
 ///        Witness(),
-///        || account.config().assert_is_member(ctx)
+///        || account.config::<Config>().assert_is_member(ctx)
 ///     )
 /// }
 ///
 /// ```
 
 /// Returns an Auth if the conditions passed are met (used to create intents and more).
-public macro fun create_auth<$Config, $CW: drop>(
-    $account: &Account<$Config>,
+public macro fun create_auth<$Config: store, $CW: drop>(
+    $account: &Account,
     $version_witness: VersionWitness,
     $config_witness: $CW,
     $grant_permission: ||, // condition to grant permission, must throw if not met
@@ -92,15 +92,15 @@ public macro fun create_auth<$Config, $CW: drop>(
 
     $grant_permission();
 
-    account.new_auth($version_witness, $config_witness)
+    account.new_auth<$Config, $CW>($version_witness, $config_witness)
 }
 
 /// Example implementation:
 ///
 /// ```move
 ///
-/// public fun approve_intent<Config>(
-///     account: &mut Account<Config>,
+/// public fun approve_intent<Config: store>(
+///     account: &mut Account,
 ///     key: String,
 ///     ctx: &TxContext
 /// ) {
@@ -120,8 +120,8 @@ public macro fun create_auth<$Config, $CW: drop>(
 /// ```
 
 /// Modifies the outcome of an intent.
-public macro fun resolve_intent<$Config, $Outcome, $CW: drop>(
-    $account: &mut Account<$Config>,
+public macro fun resolve_intent<$Config: store, $Outcome, $CW: drop>(
+    $account: &mut Account,
     $key: String,
     $version_witness: VersionWitness,
     $config_witness: $CW,
@@ -130,7 +130,7 @@ public macro fun resolve_intent<$Config, $Outcome, $CW: drop>(
     let account = $account;
 
     let outcome_mut = account
-        .intents_mut($version_witness, $config_witness)
+        .intents_mut<$Config, $CW>($version_witness, $config_witness)
         .get_mut($key)
         .outcome_mut<$Outcome>();
 
@@ -145,11 +145,11 @@ public macro fun resolve_intent<$Config, $Outcome, $CW: drop>(
 /// ```move
 ///
 /// public fun execute_intent(
-///     account: &mut Account<Config>,
+///     account: &mut Account,
 ///     key: String,
 ///     clock: &Clock,
 /// ): Executable<Outcome> {
-///     execute_intent!<_, Outcome, _>(account, key, clock, version::current(), Witness())
+///     execute_intent!<Config, Outcome, _>(account, key, clock, version::current(), Witness())
 /// }
 ///
 /// fun validate_outcome(
@@ -165,8 +165,8 @@ public macro fun resolve_intent<$Config, $Outcome, $CW: drop>(
 /// ```
 
 /// Validates the outcome of an intent and returns an executable.
-public macro fun execute_intent<$Config, $Outcome, $CW: drop>(
-    $account: &mut Account<$Config>,
+public macro fun execute_intent<$Config: store, $Outcome, $CW: drop>(
+    $account: &mut Account,
     $key: String,
     $clock: &Clock,
     $version_witness: VersionWitness,
@@ -174,7 +174,7 @@ public macro fun execute_intent<$Config, $Outcome, $CW: drop>(
     $ctx: &mut TxContext,
     $validate_outcome: |$Outcome|,
 ): Executable<$Outcome> {
-    let (outcome, executable) = account::create_executable<_, $Outcome, _>(
+    let (outcome, executable) = account::create_executable<$Config, $Outcome, $CW>(
         $account,
         $key,
         $clock,

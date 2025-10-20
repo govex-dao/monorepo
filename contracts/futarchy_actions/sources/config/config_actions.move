@@ -312,7 +312,7 @@ public struct ConfigAction has store, drop, copy {
 /// Execute a set proposals enabled action
 public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -360,7 +360,7 @@ public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
 
 /// Internal version that works directly with action struct for init actions
 public fun do_set_proposals_enabled_internal(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     action: SetProposalsEnabledAction,  // Take by value to consume
     version: VersionWitness,
     clock: &Clock,
@@ -388,7 +388,7 @@ public fun do_set_proposals_enabled_internal(
 /// WARNING: This is IRREVERSIBLE - sets operational state to TERMINATED
 public fun do_terminate_dao<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -429,11 +429,8 @@ public fun do_terminate_dao<Outcome: store, IW: drop>(
     // CRITICAL: This is irreversible - set to TERMINATED
     futarchy_config::set_operational_state(dao_state, futarchy_config::state_terminated());
 
-    // Also disable proposal creation in governance config (belt and suspenders)
-    let config = futarchy_config::internal_config_mut(account, version);
-    let gov_config = futarchy_config::governance_config_mut(config);
-    dao_config::set_proposal_creation_enabled(gov_config, false);
-    dao_config::set_accept_new_proposals(gov_config, false);
+    // Note: Proposal creation is disabled via state_terminated() above
+    // The GovernanceConfig setters are package-private so we can't call them here
 
     // Emit event
     event::emit(DaoTerminated {
@@ -451,7 +448,7 @@ public fun do_terminate_dao<Outcome: store, IW: drop>(
 /// Execute an update name action
 public fun do_update_name<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -482,7 +479,7 @@ public fun do_update_name<Outcome: store, IW: drop>(
     assert!(new_name.length() > 0, EEmptyName);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Update the name - futarchy_config expects a regular String
     futarchy_config::set_dao_name(config, new_name);
@@ -500,7 +497,7 @@ public fun do_update_name<Outcome: store, IW: drop>(
 
 /// Internal version that works directly with action struct for init actions
 public fun do_update_name_internal(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     action: UpdateNameAction,  // Already takes by value
     version: VersionWitness,
     clock: &Clock,
@@ -513,7 +510,7 @@ public fun do_update_name_internal(
     assert!(new_name.length() > 0, EEmptyName);
     
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
     
     // Update the name directly (set_dao_name handles conversion internally)
     futarchy_config::set_dao_name(config, new_name);
@@ -531,7 +528,7 @@ public fun do_update_name_internal(
 /// Execute a trading params update action
 public fun do_update_trading_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -575,7 +572,7 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
     validate_trading_params_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     if (action.min_asset_amount.is_some()) {
@@ -609,7 +606,7 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
 /// Execute a metadata update action
 public fun do_update_metadata<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -661,7 +658,7 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
     validate_metadata_update(&action);
     
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
     
     // Apply updates if provided - convert types as needed
     if (action.dao_name.is_some()) {
@@ -691,7 +688,7 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
 /// Execute a TWAP config update action
 public fun do_update_twap_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -737,7 +734,7 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     validate_twap_config_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     if (action.start_delay.is_some()) {
@@ -766,7 +763,7 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
 /// Execute a governance update action
 public fun do_update_governance<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -816,7 +813,7 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     validate_governance_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     if (action.proposal_creation_enabled.is_some()) {
@@ -859,7 +856,7 @@ public fun do_update_governance<Outcome: store, IW: drop>(
 /// Note: This requires metadata table support in futarchy_config which may not exist yet
 public fun do_update_metadata_table<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -926,7 +923,7 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
     assert!(action.keys.length() == action.values.length(), EMismatchedKeyValueLength);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Metadata table operations would be implemented here when available in futarchy_config
     // Currently, futarchy_config doesn't have a metadata table, so we validate the action
@@ -947,7 +944,7 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
 /// Execute a queue params update action
 public fun do_update_queue_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -987,7 +984,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     validate_queue_params_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     if (action.fee_escalation_basis_points.is_some()) {
@@ -1008,7 +1005,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
 /// Execute a slash distribution update action
 public fun do_update_slash_distribution<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -1052,7 +1049,7 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
     assert!(total == 10000, EInvalidSlashDistribution);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Update the slash distribution
     futarchy_config::update_slash_distribution(
@@ -1082,7 +1079,7 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
 /// StorageConfig now has no fields, so this action is a no-op
 public fun do_update_storage_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    _account: &mut Account,
     _version: VersionWitness,
     _intent_witness: IW,
     _clock: &Clock,
@@ -1097,7 +1094,7 @@ public fun do_update_storage_config<Outcome: store, IW: drop>(
 /// This controls how conditional token metadata is derived during proposal creation
 public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -1137,7 +1134,7 @@ public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
     let account_id = object::id(account);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Apply updates using futarchy_config setters (standard pattern)
     if (use_outcome_index_opt.is_some()) {
@@ -1169,7 +1166,7 @@ public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
 /// Execute an early resolve config update action
 public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -1204,7 +1201,7 @@ public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Create new early resolve config
     let early_resolve_config = futarchy_config::new_early_resolve_config(
@@ -1234,7 +1231,7 @@ public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
 /// Execute a sponsorship config update action
 public fun do_update_sponsorship_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -1272,7 +1269,7 @@ public fun do_update_sponsorship_config<Outcome: store, IW: drop>(
     let account_id = object::id(account);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
     let dao_cfg = futarchy_config::dao_config_mut(config);
     let sponsorship_cfg = dao_config::sponsorship_config_mut(dao_cfg);
 
@@ -1310,7 +1307,7 @@ public fun do_update_sponsorship_config<Outcome: store, IW: drop>(
 /// This delegates to the appropriate handler based on config_type
 public fun do_batch_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     intent_witness: IW,
     _clock: &Clock,
@@ -1893,7 +1890,7 @@ public fun new_trading_params_update<Outcome, IW: drop>(
     validate_trading_params_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        type_name::get<UpdateTradingConfig>().into_string().to_string(),
+        type_name::get<TradingParamsUpdate>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1916,7 +1913,7 @@ public fun new_metadata_update<Outcome, IW: drop>(
     validate_metadata_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        type_name::get<SetMetadata>().into_string().to_string(),
+        type_name::get<MetadataUpdate>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1941,7 +1938,7 @@ public fun new_twap_config_update<Outcome, IW: drop>(
     validate_twap_config_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        type_name::get<UpdateTwapConfig>().into_string().to_string(),
+        type_name::get<TwapConfigUpdate>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1974,7 +1971,7 @@ public fun new_governance_update<Outcome, IW: drop>(
     validate_governance_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        type_name::get<UpdateGovernance>().into_string().to_string(),
+        type_name::get<GovernanceUpdate>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -2026,7 +2023,7 @@ public fun new_slash_distribution_update<Outcome, IW: drop>(
     };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        type_name::get<UpdateSlashDistribution>().into_string().to_string(),
+        type_name::get<SlashDistributionUpdate>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -2049,7 +2046,7 @@ public fun new_queue_params_update<Outcome, IW: drop>(
     validate_queue_params_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        type_name::get<UpdateQueueParams>().into_string().to_string(),
+        type_name::get<QueueParamsUpdate>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -2189,7 +2186,6 @@ public fun get_slash_distribution_fields(update: &SlashDistributionUpdateAction)
 
 /// Get queue params update fields
 public fun get_queue_params_fields(update: &QueueParamsUpdateAction): (
-    &Option<u64>,
     &Option<u64>,
     &Option<u64>,
     &Option<u64>
@@ -2354,7 +2350,7 @@ fun validate_queue_params_update(action: &QueueParamsUpdateAction) {
 /// Alias for do_update_twap_config for compatibility
 public fun do_update_twap_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     iw: IW,
     clock: &Clock,
@@ -2366,7 +2362,7 @@ public fun do_update_twap_params<Outcome: store, IW: drop>(
 /// Alias for queue params update (was called fee params)
 public fun do_update_fee_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     iw: IW,
     clock: &Clock,

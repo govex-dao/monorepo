@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// Generic payment system for Account Protocol - REFACTORED
-/// Works with any Account<Config> type
+/// Works with any Account type
 /// This version removes state duplication by using vault streams as the source of truth
 /// while preserving all original features (budget accountability, isolated pools, etc.)
 ///
@@ -431,7 +431,7 @@ public fun new_execute_payment_action<CoinType>(
 /// Returns the payment ID for PTB chaining
 public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _version_witness: VersionWitness,
     witness: IW,
     clock: &Clock,
@@ -516,7 +516,7 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
     
     // REFACTORED: Create vault stream for direct treasury mode
     let vault_stream_id: Option<ID> = if (action.source_mode == SOURCE_DIRECT_TREASURY && action.payment_type == PAYMENT_TYPE_STREAM) {
-        let auth = account::new_auth(account, version::current(), witness);
+        let auth = account::new_auth<Config, IW>(account, version::current(), witness);
 
         // Create vault stream with proper parameters
         let stream_id = vault::create_stream<Config, CoinType>(
@@ -559,10 +559,10 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
         // Check if isolated vault exists
         // Note: Vault will be auto-created on first deposit via vault::deposit_coin
         // For now, we require the vault to already exist with funds before creating stream
-        assert!(vault::has_vault<Config>(account, isolated_vault_name), EVaultNotFound);
+        assert!(vault::has_vault(account, isolated_vault_name), EVaultNotFound);
 
         // Create stream in isolated vault (vault must already be funded)
-        let auth = account::new_auth(account, version::current(), witness);
+        let auth = account::new_auth<Config, IW>(account, version::current(), witness);
         let stream_id = vault::create_stream<Config, CoinType>(
             auth,
             account,
@@ -656,7 +656,7 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
 /// Execute do_cancel_payment action
 public fun do_cancel_payment<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -709,7 +709,7 @@ public fun do_cancel_payment<Config: store, Outcome: store, CoinType: drop, IW: 
 /// Execute do_execute_payment action (for recurring payments)
 public fun do_execute_payment<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -737,7 +737,7 @@ public fun do_execute_payment<Config: store, Outcome: store, CoinType: drop, IW:
 /// Execute do_update_payment_recipient action
 public fun do_update_payment_recipient<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -784,7 +784,7 @@ public fun do_update_payment_recipient<Config: store, Outcome: store, IW: drop>(
 /// Execute do_add_withdrawer action
 public fun do_add_withdrawer<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -827,7 +827,7 @@ public fun do_add_withdrawer<Config: store, Outcome: store, IW: drop>(
 /// Execute do_remove_withdrawers action
 public fun do_remove_withdrawers<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -877,7 +877,7 @@ public fun do_remove_withdrawers<Config: store, Outcome: store, IW: drop>(
 /// Execute do_toggle_payment action
 public fun do_toggle_payment<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -917,7 +917,7 @@ public fun do_toggle_payment<Config: store, Outcome: store, IW: drop>(
 
 /// REFACTORED: Claim now delegates to vault stream for direct treasury and handles weighted distribution
 public fun claim_from_payment<Config: store, CoinType: drop>(
-    account: &mut Account<Config>,
+    account: &mut Account,
     payment_id: String,
     amount: Option<u64>,
     reason_code: Option<String>,
@@ -949,7 +949,7 @@ public fun claim_from_payment<Config: store, CoinType: drop>(
         let stream_id = *vault_stream_id_opt.borrow();
         
         // Calculate total available from vault stream
-        let total_available = vault::calculate_claimable(account, string::utf8(b"treasury"), stream_id, clock);
+        let total_available = vault::calculate_claimable<Config>(account, string::utf8(b"treasury"), stream_id, clock);
         
         // For simplified single-recipient model, sender gets full amount
         let available = if (amount.is_some()) {
@@ -966,7 +966,7 @@ public fun claim_from_payment<Config: store, CoinType: drop>(
         assert!(available > 0, ENothingToClaim);
 
         // Get claimed amount BEFORE withdrawal for accurate event data
-        let (_, total_amount, claimed_before, _, _, _, _) = vault::stream_info(
+        let (_, total_amount, claimed_before, _, _, _, _) = vault::stream_info<Config>(
             account,
             string::utf8(b"treasury"),
             stream_id
@@ -1061,7 +1061,7 @@ public fun claim_from_payment<Config: store, CoinType: drop>(
 
 /// REFACTORED: Cancel payment properly handles vault stream cancellation
 public fun cancel_payment<Config: store, CoinType: drop>(
-    account: &mut Account<Config>,
+    account: &mut Account,
     payment_id: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1087,7 +1087,7 @@ public fun cancel_payment<Config: store, CoinType: drop>(
     // Cancel vault stream if it exists
     if (vault_stream_id_opt.is_some()) {
         let stream_id = *vault_stream_id_opt.borrow();
-        let auth = account::new_auth(account, version::current(), tx_context::sender(ctx));
+        let auth = account::new_auth<Config, address>(account, version::current(), tx_context::sender(ctx));
         let (vault_refund, vault_amount) = vault::cancel_stream<Config, CoinType>(
             auth,
             account,
@@ -1138,7 +1138,7 @@ public fun cancel_payment<Config: store, CoinType: drop>(
 
 /// REFACTORED: Get payment info now queries vault stream for amounts/timestamps
 public fun get_payment_info<Config: store>(
-    account: &Account<Config>,
+    account: &Account,
     payment_id: String,
     clock: &Clock,
 ): (u8, u64, u64, u64, u64, bool) {
@@ -1154,7 +1154,7 @@ public fun get_payment_info<Config: store>(
     // REFACTORED: Get amounts/timestamps from vault stream if direct treasury
     if (config.vault_stream_id.is_some()) {
         let stream_id = *config.vault_stream_id.borrow();
-        let (_, total_amount, claimed_amount, start_time, end_time, _, _) = vault::stream_info(
+        let (_, total_amount, claimed_amount, start_time, end_time, _, _) = vault::stream_info<Config>(
             account,
             string::utf8(b"treasury"),
             stream_id
@@ -1275,7 +1275,7 @@ fun handle_budget_withdrawal(
 
 /// Withdraw from isolated pool (existing logic preserved)
 fun withdraw_from_isolated_pool<Config: store, CoinType: drop>(
-    account: &mut Account<Config>,
+    account: &mut Account,
     config: &mut PaymentConfig,
     payment_id: String,
     amount: Option<u64>,
@@ -1368,7 +1368,7 @@ public fun delete_challenge_withdrawals(expired: &mut account_protocol::intents:
 /// Pause a payment stream (delegates to vault)
 public fun pause_payment<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     payment_id: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1401,7 +1401,7 @@ public fun pause_payment<Config: store>(
 /// Resume a paused payment stream (delegates to vault)
 public fun resume_payment<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     payment_id: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1433,7 +1433,7 @@ public fun resume_payment<Config: store>(
 /// Add additional beneficiary to payment stream
 public fun add_payment_beneficiary<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     payment_id: String,
     new_beneficiary: address,
     ctx: &mut TxContext,
@@ -1462,7 +1462,7 @@ public fun add_payment_beneficiary<Config: store>(
 /// Transfer payment stream to new primary beneficiary
 public fun transfer_payment<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     payment_id: String,
     new_beneficiary: address,
     ctx: &mut TxContext,
@@ -1492,7 +1492,7 @@ public fun transfer_payment<Config: store>(
 /// Update payment metadata
 public fun update_payment_metadata<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     payment_id: String,
     metadata: String,
     ctx: &mut TxContext,
@@ -1518,7 +1518,7 @@ public fun update_payment_metadata<Config: store>(
 
 /// Get all payment IDs for dissolution
 public fun get_all_payment_ids<Config: store>(
-    account: &Account<Config>,
+    account: &Account,
 ): vector<String> {
     if (!account::has_managed_data(account, PaymentStorageKey {})) {
         return vector::empty()
@@ -1535,7 +1535,7 @@ public fun get_all_payment_ids<Config: store>(
 
 /// List all unique coin types used by active payments (for PTB dissolution routing)
 public fun list_stream_coin_types<Config: store>(
-    account: &Account<Config>,
+    account: &Account,
 ): vector<String> {
     let mut coin_types = vector::empty<String>();
 
@@ -1567,7 +1567,7 @@ public fun list_stream_coin_types<Config: store>(
 /// FIXED: Now actually cancels vault streams and handles non-cancellable streams
 /// Returns total amount refunded across all cancelled streams
 public fun cancel_all_payments_for_dissolution<Config: store, CoinType: drop>(
-    account: &mut Account<Config>,
+    account: &mut Account,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Coin<CoinType>, u64) {
@@ -1620,7 +1620,7 @@ public fun cancel_all_payments_for_dissolution<Config: store, CoinType: drop>(
                     let stream_id = *vault_stream_id_opt.borrow();
 
                     // Create auth for each cancellation (auth doesn't have copy ability)
-                    let auth = account::new_auth(account, version::current(), tx_context::sender(ctx));
+                    let auth = account::new_auth<Config, address>(account, version::current(), tx_context::sender(ctx));
 
                     // Cancel the vault stream (this handles vested vs unvested split)
                     let (vault_refund, vault_amount) = vault::cancel_stream<Config, CoinType>(
@@ -1697,7 +1697,7 @@ public fun cancel_all_payments_for_dissolution<Config: store, CoinType: drop>(
 /// Create a payment stream during DAO initialization
 /// Called directly by PTB during init phase
 public entry fun init_create_stream<Config: store, CoinType>(
-    account: &mut Account<Config>,
+    account: &mut Account,
     recipient: address,
     amount_per_period: u64,     // Amount to pay per period
     period_duration_ms: u64,    // Duration of each period in milliseconds

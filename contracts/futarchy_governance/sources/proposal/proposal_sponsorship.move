@@ -53,7 +53,7 @@ public struct SponsorshipRefunded has copy, drop {
 /// - Proposal must not already be sponsored
 public entry fun sponsor_proposal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
-    account: &Account<FutarchyConfig>,
+    account: &Account,
     quota_registry: &mut ProposalQuotaRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -129,7 +129,7 @@ public entry fun sponsor_proposal<AssetType, StableType>(
 /// - Proposal must not already be sponsored
 public entry fun sponsor_proposal_to_zero<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
-    account: &Account<FutarchyConfig>,
+    account: &Account,
     quota_registry: &ProposalQuotaRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -236,7 +236,7 @@ public(package) fun refund_sponsorship_on_eviction<AssetType, StableType>(
 /// Returns (can_sponsor, reason)
 public fun can_sponsor_proposal<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
-    account: &Account<FutarchyConfig>,
+    account: &Account,
     quota_registry: &ProposalQuotaRegistry,
     potential_sponsor: address,
     clock: &Clock,

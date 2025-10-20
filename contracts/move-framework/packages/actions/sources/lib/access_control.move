@@ -69,9 +69,9 @@ public struct ReturnAction<phantom Cap> has drop, store {}
 // === Public functions ===
 
 /// Authenticated user can lock a Cap, the Cap must have at least store ability.
-public fun lock_cap<Config, Cap: key + store>(
+public fun lock_cap<Config: store, Cap: key + store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     cap: Cap,
 ) {
     account.verify(auth);
@@ -80,16 +80,16 @@ public fun lock_cap<Config, Cap: key + store>(
 
 /// Lock capability during initialization - works on unshared Accounts
 /// Store any capability in the Account during creation
-public(package) fun do_lock_cap_unshared<Config, Cap: key + store>(
-    account: &mut Account<Config>,
+public(package) fun do_lock_cap_unshared< Cap: key + store>(
+    account: &mut Account,
     cap: Cap,
 ) {
     account.add_managed_asset(CapKey<Cap>(), cap, version::current());
 }
 
 /// Checks if there is a Cap locked for a given type.
-public fun has_lock<Config, Cap>(
-    account: &Account<Config>
+public fun has_lock<Config: store, Cap>(
+    account: &Account
 ): bool {
     account.has_managed_asset(CapKey<Cap>())
 }
@@ -131,9 +131,9 @@ public fun new_borrow<Outcome, Cap, IW: drop>(
 }
 
 /// Processes a BorrowAction and returns a Borrowed hot potato and the Cap.
-public fun do_borrow<Config, Outcome: store, Cap: key + store, IW: drop>(
+public fun do_borrow<Config: store, Outcome: store, Cap: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ): Cap {
@@ -206,9 +206,9 @@ public fun new_return<Outcome, Cap, IW: drop>(
 }
 
 /// Returns a Cap to the Account and validates the ReturnAction.
-public fun do_return<Config, Outcome: store, Cap: key + store, IW: drop>(
+public fun do_return<Config: store, Outcome: store, Cap: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     cap: Cap,
     version_witness: VersionWitness,
     _intent_witness: IW,

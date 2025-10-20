@@ -53,9 +53,9 @@ public struct WithdrawAndBurnIntent() has copy, drop;
 // === Public functions ===
 
 /// Creates a DisableRulesIntent and adds it to an Account.
-public fun request_disable_rules<Config, Outcome: store, CoinType>(
+public fun request_disable_rules<Config: store, Outcome: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     mint: bool,
@@ -68,7 +68,7 @@ public fun request_disable_rules<Config, Outcome: store, CoinType>(
 ) {
     account.verify(auth);
     params.assert_single_execution();
-    assert!(currency::has_cap<_, CoinType>(account), ENoLock);
+    assert!(currency::has_cap<CoinType>(account), ENoLock);
 
     account.build_intent!(
         params,
@@ -91,15 +91,15 @@ public fun request_disable_rules<Config, Outcome: store, CoinType>(
 }
 
 /// Executes a DisableRulesIntent, disables rules for the coin forever.
-public fun execute_disable_rules<Config, Outcome: store, CoinType>(
+public fun execute_disable_rules<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
 ) {
     account.process_intent!(
         executable,
         version::current(),
         DisableRulesIntent(),
-        |executable, iw| currency::do_disable<_, _, CoinType, _>(
+        |executable, iw| currency::do_disable<_, CoinType, _>(
             executable,
             account,
             version::current(),
@@ -109,9 +109,9 @@ public fun execute_disable_rules<Config, Outcome: store, CoinType>(
 }
 
 /// Creates an UpdateMetadataIntent and adds it to an Account.
-public fun request_update_metadata<Config, Outcome: store, CoinType>(
+public fun request_update_metadata<Config: store, Outcome: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     md_symbol: Option<ascii::String>,
@@ -123,7 +123,7 @@ public fun request_update_metadata<Config, Outcome: store, CoinType>(
     account.verify(auth);
     params.assert_single_execution();
 
-    let rules = currency::borrow_rules<_, CoinType>(account);
+    let rules = currency::borrow_rules<CoinType>(account);
     if (!rules.can_update_symbol()) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
     if (!rules.can_update_name()) assert!(md_name.is_none(), ECannotUpdateName);
     if (!rules.can_update_description())
@@ -149,16 +149,16 @@ public fun request_update_metadata<Config, Outcome: store, CoinType>(
 }
 
 /// Executes an UpdateMetadataIntent, updates the CoinMetadata.
-public fun execute_update_metadata<Config, Outcome: store, CoinType>(
+public fun execute_update_metadata<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     metadata: &mut CoinMetadata<CoinType>,
 ) {
     account.process_intent!(
         executable,
         version::current(),
         UpdateMetadataIntent(),
-        |executable, iw| currency::do_update<_, _, CoinType, _>(
+        |executable, iw| currency::do_update<_, CoinType, _>(
             executable,
             account,
             metadata,
@@ -169,9 +169,9 @@ public fun execute_update_metadata<Config, Outcome: store, CoinType>(
 }
 
 /// Creates a MintAndTransferIntent and adds it to an Account.
-public fun request_mint_and_transfer<Config, Outcome: store, CoinType>(
+public fun request_mint_and_transfer<Config: store, Outcome: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     amounts: vector<u64>,
@@ -181,7 +181,7 @@ public fun request_mint_and_transfer<Config, Outcome: store, CoinType>(
     account.verify(auth);
     assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
 
-    let rules = currency::borrow_rules<_, CoinType>(account);
+    let rules = currency::borrow_rules<CoinType>(account);
     assert!(rules.can_mint(), EMintDisabled);
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
     if (rules.max_supply().is_some()) assert!(sum <= *rules.max_supply().borrow(), EMaxSupply);
@@ -201,9 +201,9 @@ public fun request_mint_and_transfer<Config, Outcome: store, CoinType>(
 }
 
 /// Executes a MintAndTransferIntent, sends managed coins. Can be looped over.
-public fun execute_mint_and_transfer<Config, Outcome: store, CoinType>(
+public fun execute_mint_and_transfer<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     ctx: &mut TxContext,
 ) {
     account.process_intent!(
@@ -211,7 +211,7 @@ public fun execute_mint_and_transfer<Config, Outcome: store, CoinType>(
         version::current(),
         MintAndTransferIntent(),
         |executable, iw| {
-            let coin = currency::do_mint<_, _, CoinType, _>(
+            let coin = currency::do_mint<_, CoinType, _>(
                 executable,
                 account,
                 version::current(),
@@ -224,9 +224,9 @@ public fun execute_mint_and_transfer<Config, Outcome: store, CoinType>(
 }
 
 /// Creates a WithdrawAndBurnIntent and adds it to an Account.
-public fun request_withdraw_and_burn<Config, Outcome: store, CoinType>(
+public fun request_withdraw_and_burn<Config: store, Outcome: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     coin_id: ID,
@@ -236,7 +236,7 @@ public fun request_withdraw_and_burn<Config, Outcome: store, CoinType>(
     account.verify(auth);
     params.assert_single_execution();
 
-    let rules = currency::borrow_rules<_, CoinType>(account);
+    let rules = currency::borrow_rules<CoinType>(account);
     assert!(rules.can_burn(), EBurnDisabled);
 
     intent_interface::build_intent!(
@@ -248,16 +248,16 @@ public fun request_withdraw_and_burn<Config, Outcome: store, CoinType>(
         WithdrawAndBurnIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw_object<_, _, _>(intent, account, coin_id, iw);
+            owned::new_withdraw_object<_, _>(intent, account, coin_id, iw);
             currency::new_burn<_, CoinType, _>(intent, amount, iw);
         },
     );
 }
 
 /// Executes a WithdrawAndBurnIntent, burns a coin owned by the account.
-public fun execute_withdraw_and_burn<Config, Outcome: store, CoinType>(
+public fun execute_withdraw_and_burn<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receiving: Receiving<Coin<CoinType>>,
 ) {
     account.process_intent!(
@@ -265,13 +265,13 @@ public fun execute_withdraw_and_burn<Config, Outcome: store, CoinType>(
         version::current(),
         WithdrawAndBurnIntent(),
         |executable, iw| {
-            let coin = owned::do_withdraw_object<_, _, Coin<CoinType>, _>(
+            let coin = owned::do_withdraw_object<_, Coin<CoinType>, _>(
                 executable,
                 account,
                 receiving,
                 iw,
             );
-            currency::do_burn<_, _, CoinType, _>(executable, account, coin, version::current(), iw);
+            currency::do_burn<_, CoinType, _>(executable, account, coin, version::current(), iw);
         },
     );
 }

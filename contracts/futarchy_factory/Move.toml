@@ -14,7 +14,7 @@ futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 futarchy_oracle = { local = "../futarchy_oracle_actions" }
 futarchy_actions = { local = "../futarchy_actions" }
-futarchy_stream_actions = { local = "../futarchy_stream_actions" }
+# REMOVED: futarchy_stream_actions - moved to v3_streams (not needed in factory)
 # REMOVED: futarchy_lifecycle (dissolution) - no longer needed in core protocol
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]

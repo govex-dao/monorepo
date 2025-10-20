@@ -71,18 +71,17 @@ public struct VerifierAttestationAdded has copy, drop {
 // === Public Functions ===
 
 /// Propose upgrade with full audit trail
-public fun propose_auditable_upgrade<Config>(
+public fun propose_auditable_upgrade<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     package_name: String,
     bytecode_digest: vector<u8>,
     audit_metadata: AuditMetadata,
     execution_time_ms: u64,
     clock: &Clock,
 ) {
-    account.verify(auth);
-
     // Delegate to standard upgrade system for UpgradeCap validation
+    // (this will verify auth internally)
     package_upgrade::propose_upgrade_digest(
         auth,
         account,
@@ -117,14 +116,16 @@ public fun propose_auditable_upgrade<Config>(
 }
 
 /// Add independent verifier attestation
-public fun add_verifier_attestation<Config>(
+public fun add_verifier_attestation<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     package_name: String,
     bytecode_digest: vector<u8>,
     signature: vector<u8>,  // Verifier's signature over digest
     clock: &Clock,
 ) {
+    use account_protocol::account as acc;
+    let verifier = acc::auth_account_addr(&auth);
     account.verify(auth);
 
     let proposal: &mut AuditableUpgradeProposal = account.borrow_managed_data_mut(
@@ -137,15 +138,15 @@ public fun add_verifier_attestation<Config>(
     sui::event::emit(VerifierAttestationAdded {
         package_name,
         bytecode_digest,
-        verifier: auth.intent_addr(),
+        verifier,
         signature,
         timestamp_ms: clock.timestamp_ms(),
     });
 }
 
 /// Get full audit metadata for proposal
-public fun get_audit_metadata<Config>(
-    account: &Account<Config>,
+public fun get_audit_metadata<Config: store>(
+    account: &Account,
     package_name: String,
     bytecode_digest: vector<u8>,
 ): AuditMetadata {

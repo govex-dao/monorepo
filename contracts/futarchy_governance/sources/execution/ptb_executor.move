@@ -30,7 +30,7 @@ use futarchy_markets_core::{
 };
 use std::option;
 use std::string::String;
-use sui::{clock::Clock, coin::Coin, event, tx_context::TxContext};
+use sui::{clock::Clock, coin::Coin, event, object::ID, tx_context::TxContext};
 
 // === Errors ===
 const EMarketNotFinalized: u64 = 0;
@@ -40,13 +40,22 @@ const EIntentMissing: u64 = 2;
 // YES/ACCEPTED outcome index used across governance flow.
 const OUTCOME_ACCEPTED: u64 = 0;
 
+// === Events ===
+/// Event emitted when a proposal intent is executed
+public struct ProposalIntentExecuted has copy, drop {
+    proposal_id: ID,
+    dao_id: ID,
+    intent_key: String,
+    timestamp: u64,
+}
+
 /// Begin execution for an approved proposal by creating the governance executable.
 /// - Verifies market finalization and approval.
 /// - Deposits the execution fee.
 /// - Synthesizes the intent from the stored InitActionSpecs.
 /// Returns the executable hot potato and intent key for cleanup.
 public fun begin_execution<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
     fee_manager: &mut ProposalFeeManager,
@@ -90,8 +99,9 @@ public fun begin_execution<AssetType, StableType>(
 
 /// Finalize execution after all actions have been processed.
 /// Confirms the executable, performs janitorial cleanup, and emits the execution event.
-public entry fun finalize_execution<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+/// Note: Cannot be `entry` because Executable<FutarchyOutcome> is not a valid entry parameter type
+public fun finalize_execution<AssetType, StableType>(
+    account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     executable: Executable<FutarchyOutcome>,
     clock: &Clock,
@@ -103,12 +113,12 @@ public entry fun finalize_execution<AssetType, StableType>(
 
     intent_janitor::cleanup_all_expired_intents(account, clock, ctx);
 
-    event::emit(proposal_lifecycle::new_proposal_intent_executed(
-        proposal::get_id(proposal),
-        proposal::get_dao_id(proposal),
+    event::emit(ProposalIntentExecuted {
+        proposal_id: proposal::get_id(proposal),
+        dao_id: proposal::get_dao_id(proposal),
         intent_key,
-        clock.timestamp_ms(),
-    ));
+        timestamp: clock.timestamp_ms(),
+    });
 }
 
 /// Build a human-readable hint for the temporary outcome metadata.

@@ -369,7 +369,7 @@ public fun new_apply_pending_coin_fees(
 /// Execute factory pause/unpause action
 public fun do_set_factory_paused<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -391,7 +391,7 @@ public fun do_set_factory_paused<Outcome: store, IW: drop>(
 
     let _ = ctx;
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
+    let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
         b"protocol:factory_owner_cap".to_string(),
         version
@@ -407,7 +407,7 @@ public fun do_set_factory_paused<Outcome: store, IW: drop>(
 /// Execute permanent factory disable action - THIS CANNOT BE REVERSED
 public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -427,7 +427,7 @@ public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
 
     let _ = witness;
 
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
+    let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
         b"protocol:factory_owner_cap".to_string(),
         version
@@ -440,7 +440,7 @@ public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
 /// Execute add stable type action
 public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -459,7 +459,7 @@ public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
+    let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
         b"protocol:factory_owner_cap".to_string(),
         version
@@ -471,7 +471,7 @@ public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
 /// Execute remove stable type action
 public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -490,7 +490,7 @@ public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
+    let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
         b"protocol:factory_owner_cap".to_string(),
         version
@@ -502,7 +502,7 @@ public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
 /// Execute update DAO creation fee action
 public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -523,7 +523,7 @@ public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -535,7 +535,7 @@ public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
 /// Execute update proposal fee action
 public fun do_update_proposal_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -556,7 +556,7 @@ public fun do_update_proposal_fee<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
 
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -574,7 +574,7 @@ public fun do_update_proposal_fee<Outcome: store, IW: drop>(
 /// Execute update verification fee action
 public fun do_update_verification_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -596,7 +596,7 @@ public fun do_update_verification_fee<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -615,7 +615,7 @@ public fun do_update_verification_fee<Outcome: store, IW: drop>(
 /// Execute add verification level action
 public fun do_add_verification_level<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -637,7 +637,7 @@ public fun do_add_verification_level<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -649,7 +649,7 @@ public fun do_add_verification_level<Outcome: store, IW: drop>(
 /// Execute remove verification level action
 public fun do_remove_verification_level<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -670,7 +670,7 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -685,7 +685,7 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
 /// Multiple verification requests can be pending with unique IDs
 public fun do_request_verification<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -742,10 +742,10 @@ public fun do_request_verification<Outcome: store, IW: drop>(
 /// Validators can approve a specific verification request by its ID
 public fun do_approve_verification<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
-    target_dao: &mut Account<FutarchyConfig>,
+    target_dao: &mut Account,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -767,7 +767,7 @@ public fun do_approve_verification<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     // Verify we have the validator capability
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
+    let cap = account::borrow_managed_asset<String, ValidatorAdminCap>(
         account,
         b"protocol:validator_admin_cap".to_string(),
         version
@@ -798,10 +798,10 @@ public fun do_approve_verification<Outcome: store, IW: drop>(
 /// Validators can reject a specific verification request with a reason
 public fun do_reject_verification<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
-    target_dao: &mut Account<FutarchyConfig>,
+    target_dao: &mut Account,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -822,7 +822,7 @@ public fun do_reject_verification<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     // Verify we have the validator capability
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
+    let cap = account::borrow_managed_asset<String, ValidatorAdminCap>(
         account,
         b"protocol:validator_admin_cap".to_string(),
         version
@@ -850,7 +850,7 @@ public fun do_reject_verification<Outcome: store, IW: drop>(
 /// Execute update recovery fee action
 public fun do_update_recovery_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -871,7 +871,7 @@ public fun do_update_recovery_fee<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -883,7 +883,7 @@ public fun do_update_recovery_fee<Outcome: store, IW: drop>(
 /// Execute withdraw fees to treasury action
 public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -904,7 +904,7 @@ public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -922,7 +922,7 @@ public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
 /// Execute action to add a coin fee configuration
 public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -952,7 +952,7 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
     // Increment action index
     executable::increment_action_idx(executable);
 
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -974,7 +974,7 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
 /// Execute action to update coin creation fee
 public fun do_update_coin_creation_fee<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -995,7 +995,7 @@ public fun do_update_coin_creation_fee<Outcome: store, IW: drop, StableType>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -1014,7 +1014,7 @@ public fun do_update_coin_creation_fee<Outcome: store, IW: drop, StableType>(
 /// Execute action to update coin proposal fee
 public fun do_update_coin_proposal_fee<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -1035,7 +1035,7 @@ public fun do_update_coin_proposal_fee<Outcome: store, IW: drop, StableType>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -1054,7 +1054,7 @@ public fun do_update_coin_proposal_fee<Outcome: store, IW: drop, StableType>(
 /// Execute action to update coin recovery fee
 public fun do_update_coin_recovery_fee<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -1075,7 +1075,7 @@ public fun do_update_coin_recovery_fee<Outcome: store, IW: drop, StableType>(
     // Increment action index
     executable::increment_action_idx(executable);
     
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+    let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
@@ -1099,7 +1099,7 @@ public struct ApplyPendingCoinFeesAction has store, drop {
 /// Execute action to apply pending coin fees after delay
 public fun do_apply_pending_coin_fees<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -1134,7 +1134,7 @@ public fun do_apply_pending_coin_fees<Outcome: store, IW: drop, StableType>(
 /// Execute set launchpad trust score action
 public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, StableCoin>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     version: VersionWitness,
     witness: IW,
     raise: &mut Raise<RaiseToken, StableCoin>,
@@ -1160,7 +1160,7 @@ public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, St
     executable::increment_action_idx(executable);
 
     // Verify we have the validator capability
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
+    let cap = account::borrow_managed_asset<String, ValidatorAdminCap>(
         account,
         b"protocol:validator_admin_cap".to_string(),
         version
@@ -1192,7 +1192,7 @@ public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, St
 // stored in the account first, but it's actually a separate object.
 // /// Allow security council to execute factory operations 
 // public fun council_set_factory_paused<Outcome: store>(
-//     council: &mut Account<FutarchyConfig>,
+//     council: &mut Account,
 //     executable: &mut Executable<Outcome>,
 //     factory: &mut Factory,
 //     paused: bool,
@@ -1218,7 +1218,7 @@ public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, St
 // stored in the account first, but it's actually a separate object.
 // /// Allow security council to execute fee operations
 // public fun council_withdraw_emergency_fees<Outcome: store>(
-//     council: &mut Account<FutarchyConfig>,
+//     council: &mut Account,
 //     executable: &mut Executable<Outcome>,
 //     fee_manager: &mut FeeManager,
 //     amount: u64,

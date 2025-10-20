@@ -63,7 +63,7 @@ public struct MaintenanceNeeded has copy, drop {
 /// Clean up expired FutarchyOutcome intents
 /// Sui's storage rebate naturally rewards cleaners
 public fun cleanup_expired_futarchy_intents(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     max_to_clean: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -104,7 +104,7 @@ public fun cleanup_expired_futarchy_intents(
 /// Clean up ALL expired intents during normal operations (no reward)
 /// Called automatically during proposal finalization and execution
 public fun cleanup_all_expired_intents(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -126,7 +126,7 @@ public fun cleanup_all_expired_intents(
 /// Clean up expired intents with a limit (for bounded operations)
 /// Called automatically during proposal finalization and execution
 public(package) fun cleanup_expired_intents_automatic(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     max_to_clean: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -148,7 +148,7 @@ public(package) fun cleanup_expired_intents_automatic(
 }
 
 /// Check if maintenance is needed and emit event if so
-public fun check_maintenance_needed(account: &Account<FutarchyConfig>, clock: &Clock) {
+public fun check_maintenance_needed(account: &Account, clock: &Clock) {
     let expired_count = count_expired_intents(account, clock);
 
     if (expired_count > 10) {
@@ -164,7 +164,7 @@ public fun check_maintenance_needed(account: &Account<FutarchyConfig>, clock: &C
 
 /// Get or initialize the intent index
 fun get_or_init_intent_index(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     ctx: &mut TxContext,
 ): &mut IntentIndex {
     // Initialize if doesn't exist
@@ -191,7 +191,7 @@ fun get_or_init_intent_index(
 
 /// Add an intent to the index when it's created
 public(package) fun register_intent(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     key: String,
     expiration_time: u64,
     ctx: &mut TxContext,
@@ -203,7 +203,7 @@ public(package) fun register_intent(
 
 /// Find the next expired intent key
 fun find_next_expired_intent(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Option<String> {
@@ -249,7 +249,7 @@ fun find_next_expired_intent(
 
 /// Try to delete an expired FutarchyOutcome intent
 fun try_delete_expired_futarchy_intent(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     key: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -261,7 +261,7 @@ fun try_delete_expired_futarchy_intent(
     };
 
     let key_for_index = key;
-    let expired = account::delete_expired_intent<FutarchyConfig, FutarchyOutcome>(
+    let expired = account::delete_expired_intent<FutarchyOutcome>(
         account,
         key,
         clock,
@@ -286,7 +286,7 @@ fun destroy_expired(expired: Expired) {
 }
 
 /// Count expired intents
-fun count_expired_intents(account: &Account<FutarchyConfig>, clock: &Clock): u64 {
+fun count_expired_intents(account: &Account, clock: &Clock): u64 {
     // Check if index exists
     if (!account::has_managed_data(account, IntentIndexKey {})) {
         return 0
@@ -321,7 +321,7 @@ fun count_expired_intents(account: &Account<FutarchyConfig>, clock: &Clock): u64
 }
 
 /// Remove an intent from the index after deletion
-fun remove_from_index(account: &mut Account<FutarchyConfig>, key: String, ctx: &mut TxContext) {
+fun remove_from_index(account: &mut Account, key: String, ctx: &mut TxContext) {
     let index = get_or_init_intent_index(account, ctx);
 
     // Remove from expiration times table

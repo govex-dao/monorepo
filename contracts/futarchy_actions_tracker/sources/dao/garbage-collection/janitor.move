@@ -44,11 +44,11 @@ fun drain_all(expired: &mut Expired) {
     gc_registry::delete_set_policy(expired);
     gc_registry::delete_remove_policy(expired);
 
-    // Dissolution Actions
-    gc_registry::delete_initiate_dissolution(expired);
-    gc_registry::delete_batch_distribute(expired);
-    gc_registry::delete_finalize_dissolution(expired);
-    gc_registry::delete_cancel_dissolution(expired);
+    // Dissolution Actions (MOVED TO V3 - commented out)
+    // gc_registry::delete_initiate_dissolution(expired);
+    // gc_registry::delete_batch_distribute(expired);
+    // gc_registry::delete_finalize_dissolution(expired);
+    // gc_registry::delete_cancel_dissolution(expired);
 
     // Package Upgrade
     gc_registry::delete_upgrade_commit(expired);
@@ -63,12 +63,13 @@ fun drain_all(expired: &mut Expired) {
     gc_registry::delete_update_pool_params(expired);
 
     // Stream/Payment Actions (non-generic)
-    gc_registry::delete_update_payment_recipient(expired);
-    gc_registry::delete_add_withdrawer(expired);
-    gc_registry::delete_remove_withdrawers(expired);
-    gc_registry::delete_toggle_payment(expired);
-    gc_registry::delete_challenge_withdrawals(expired);
-    gc_registry::delete_cancel_challenged_withdrawals(expired);
+    // REMOVED: Stream actions moved to v3_streams package
+    // gc_registry::delete_update_payment_recipient(expired);
+    // gc_registry::delete_add_withdrawer(expired);
+    // gc_registry::delete_remove_withdrawers(expired);
+    // gc_registry::delete_toggle_payment(expired);
+    // gc_registry::delete_challenge_withdrawals(expired);
+    // gc_registry::delete_cancel_challenged_withdrawals(expired);
 
     // REMOVED: Governance Actions (second-order proposals deleted)
 
@@ -107,8 +108,9 @@ fun drain_all(expired: &mut Expired) {
     // gc_registry::delete_set_document_remove_allowed(expired);
 
     // Additional Dissolution Actions (non-generic)
-    gc_registry::delete_calculate_pro_rata_shares(expired);
-    gc_registry::delete_cancel_all_streams(expired);
+    // REMOVED: Dissolution/stream actions moved to v3 packages
+    // gc_registry::delete_calculate_pro_rata_shares(expired);
+    // gc_registry::delete_cancel_all_streams(expired);
     // Note: delete_distribute_assets and delete_withdraw_amm_liquidity are generic
     // and are handled in drain_common_generics
 
@@ -140,8 +142,9 @@ fun drain_common_generics(expired: &mut Expired) {
     drain_liquidity_generic_actions_for_pair<SUI, SUI>(expired);
 
     // Dissolution Actions (phantom types)
-    gc_registry::delete_distribute_assets<SUI>(expired);
-    gc_registry::delete_withdraw_amm_liquidity<SUI, SUI>(expired);
+    // REMOVED: Dissolution actions moved to v3_dissolution package
+    // gc_registry::delete_distribute_assets<SUI>(expired);
+    // gc_registry::delete_withdraw_amm_liquidity<SUI, SUI>(expired);
 
     // Vesting Actions (phantom CoinType)
     gc_registry::delete_vesting_action<SUI>(expired);
@@ -172,12 +175,14 @@ fun drain_currency_actions_for_coin<CoinType>(expired: &mut Expired) {
 }
 
 /// Helper to drain stream actions for a specific coin type
-fun drain_stream_actions_for_coin<CoinType>(expired: &mut Expired) {
-    gc_registry::delete_create_payment<CoinType>(expired);
-    gc_registry::delete_execute_payment<CoinType>(expired);
-    gc_registry::delete_cancel_payment<CoinType>(expired);
-    gc_registry::delete_request_withdrawal<CoinType>(expired);
-    gc_registry::delete_process_pending_withdrawal<CoinType>(expired);
+/// REMOVED: Stream actions moved to v3_streams package
+#[allow(unused_type_parameter)]
+fun drain_stream_actions_for_coin<CoinType>(_expired: &mut Expired) {
+    // gc_registry::delete_create_payment<CoinType>(expired);
+    // gc_registry::delete_execute_payment<CoinType>(expired);
+    // gc_registry::delete_cancel_payment<CoinType>(expired);
+    // gc_registry::delete_request_withdrawal<CoinType>(expired);
+    // gc_registry::delete_process_pending_withdrawal<CoinType>(expired);
 }
 
 /// Helper to drain liquidity actions for a specific pair
@@ -197,12 +202,12 @@ fun drain_liquidity_generic_actions_for_pair<AssetType, StableType>(expired: &mu
 
 /// Delete a specific expired intent by key
 public fun delete_expired_by_key(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     key: String,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let mut expired = account::delete_expired_intent<FutarchyConfig, FutarchyOutcome>(
+    let mut expired = account::delete_expired_intent<FutarchyOutcome>(
         account,
         key,
         clock,
@@ -215,7 +220,7 @@ public fun delete_expired_by_key(
 /// Sweep multiple expired intents in a bounded manner
 /// Processes up to max_n intents from the provided keys
 public fun sweep_expired_intents(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     keys: vector<String>,
     max_n: u64,
     clock: &Clock,
@@ -239,7 +244,7 @@ public fun sweep_expired_intents(
 }
 
 /// Check if an intent is expired (helper function)
-fun is_intent_expired(account: &Account<FutarchyConfig>, key: &String, clock: &Clock): bool {
+fun is_intent_expired(account: &Account, key: &String, clock: &Clock): bool {
     // Check if intent exists
     if (!account::intents(account).contains(*key)) {
         return false
@@ -271,7 +276,7 @@ fun is_intent_expired(account: &Account<FutarchyConfig>, key: &String, clock: &C
 }
 
 /// Drain with Account context to handle all action types including owned withdrawals
-fun drain_all_with_account(account: &Account<FutarchyConfig>, expired: &mut Expired) {
+fun drain_all_with_account(account: &Account, expired: &mut Expired) {
     // First drain all non-generic actions
     drain_all(expired);
 
@@ -284,13 +289,13 @@ fun drain_all_with_account(account: &Account<FutarchyConfig>, expired: &mut Expi
 
 /// Public export of drain_all for use in other modules
 /// Properly handles all action types including generics
-public fun drain_all_public(account: &Account<FutarchyConfig>, expired: &mut Expired) {
+public fun drain_all_public(account: &Account, expired: &mut Expired) {
     drain_all_with_account(account, expired);
 }
 
 /// Entry function to clean up a specific expired intent
 public entry fun cleanup_expired_intent(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     key: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -300,7 +305,7 @@ public entry fun cleanup_expired_intent(
 
 /// Entry function to sweep multiple expired intents
 public entry fun cleanup_expired_intents(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     keys: vector<String>,
     clock: &Clock,
     ctx: &mut TxContext,

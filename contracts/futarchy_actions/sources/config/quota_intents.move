@@ -29,7 +29,7 @@ public struct QuotaIntent has copy, drop {}
 /// Create intent to set quotas for multiple addresses
 /// quota_amount = 0 removes quotas
 public fun create_set_quotas_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
@@ -73,7 +73,7 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
 
 /// Create intent to remove quotas (convenience wrapper)
 public fun create_remove_quotas_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,

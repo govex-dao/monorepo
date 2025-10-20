@@ -49,7 +49,7 @@ public fun witness(): GovernanceWitness {
 /// and immediately converts it to an executable for execution
 /// Returns both the executable and the intent key for cleanup
 public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     _market: &MarketState,
     outcome_index: u64,
@@ -92,7 +92,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
 /// Create and store an Intent from an InitActionSpecs blueprint
 /// Returns the intent key for immediate execution
 public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     spec: InitActionSpecs,
     outcome: Outcome,
     clock: &Clock,

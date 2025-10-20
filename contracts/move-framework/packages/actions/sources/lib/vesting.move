@@ -261,9 +261,9 @@ public fun destroy_toggle_vesting_freeze_action(action: ToggleVestingFreezeActio
 
 /// Proposes to create vestings for multiple recipients (supports 1 to N recipients)
 /// Each recipient gets their own independent Vesting object
-public fun new_vesting<Config, Outcome, CoinType, IW: copy + drop>(
+public fun new_vesting<Outcome, CoinType, IW: copy + drop>(
     intent: &mut Intent<Outcome>,
-    _account: &Account<Config>,
+    _account: &Account,
     recipients: vector<address>,
     amounts: vector<u64>,
     start_timestamp: u64,
@@ -317,9 +317,9 @@ public fun new_vesting<Config, Outcome, CoinType, IW: copy + drop>(
 }
 
 /// Creates the Vesting and ClaimCap objects from a CreateVestingAction
-public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_vesting<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<Config>,
+    _account: &mut Account,
     coin: Coin<CoinType>,
     clock: &Clock,
     _intent_witness: IW,
@@ -609,9 +609,9 @@ public fun claim_vesting_to_self<CoinType>(
 }
 
 /// Cancels a vesting, returning unvested funds to the account
-public fun cancel_vesting<Config, Outcome: store, CoinType, IW: drop>(
+public fun cancel_vesting<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vesting: Vesting<CoinType>,
     clock: &Clock,
     _intent_witness: IW,
@@ -1029,9 +1029,9 @@ public fun new_toggle_vesting_freeze<Outcome, IW: drop>(
 // === Execution Functions ===
 
 /// Execute toggle vesting pause action
-public fun do_toggle_vesting_pause<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_toggle_vesting_pause<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &Account<Config>,
+    _account: &Account,
     vesting: &mut Vesting<CoinType>,
     clock: &Clock,
     version: VersionWitness,
@@ -1068,9 +1068,9 @@ public fun do_toggle_vesting_pause<Config, Outcome: store, CoinType, IW: drop>(
 }
 
 /// Execute toggle vesting freeze action
-public fun do_toggle_vesting_freeze<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_toggle_vesting_freeze<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &Account<Config>,
+    _account: &Account,
     vesting: &mut Vesting<CoinType>,
     clock: &Clock,
     version: VersionWitness,

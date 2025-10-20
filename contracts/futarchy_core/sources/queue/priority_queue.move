@@ -967,7 +967,7 @@ public fun slash_and_distribute_fee<StableCoin>(
     fee_manager: &mut ProposalFeeManager,
     proposal_id: ID,
     slasher: address,
-    account: &Account<FutarchyConfig>,
+    account: &Account,
     ctx: &mut TxContext,
 ): (Coin<SUI>, Coin<SUI>) {
     let config = account::config(account);

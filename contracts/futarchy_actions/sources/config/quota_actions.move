@@ -49,7 +49,7 @@ public struct SetQuotasAction has store, drop {
 /// Execute set quotas action
 public fun do_set_quotas<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &mut ProposalQuotaRegistry,
     version: VersionWitness,
     intent_witness: IW,
@@ -109,7 +109,7 @@ public fun do_set_quotas<Outcome: store, IW: drop>(
 
 /// Internal version for actual execution
 fun do_set_quotas_internal(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &mut ProposalQuotaRegistry,
     action: SetQuotasAction,
     _version: VersionWitness,

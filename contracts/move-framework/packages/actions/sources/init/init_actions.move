@@ -50,8 +50,8 @@ const EObjectKeyAlreadyExists: u64 = 1007;
 // === Init Vault Actions ===
 
 /// Deposit initial funds during account creation
-public fun init_vault_deposit<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public fun init_vault_deposit<Config: store, CoinType: drop>(
+    account: &mut Account,
     coin: Coin<CoinType>,
     vault_name: vector<u8>,
     ctx: &mut TxContext,
@@ -65,8 +65,8 @@ public fun init_vault_deposit<Config, CoinType: drop>(
 }
 
 /// Deposit with default vault name
-public fun init_vault_deposit_default<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public fun init_vault_deposit_default<Config: store, CoinType: drop>(
+    account: &mut Account,
     coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
@@ -81,31 +81,31 @@ public fun init_vault_deposit_default<Config, CoinType: drop>(
 // === Init Currency Actions ===
 
 /// Lock treasury cap during initialization
-public fun init_lock_treasury_cap<Config, CoinType>(
-    account: &mut Account<Config>,
+public fun init_lock_treasury_cap<Config: store, CoinType>(
+    account: &mut Account,
     cap: TreasuryCap<CoinType>,
 ) {
     currency::do_lock_cap_unshared(account, cap);
 }
 
 /// Mint coins during initialization
-public fun init_mint<Config, CoinType>(
-    account: &mut Account<Config>,
+public fun init_mint<Config: store, CoinType>(
+    account: &mut Account,
     amount: u64,
     recipient: address,
     ctx: &mut TxContext,
 ) {
-    currency::do_mint_unshared<Config, CoinType>(account, amount, recipient, ctx);
+    currency::do_mint_unshared<CoinType>(account, amount, recipient, ctx);
 }
 
 /// Mint and deposit during initialization
-public fun init_mint_and_deposit<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public fun init_mint_and_deposit<Config: store, CoinType: drop>(
+    account: &mut Account,
     amount: u64,
     vault_name: vector<u8>,
     ctx: &mut TxContext,
 ) {
-    let coin = currency::do_mint_to_coin_unshared<Config, CoinType>(
+    let coin = currency::do_mint_to_coin_unshared<CoinType>(
         account,
         amount,
         ctx,
@@ -123,8 +123,8 @@ public fun init_mint_and_deposit<Config, CoinType: drop>(
 /// Create vesting during initialization
 /// Creates a vesting schedule with coins and transfers ClaimCap to recipient
 /// Returns the vesting ID for reference
-public fun init_create_vesting<Config, CoinType>(
-    _account: &mut Account<Config>, // For consistency, though not used
+public fun init_create_vesting<Config: store, CoinType>(
+    _account: &mut Account, // For consistency, though not used
     coin: Coin<CoinType>,
     recipient: address,
     start_timestamp: u64,
@@ -147,8 +147,8 @@ public fun init_create_vesting<Config, CoinType>(
 /// Create founder vesting with standard parameters
 /// Convenience function with preset duration for founder vesting
 /// Returns the vesting ID for reference
-public fun init_create_founder_vesting<Config, CoinType>(
-    _account: &mut Account<Config>,
+public fun init_create_founder_vesting<Config: store, CoinType>(
+    _account: &mut Account,
     coin: Coin<CoinType>,
     founder: address,
     cliff_ms: u64,
@@ -172,8 +172,8 @@ public fun init_create_founder_vesting<Config, CoinType>(
 
 /// Create team vesting with custom duration
 /// Returns the vesting ID for reference
-public fun init_create_team_vesting<Config, CoinType>(
-    _account: &mut Account<Config>,
+public fun init_create_team_vesting<Config: store, CoinType>(
+    _account: &mut Account,
     coin: Coin<CoinType>,
     team_member: address,
     duration_ms: u64,
@@ -199,8 +199,8 @@ public fun init_create_team_vesting<Config, CoinType>(
 /// Lock upgrade cap during initialization
 /// Stores UpgradeCap in the Account for controlled package upgrades
 /// reclaim_delay_ms: Time before DAO can reclaim externally-held commit cap (e.g., 6 months)
-public fun init_lock_upgrade_cap<Config>(
-    account: &mut Account<Config>,
+public fun init_lock_upgrade_cap<Config: store>(
+    account: &mut Account,
     cap: UpgradeCap,
     package_name: vector<u8>,
     delay_ms: u64,
@@ -218,8 +218,8 @@ public fun init_lock_upgrade_cap<Config>(
 /// Lock commit cap during initialization
 /// Creates and stores an UpgradeCommitCap in the Account
 /// This cap grants authority to commit package upgrades (finalize with UpgradeReceipt)
-public fun init_lock_commit_cap<Config>(
-    account: &mut Account<Config>,
+public fun init_lock_commit_cap<Config: store>(
+    account: &mut Account,
     package_name: vector<u8>,
     ctx: &mut TxContext,
 ) {
@@ -233,7 +233,7 @@ public fun init_lock_commit_cap<Config>(
 /// Create commit cap and transfer to recipient during initialization
 /// Use this to give commit authority to an external multisig
 /// while the DAO Account holds the UpgradeCap
-public fun init_create_and_transfer_commit_cap<Config>(
+public fun init_create_and_transfer_commit_cap<Config: store>(
     package_name: vector<u8>,
     recipient: address,
     ctx: &mut TxContext,
@@ -249,7 +249,7 @@ public fun init_create_and_transfer_commit_cap<Config>(
 
 /// Lock generic capability during initialization
 /// Stores any capability object in the Account
-public fun init_lock_capability<Config, Cap: key + store>(account: &mut Account<Config>, cap: Cap) {
+public fun init_lock_capability<Config: store, Cap: key + store>(account: &mut Account, cap: Cap) {
     access_control::do_lock_cap_unshared(account, cap);
 }
 
@@ -257,8 +257,8 @@ public fun init_lock_capability<Config, Cap: key + store>(account: &mut Account<
 
 /// Store owned object during initialization
 /// Directly stores an object in the Account's owned storage
-public fun init_store_object<Config, Key: copy + drop + store, T: key + store>(
-    account: &mut Account<Config>,
+public fun init_store_object<Config: store, Key: copy + drop + store, T: key + store>(
+    account: &mut Account,
     key: Key,
     object: T,
     _ctx: &mut TxContext,
@@ -297,8 +297,8 @@ public fun init_transfer_objects<T: key + store>(
 /// Create a vault stream during initialization
 /// Creates a time-based payment stream for salaries, grants, etc.
 /// Returns the stream ID for reference
-public fun init_create_vault_stream<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public fun init_create_vault_stream<Config: store, CoinType: drop>(
+    account: &mut Account,
     vault_name: vector<u8>,
     beneficiary: address,
     total_amount: u64,
@@ -329,8 +329,8 @@ public fun init_create_vault_stream<Config, CoinType: drop>(
 /// Create a simple salary stream with monthly payments
 /// Convenience function for common use case
 /// Returns the stream ID for reference
-public fun init_create_salary_stream<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public fun init_create_salary_stream<Config: store, CoinType: drop>(
+    account: &mut Account,
     employee: address,
     monthly_amount: u64,
     num_months: u64,

@@ -117,7 +117,7 @@ public fun refuse_invite(invite: Invite) {
     id.delete();
 }
 
-public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
+public fun reorder_accounts<Config: store>(user: &mut User, addrs: vector<address>) {
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     assert!(user.accounts.contains(&account_type), ENoAccountsToReorder);
 
@@ -137,12 +137,12 @@ public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
 }
 // === Config-only functions ===
 
-public fun add_account<Config, CW: drop>(
+public fun add_account<Config: store, CW: drop>(
     user: &mut User,
-    account: &Account<Config>,
+    account: &Account,
     config_witness: CW,
 ) {
-    account::assert_is_config_module(account, config_witness);
+    account::assert_is_config_module_witness(account, config_witness);
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     if (user.accounts.contains(&account_type)) {
@@ -153,12 +153,12 @@ public fun add_account<Config, CW: drop>(
     }
 }
 
-public fun remove_account<Config, CW: drop>(
+public fun remove_account<Config: store, CW: drop>(
     user: &mut User,
-    account: &Account<Config>,
+    account: &Account,
     config_witness: CW,
 ) {
-    account::assert_is_config_module(account, config_witness);
+    account::assert_is_config_module_witness(account, config_witness);
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
@@ -171,13 +171,13 @@ public fun remove_account<Config, CW: drop>(
 }
 
 /// Invites can be sent by an Account member (upon Account creation for instance)
-public fun send_invite<Config, CW: drop>(
-    account: &Account<Config>,
+public fun send_invite<Config: store, CW: drop>(
+    account: &Account,
     recipient: address,
     config_witness: CW,
     ctx: &mut TxContext,
 ) {
-    account::assert_is_config_module(account, config_witness);
+    account::assert_is_config_module_witness(account, config_witness);
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     transfer::transfer(
@@ -196,7 +196,7 @@ public fun users(registry: &Registry): &Table<address, ID> {
     &registry.users
 }
 
-public fun ids_for_type<Config>(user: &User): vector<address> {
+public fun ids_for_type<Config: store>(user: &User): vector<address> {
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     user.accounts[&account_type]
 }
@@ -233,7 +233,7 @@ public fun registry_for_testing(ctx: &mut TxContext): Registry {
 }
 
 #[test_only]
-public fun add_account_for_testing<Config>(user: &mut User, account_addr: address) {
+public fun add_account_for_testing<Config: store>(user: &mut User, account_addr: address) {
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     if (user.accounts.contains(&account_type)) {
         assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);

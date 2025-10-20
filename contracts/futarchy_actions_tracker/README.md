@@ -78,15 +78,13 @@ find \
     contracts/futarchy_markets_core/sources \
     contracts/futarchy_markets_operations/sources \
     contracts/futarchy_markets_primitives/sources \
-    contracts/futarchy_stream_actions/sources \
     contracts/futarchy_oracle_actions/sources \
     contracts/futarchy_factory/sources \
-    contracts/futarchy_dissolution_actions/sources \
     contracts/futarchy_governance/sources \
     contracts/futarchy_governance_actions/sources \
     contracts/futarchy_actions/sources \
     contracts/futarchy_actions_tracker/sources \
-    -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_18_packages.txt
+    -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_15_packages.txt
 ```
 
 

@@ -38,7 +38,7 @@ public struct AcceptValidatorAdminCapIntent() has copy, drop;
 /// Request to accept the FactoryOwnerCap into the DAO's custody
 public fun request_accept_factory_owner_cap<Outcome: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     cap_id: ID,
@@ -64,7 +64,7 @@ public fun request_accept_factory_owner_cap<Outcome: store>(
 /// Request to accept the FeeAdminCap into the DAO's custody
 public fun request_accept_fee_admin_cap<Outcome: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     cap_id: ID,
@@ -90,7 +90,7 @@ public fun request_accept_fee_admin_cap<Outcome: store>(
 /// Request to accept the ValidatorAdminCap into the DAO's custody
 public fun request_accept_validator_admin_cap<Outcome: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     cap_id: ID,
@@ -118,7 +118,7 @@ public fun request_accept_validator_admin_cap<Outcome: store>(
 /// Execute the intent to accept FactoryOwnerCap
 public fun execute_accept_factory_owner_cap<Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     receiving: Receiving<FactoryOwnerCap>,
 ) {
     account.process_intent!(
@@ -142,7 +142,7 @@ public fun execute_accept_factory_owner_cap<Outcome: store>(
 /// Execute the intent to accept FeeAdminCap
 public fun execute_accept_fee_admin_cap<Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     receiving: Receiving<FeeAdminCap>,
 ) {
     account.process_intent!(
@@ -166,7 +166,7 @@ public fun execute_accept_fee_admin_cap<Outcome: store>(
 /// Execute the intent to accept ValidatorAdminCap
 public fun execute_accept_validator_admin_cap<Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     receiving: Receiving<ValidatorAdminCap>,
 ) {
     account.process_intent!(
@@ -192,7 +192,7 @@ public fun execute_accept_validator_admin_cap<Outcome: store>(
 /// One-time migration function to transfer all admin caps to the protocol DAO
 /// This should be called by the current admin cap holders to transfer control
 public entry fun migrate_admin_caps_to_dao(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     factory_cap: FactoryOwnerCap,
     fee_cap: FeeAdminCap,
     validator_cap: ValidatorAdminCap,
@@ -223,7 +223,7 @@ public entry fun migrate_admin_caps_to_dao(
 
 /// Transfer a specific admin cap to the protocol DAO (for gradual migration)
 public entry fun migrate_factory_cap_to_dao(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     cap: FactoryOwnerCap,
     ctx: &mut TxContext,
 ) {
@@ -236,7 +236,7 @@ public entry fun migrate_factory_cap_to_dao(
 }
 
 public entry fun migrate_fee_cap_to_dao(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     cap: FeeAdminCap,
     ctx: &mut TxContext,
 ) {
@@ -249,7 +249,7 @@ public entry fun migrate_fee_cap_to_dao(
 }
 
 public entry fun migrate_validator_cap_to_dao(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     cap: ValidatorAdminCap,
     ctx: &mut TxContext,
 ) {
@@ -437,7 +437,7 @@ public fun add_set_dao_score_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_set_dao_score(dao_id, score, reason);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(type_name::get<protocol_admin_actions::SetDaoScore>().into_string().to_string(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::SetDaoScoreAction>().into_string().to_string(), action_data, intent_witness);
 }
 
 // === Coin Fee Configuration Intent Helpers ===

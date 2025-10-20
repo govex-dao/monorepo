@@ -42,9 +42,9 @@ public struct CreateCommitCapIntent() has copy, drop;
 // === Public Functions ===
 
 /// Creates an UpgradePackageIntent and adds it to an Account.
-public fun request_upgrade_package<Config, Outcome: store>(
+public fun request_upgrade_package<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     package_name: String,
@@ -75,9 +75,9 @@ public fun request_upgrade_package<Config, Outcome: store>(
 }
 
 /// Executes an UpgradePackageIntent, returns the UpgradeTicket for upgrading.
-public fun execute_upgrade_package<Config, Outcome: store>(
+public fun execute_upgrade_package<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     clock: &Clock,
 ): UpgradeTicket {
     account.process_intent!(
@@ -97,9 +97,9 @@ public fun execute_upgrade_package<Config, Outcome: store>(
 /// Commits upgrade - DAO-only mode (no commit cap required)
 /// Use this when DAO has full control over upgrades OR when reclaim timelock has expired
 /// If reclaim is pending, validates that timelock has passed
-public fun execute_commit_upgrade_dao_only<Config, Outcome: store>(
+public fun execute_commit_upgrade_dao_only<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receipt: UpgradeReceipt,
     clock: &Clock,
 ) {
@@ -120,9 +120,9 @@ public fun execute_commit_upgrade_dao_only<Config, Outcome: store>(
 
 /// Commits upgrade - Core team mode (requires commit cap)
 /// Use this when core team/multisig holds commit authority
-public fun execute_commit_upgrade_with_cap<Config, Outcome: store>(
+public fun execute_commit_upgrade_with_cap<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receipt: UpgradeReceipt,
     commit_cap: &package_upgrade::UpgradeCommitCap,
 ) {
@@ -142,9 +142,9 @@ public fun execute_commit_upgrade_with_cap<Config, Outcome: store>(
 }
 
 /// Creates a RestrictPolicyIntent and adds it to an Account.
-public fun request_restrict_policy<Config, Outcome: store>(
+public fun request_restrict_policy<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     package_name: String,
@@ -175,9 +175,9 @@ public fun request_restrict_policy<Config, Outcome: store>(
 }
 
 /// Restricts the upgrade policy.
-public fun execute_restrict_policy<Config, Outcome: store>(
+public fun execute_restrict_policy<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
 ) {
     account.process_intent!(
         executable,
@@ -189,9 +189,9 @@ public fun execute_restrict_policy<Config, Outcome: store>(
 
 /// Creates a CreateCommitCapIntent to give commit authority to a new team via governance
 /// This allows the DAO to vote on transferring commit authority and set new reclaim delay
-public fun request_create_commit_cap<Config, Outcome: store>(
+public fun request_create_commit_cap<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     package_name: String,
@@ -216,9 +216,9 @@ public fun request_create_commit_cap<Config, Outcome: store>(
 }
 
 /// Executes a CreateCommitCapIntent, creating and transferring commit cap to recipient
-public fun execute_create_commit_cap<Config, Outcome: store>(
+public fun execute_create_commit_cap<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     ctx: &mut TxContext,
 ) {
     account.process_intent!(

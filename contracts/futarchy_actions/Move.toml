@@ -12,6 +12,8 @@ futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_primitives = { local = "../futarchy_markets_primitives" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
+Walrus = { local = "../walrus_walrus" }
+WAL = { local = "../walrus_wal" }
 [addresses]
 futarchy_actions = "0x0393f67d13f180d5dcedb1be3b789c6f20b4b4a478f0d98b58fc2754eb3486d4"
 futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"

@@ -47,9 +47,9 @@ public struct WithdrawAndVestIntent() has copy, drop;
 // === Public functions ===
 
 /// Creates a WithdrawAndTransferToVaultIntent and adds it to an Account.
-public fun request_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinType>(
+public fun request_withdraw_and_transfer_to_vault<Outcome: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     coin_amount: u64,
@@ -82,9 +82,9 @@ public fun request_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinTy
 }
 
 /// Executes a WithdrawAndTransferToVaultIntent, deposits a coin owned by the account into a vault.
-public fun execute_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinType: drop>(
+public fun execute_withdraw_and_transfer_to_vault<Config: store, Outcome: store, CoinType: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receiving: Receiving<Coin<CoinType>>,
 ) {
     account.process_intent!(
@@ -93,7 +93,7 @@ public fun execute_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinTy
         WithdrawAndTransferToVaultIntent(),
         |executable, iw| {
             let object = owned::do_withdraw_coin(executable, account, receiving, iw);
-            vault::do_deposit<_, _, CoinType, _>(
+            vault::do_deposit<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 object,
@@ -105,9 +105,9 @@ public fun execute_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinTy
 }
 
 /// Creates a WithdrawObjectsAndTransferIntent and adds it to an Account.
-public fun request_withdraw_objects_and_transfer<Config, Outcome: store>(
+public fun request_withdraw_objects_and_transfer<Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     object_ids: vector<ID>,
@@ -134,9 +134,9 @@ public fun request_withdraw_objects_and_transfer<Config, Outcome: store>(
 }
 
 /// Executes a WithdrawObjectsAndTransferIntent, transfers an object owned by the account. Can be looped over.
-public fun execute_withdraw_object_and_transfer<Config, Outcome: store, T: key + store>(
+public fun execute_withdraw_object_and_transfer<Outcome: store, T: key + store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receiving: Receiving<T>,
 ) {
     account.process_intent!(
@@ -151,9 +151,9 @@ public fun execute_withdraw_object_and_transfer<Config, Outcome: store, T: key +
 }
 
 /// Creates a WithdrawCoinsAndTransferIntent and adds it to an Account.
-public fun request_withdraw_coins_and_transfer<Config, Outcome: store>(
+public fun request_withdraw_coins_and_transfer<Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     coin_types: vector<String>,
@@ -185,9 +185,9 @@ public fun request_withdraw_coins_and_transfer<Config, Outcome: store>(
 }
 
 /// Executes a WithdrawCoinsAndTransferIntent, transfers a coin owned by the account. Can be looped over.
-public fun execute_withdraw_coin_and_transfer<Config, Outcome: store, CoinType>(
+public fun execute_withdraw_coin_and_transfer<Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receiving: Receiving<Coin<CoinType>>,
 ) {
     account.process_intent!(
@@ -202,9 +202,9 @@ public fun execute_withdraw_coin_and_transfer<Config, Outcome: store, CoinType>(
 }
 
 /// Creates a WithdrawAndVestIntent and adds it to an Account.
-public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
+public fun request_withdraw_and_vest<Config: store, Outcome: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     recipients: vector<address>,
@@ -234,7 +234,7 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
         WithdrawAndVestIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw_coin<_, _, _>(
+            owned::new_withdraw_coin<_, _>(
                 intent,
                 account,
                 type_name_to_string<CoinType>(),
@@ -243,7 +243,7 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
             );
             // Note: This template uses simplified vesting parameters
             // For custom rate limiting, call vesting::new_vesting() directly
-            vesting::new_vesting<_, _, CoinType, _>(
+            vesting::new_vesting<_, CoinType, _>(
                 intent,
                 account,
                 recipients,
@@ -264,9 +264,9 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
 }
 
 /// Executes a WithdrawAndVestIntent, withdraws a coin and creates a vesting.
-public fun execute_withdraw_and_vest<Config, Outcome: store, CoinType>(
+public fun execute_withdraw_and_vest<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receiving: Receiving<Coin<CoinType>>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -276,13 +276,13 @@ public fun execute_withdraw_and_vest<Config, Outcome: store, CoinType>(
         version::current(),
         WithdrawAndVestIntent(),
         |executable, iw| {
-            let coin = owned::do_withdraw_coin<_, _, CoinType, _>(
+            let coin = owned::do_withdraw_coin<_, CoinType, _>(
                 executable,
                 account,
                 receiving,
                 iw,
             );
-            vesting::do_vesting<_, _, CoinType, _>(executable, account, coin, clock, iw, ctx);
+            vesting::do_vesting<Config, Outcome, CoinType, _>(executable, account, coin, clock, iw, ctx);
         },
     );
 }

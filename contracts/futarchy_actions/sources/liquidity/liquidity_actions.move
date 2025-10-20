@@ -141,7 +141,7 @@ public struct SetPoolStatusAction has store, drop, copy {
 /// Creates a hot potato ResourceRequest that must be fulfilled with coins and pool
 public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     ctx: &mut TxContext,
@@ -190,7 +190,7 @@ public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW:
 /// Updates fee and minimum liquidity requirements for a pool
 public fun do_update_pool_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     _ctx: &mut TxContext,
@@ -214,7 +214,7 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
     assert!(new_minimum_liquidity > 0, EInvalidAmount);
     
     // Verify this pool belongs to the DAO
-    let _config = account::config(account);
+    let _config = account::config<FutarchyConfig>(account);
     // Pool validation would be done against stored pools in the Account
     // For now, just validate pool_id is not zero
     assert!(pool_id != object::id_from_address(@0x0), EEmptyPool);
@@ -231,7 +231,7 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
 /// Pauses or unpauses trading in a pool
 public fun do_set_pool_status<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     _ctx: &mut TxContext,
@@ -250,7 +250,7 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify this pool belongs to the DAO
-    let _config = account::config(account);
+    let _config = account::config<FutarchyConfig>(account);
     // Pool validation would be done against stored pools in the Account
     // For now, just validate pool_id is not zero
     assert!(pool_id != object::id_from_address(@0x0), EEmptyPool);
@@ -269,7 +269,7 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
 /// Fulfill pool creation request with coins from vault
 public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + drop>(
     request: ResourceRequest<CreatePoolAction<AssetType, StableType>>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     witness: IW,
@@ -319,7 +319,7 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
 /// Execute add liquidity with type validation - creates request for vault coins
 public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     ctx: &mut TxContext,
@@ -369,7 +369,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
 public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     request: ResourceRequest<AddLiquidityAction<AssetType, StableType>>,
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     witness: IW,
     ctx: &mut TxContext,
@@ -429,7 +429,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
 /// Returns a hot potato that must be fulfilled to obtain the LP token
 public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     _witness: IW,
     ctx: &mut TxContext,
@@ -466,7 +466,7 @@ public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: stor
 /// Fulfill withdraw LP token request by releasing the LP from custody
 public fun fulfill_withdraw_lp_token<AssetType: drop, StableType: drop, W: copy + drop>(
     request: resource_requests::ResourceRequest<WithdrawLpTokenAction<AssetType, StableType>>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     witness: W,
     ctx: &mut TxContext,
 ): (LPToken<AssetType, StableType>, resource_requests::ResourceReceipt<WithdrawLpTokenAction<AssetType, StableType>>) {
@@ -488,7 +488,7 @@ public fun fulfill_withdraw_lp_token<AssetType: drop, StableType: drop, W: copy 
 /// Returns a hot potato that must be fulfilled with the released LP token
 public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     ctx: &mut TxContext,
@@ -534,7 +534,7 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
 /// Fulfill remove liquidity request with released LP token and pool reference
 public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy + drop>(
     request: resource_requests::ResourceRequest<RemoveLiquidityAction<AssetType, StableType>>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     lp_token: LPToken<AssetType, StableType>,
     witness: W,
@@ -546,7 +546,7 @@ public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy +
     assert!(action.token_id == object::id(&lp_token), EWrongToken);
 
     // Verify the DAO authorization before burning the LP token
-    let auth = account::new_auth(account, version::current(), witness);
+    let auth = account::new_auth<FutarchyConfig, W>(account, version::current(), witness);
     account::verify(account, auth);
 
     let actual_lp_amount = unified_spot_pool::lp_token_amount(&lp_token);
@@ -590,7 +590,7 @@ public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy +
 /// Execute a swap action with type validation
 public fun do_swap<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    _account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     _ctx: &mut TxContext,
@@ -635,7 +635,7 @@ public fun do_swap<AssetType: drop, StableType: drop, Outcome: store, IW: copy +
 /// Execute collect fees action with type validation
 public fun do_collect_fees<AssetType: drop, StableType: drop, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     _ctx: &mut TxContext,
@@ -653,7 +653,7 @@ public fun do_collect_fees<AssetType: drop, StableType: drop, Outcome: store, IW
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Verify this pool belongs to the DAO
-    let _config = account::config(account);
+    let _config = account::config<FutarchyConfig>(account);
     // Pool validation would be done against stored pools in the Account
     // For now, just validate pool_id is not zero
     assert!(pool_id != object::id_from_address(@0x0), EEmptyPool);
@@ -667,7 +667,7 @@ public fun do_collect_fees<AssetType: drop, StableType: drop, Outcome: store, IW
 /// Execute withdraw fees action with type validation
 public fun do_withdraw_fees<AssetType: drop, StableType: drop, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     _version: VersionWitness,
     witness: IW,
     _ctx: &mut TxContext,
@@ -687,7 +687,7 @@ public fun do_withdraw_fees<AssetType: drop, StableType: drop, Outcome: store, I
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Verify this pool belongs to the DAO
-    let _config = account::config(account);
+    let _config = account::config<FutarchyConfig>(account);
     // Pool validation would be done against stored pools in the Account
     // For now, just validate pool_id is not zero
     assert!(pool_id != object::id_from_address(@0x0), EEmptyPool);
@@ -824,7 +824,7 @@ public fun new_withdraw_lp_token_action<AssetType, StableType>(
 /// Enable bypass mode for a remove liquidity request (restricted to dissolution state)
 public fun enable_remove_liquidity_bypass<AssetType, StableType>(
     request: &mut resource_requests::ResourceRequest<RemoveLiquidityAction<AssetType, StableType>>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
 ) {
     {
         let dao_state = futarchy_config::state_mut_from_account(account);

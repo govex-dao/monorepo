@@ -29,8 +29,8 @@ public struct MemoIntent() has copy, drop;
 /// - Accept decisions: memo="Accept", reference_id=Some(proposal_id)
 /// - Reject decisions: memo="Reject", reference_id=Some(proposal_id)
 /// - Comments on objects: memo="Looks good!", reference_id=Some(object_id)
-public fun request_emit_memo<Config, Outcome: store>(
-    account: &mut Account<Config>,
+public fun request_emit_memo<Config: store, Outcome: store>(
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     memo_text: String,

@@ -11,7 +11,7 @@ futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
-futarchy_stream_actions = { local = "../futarchy_stream_actions" }
+# REMOVED: futarchy_stream_actions - moved to v3_streams (not needed in tracker)
 futarchy_oracle = { local = "../futarchy_oracle_actions" }
 # REMOVED: futarchy_lifecycle (dissolution) - no longer needed in core protocol
 futarchy_actions = { local = "../futarchy_actions" }
@@ -25,7 +25,7 @@ futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8
 futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
 futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
-futarchy_stream_actions = "0x8e2848ba3f7102ad614266040f7c4d83cec193dbf91c907365e523b63090915b"
+# REMOVED: futarchy_stream_actions - moved to v3_streams
 futarchy_oracle = "0x772f010aa6957c875b5777a9e770e4f8e9c45a932e7e5fced33b2956095313ea"
 # REMOVED: futarchy_lifecycle address - no longer used
 futarchy_governance_actions = "0xb099b96ba26f0facde45dae7947e7d0144282b7a2923c2b4c4f0e942ae608865"

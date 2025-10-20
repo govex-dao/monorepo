@@ -66,7 +66,7 @@ fun add_actions_to_intent(
 /// Stores InitActionSpecs as an Intent for validation and tamper-proofing.
 /// After raise completes, frontend reads these specs and constructs PTB.
 public fun stage_init_intent(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     owner_id: &ID,
     staged_index: u64,
     spec: &InitActionSpecs,
@@ -108,7 +108,7 @@ public fun stage_init_intent(
 // === Cleanup Functions ===
 
 fun cancel_init_intent_internal(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     key: String,
     ctx: &mut TxContext,
 ) {
@@ -136,7 +136,7 @@ fun cancel_init_intent_internal(
 
 /// Cancel a single staged launchpad init intent.
 public fun cancel_init_intent(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     owner_id: &ID,
     index: u64,
     ctx: &mut TxContext,
@@ -147,7 +147,7 @@ public fun cancel_init_intent(
 
 /// Remove any staged init intents (used when a workflow aborts).
 public fun cleanup_init_intents(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     owner_id: &ID,
     specs: &vector<InitActionSpecs>,
     ctx: &mut TxContext,

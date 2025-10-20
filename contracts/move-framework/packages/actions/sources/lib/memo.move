@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 /// Generic memo emission actions for Account Protocol
-/// Works with any Account<Config> type
+/// Works with any Account type
 /// Provides text memos with optional references to objects
 ///
 /// Can be used for:
@@ -115,7 +115,7 @@ public fun new_emit_memo<Outcome, IW: drop>(
 /// Execute an emit memo action
 public fun do_emit_memo<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     _intent_witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,

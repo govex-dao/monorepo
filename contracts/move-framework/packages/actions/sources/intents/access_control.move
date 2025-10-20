@@ -34,15 +34,15 @@ public struct BorrowCapIntent() has copy, drop;
 // === Public functions ===
 
 /// Creates a BorrowCapIntent and adds it to an Account.
-public fun request_borrow_cap<Config, Outcome: store, Cap>(
+public fun request_borrow_cap<Config: store, Outcome: store, Cap>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     ctx: &mut TxContext,
 ) {
     account.verify(auth);
-    assert!(ac::has_lock<_, Cap>(account), ENoLock);
+    assert!(ac::has_lock<Config, Cap>(account), ENoLock);
 
     account.build_intent!(
         params,
@@ -59,29 +59,29 @@ public fun request_borrow_cap<Config, Outcome: store, Cap>(
 }
 
 /// Executes a BorrowCapIntent, returns a cap and a hot potato.
-public fun execute_borrow_cap<Config, Outcome: store, Cap: key + store>(
+public fun execute_borrow_cap<Config: store, Outcome: store, Cap: key + store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
 ): Cap {
     account.process_intent!(
         executable,
         version::current(),
         BorrowCapIntent(),
-        |executable, iw| ac::do_borrow(executable, account, version::current(), iw),
+        |executable, iw| ac::do_borrow<Config, Outcome, Cap, _>(executable, account, version::current(), iw),
     )
 }
 
 /// Completes a BorrowCapIntent, destroys the executable and returns the cap to the account if the matching hot potato is returned.
-public fun execute_return_cap<Config, Outcome: store, Cap: key + store>(
+public fun execute_return_cap<Config: store, Outcome: store, Cap: key + store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     cap: Cap,
 ) {
     account.process_intent!(
         executable,
         version::current(),
         BorrowCapIntent(),
-        |executable, iw| ac::do_return(executable, account, cap, version::current(), iw),
+        |executable, iw| ac::do_return<Config, Outcome, Cap, _>(executable, account, cap, version::current(), iw),
     )
 }
 

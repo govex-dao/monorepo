@@ -193,7 +193,7 @@ fun proposal_key(package_name: String, digest: vector<u8>): UpgradeProposalKey {
 
 /// Proposal for a package upgrade - stores the digest for governance voting
 /// This replaces the hot-potato UpgradeAction pattern
-public struct UpgradeProposal has store {
+public struct UpgradeProposal has store, drop {
     package_name: String,
     digest: vector<u8>,
     proposed_time_ms: u64,
@@ -261,9 +261,9 @@ public struct CreateCommitCapAction has drop, store {
 
 /// Attaches the UpgradeCap as a Dynamic Object Field to the account.
 /// reclaim_delay_ms: Time DAO must wait after requesting reclaim (e.g., 6 months)
-public fun lock_cap<Config>(
+public fun lock_cap(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     cap: UpgradeCap,
     name: String, // name of the package
     delay_ms: u64, // minimum delay between proposal and execution
@@ -293,8 +293,8 @@ public fun lock_cap<Config>(
 
 /// Lock upgrade cap during initialization - works on unshared Accounts
 /// This function is for use during account creation, before the account is shared.
-public(package) fun do_lock_cap_unshared<Config>(
-    account: &mut Account<Config>,
+public(package) fun do_lock_cap_unshared(
+    account: &mut Account,
     cap: UpgradeCap,
     name: String,
     delay_ms: u64,
@@ -325,9 +325,9 @@ public(package) fun do_lock_cap_unshared<Config>(
 /// This cap grants authority to commit package upgrades (finalize with UpgradeReceipt)
 /// Typically given to core team multisig for security
 /// Cap is created with current nonce from UpgradeRules
-public fun lock_commit_cap<Config>(
+public fun lock_commit_cap(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     package_name: String,
     ctx: &mut TxContext,
 ) {
@@ -364,8 +364,8 @@ public fun lock_commit_cap<Config>(
 }
 
 /// Lock commit cap during initialization - works on unshared Accounts
-public(package) fun do_lock_commit_cap_unshared<Config>(
-    account: &mut Account<Config>,
+public(package) fun do_lock_commit_cap_unshared(
+    account: &mut Account,
     package_name: String,
     ctx: &mut TxContext,
 ) {
@@ -393,9 +393,9 @@ public(package) fun do_lock_commit_cap_unshared<Config>(
 /// Use this to give commit authority to an external multisig
 /// Cap is created with current nonce - will be invalidated if DAO requests reclaim
 /// BLOCKED if reclaim is currently pending (to avoid confusion)
-public fun create_and_transfer_commit_cap<Config>(
+public fun create_and_transfer_commit_cap<Config: store>(
     auth: Auth,
-    account: &Account<Config>,
+    account: &Account,
     package_name: String,
     recipient: address,
     ctx: &mut TxContext,
@@ -433,8 +433,8 @@ public fun create_and_transfer_commit_cap<Config>(
 }
 
 /// Checks if account has a commit cap for a package
-public fun has_commit_cap<Config>(
-    account: &Account<Config>,
+public fun has_commit_cap(
+    account: &Account,
     package_name: String,
 ): bool {
     account.has_managed_asset(UpgradeCommitCapKey(package_name))
@@ -453,8 +453,8 @@ public fun commit_cap_valid_nonce(cap: &UpgradeCommitCap): u256 {
 /// Get the current commit nonce from UpgradeRules
 /// This is the nonce that new caps will be created with
 /// Existing caps are only valid if their nonce matches this value
-public fun get_current_commit_nonce<Config>(
-    account: &Account<Config>,
+public fun get_current_commit_nonce(
+    account: &Account,
     package_name: String,
 ): u256 {
     let rules: &UpgradeRules = account.borrow_managed_data(
@@ -465,60 +465,60 @@ public fun get_current_commit_nonce<Config>(
 }
 
 /// Returns true if the account has an UpgradeCap for a given package name.
-public fun has_cap<Config>(
-    account: &Account<Config>, 
+public fun has_cap(
+    account: &Account, 
     name: String
 ): bool {
     account.has_managed_asset(UpgradeCapKey(name))
 }
 
 /// Returns the address of the package for a given package name.
-public fun get_cap_package<Config>(
-    account: &Account<Config>, 
+public fun get_cap_package(
+    account: &Account, 
     name: String
 ): address {
-    account.borrow_managed_asset<_, _, UpgradeCap>(UpgradeCapKey(name), version::current()).package().to_address()
+    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(UpgradeCapKey(name), version::current()).package().to_address()
 } 
 
 /// Returns the version of the UpgradeCap for a given package name.
-public fun get_cap_version<Config>(
-    account: &Account<Config>, 
+public fun get_cap_version(
+    account: &Account, 
     name: String
 ): u64 {
-    account.borrow_managed_asset<_, _, UpgradeCap>(UpgradeCapKey(name), version::current()).version()
+    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(UpgradeCapKey(name), version::current()).version()
 } 
 
 /// Returns the policy of the UpgradeCap for a given package name.
-public fun get_cap_policy<Config>(
-    account: &Account<Config>, 
+public fun get_cap_policy(
+    account: &Account, 
     name: String
 ): u8 {
-    account.borrow_managed_asset<_, _, UpgradeCap>(UpgradeCapKey(name), version::current()).policy()
+    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(UpgradeCapKey(name), version::current()).policy()
 } 
 
 /// Returns the timelock of the UpgradeRules for a given package name.
-public fun get_time_delay<Config>(
-    account: &Account<Config>, 
+public fun get_time_delay(
+    account: &Account,
     name: String
 ): u64 {
-    account.borrow_managed_data<_, _, UpgradeRules>(UpgradeRulesKey(name), version::current()).delay_ms
+    account.borrow_managed_data<UpgradeRulesKey, UpgradeRules>(UpgradeRulesKey(name), version::current()).delay_ms
 }
 
 /// Returns the map of package names to package addresses.
-public fun get_packages_info<Config>(
-    account: &Account<Config>
+public fun get_packages_info(
+    account: &Account
 ): &VecMap<String, address> {
-    &account.borrow_managed_data<_, _, UpgradeIndex>(UpgradeIndexKey(), version::current()).packages_info
+    &account.borrow_managed_data<UpgradeIndexKey, UpgradeIndex>(UpgradeIndexKey(), version::current()).packages_info
 }
 
 /// Returns true if the package is managed by the account.
-public fun is_package_managed<Config>(
-    account: &Account<Config>,
+public fun is_package_managed(
+    account: &Account,
     package_addr: address
 ): bool {
     if (!account.has_managed_data(UpgradeIndexKey())) return false;
     let index: &UpgradeIndex = account.borrow_managed_data(UpgradeIndexKey(), version::current());
-    
+
     let mut i = 0;
     while (i < index.packages_info.length()) {
         let (_, value) = index.packages_info.get_entry_by_idx(i);
@@ -530,8 +530,8 @@ public fun is_package_managed<Config>(
 }
 
 /// Returns the address of the package for a given package name.
-public fun get_package_addr<Config>(
-    account: &Account<Config>,
+public fun get_package_addr(
+    account: &Account,
     package_name: String
 ): address {
     let index: &UpgradeIndex = account.borrow_managed_data(UpgradeIndexKey(), version::current());
@@ -540,8 +540,8 @@ public fun get_package_addr<Config>(
 
 /// Returns the package name for a given package address.
 #[allow(unused_assignment)] // false positive
-public fun get_package_name<Config>(
-    account: &Account<Config>,
+public fun get_package_name(
+    account: &Account,
     package_addr: address
 ): String {
     let index: &UpgradeIndex = account.borrow_managed_data(UpgradeIndexKey(), version::current());
@@ -607,9 +607,9 @@ public fun new_upgrade<Outcome, IW: drop>(
 }    
 
 /// Processes an UpgradeAction and returns a UpgradeTicket.
-public fun do_upgrade<Config, Outcome: store, IW: drop>(
+public fun do_upgrade<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     clock: &Clock,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -684,9 +684,9 @@ public fun new_commit<Outcome, IW: drop>(
 /// Commits an upgrade WITHOUT requiring commit cap validation
 /// Use this when DAO has full control over upgrades OR when reclaim timelock has expired
 /// If a reclaim request is pending, validates that the timelock has expired before allowing DAO-only commit
-public fun do_commit_dao_only<Config, Outcome: store, IW: drop>(
+public fun do_commit_dao_only<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receipt: UpgradeReceipt,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -751,9 +751,9 @@ public fun do_commit_dao_only<Config, Outcome: store, IW: drop>(
 /// Commits an upgrade WITH commit cap validation
 /// Use this when core team holds commit authority
 /// Cap must have valid nonce matching current commit_nonce or will be rejected
-public fun do_commit_with_cap<Config, Outcome: store, IW: drop>(
+public fun do_commit_with_cap<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receipt: UpgradeReceipt,
     commit_cap: &UpgradeCommitCap,
     version_witness: VersionWitness,
@@ -840,9 +840,9 @@ public fun new_restrict<Outcome, IW: drop>(
 }    
 
 /// Processes a RestrictAction and updates the UpgradeCap policy.
-public fun do_restrict<Config, Outcome: store, IW: drop>(
+public fun do_restrict<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -920,9 +920,9 @@ public fun new_create_commit_cap<Outcome, IW: drop>(
 }
 
 /// Processes a CreateCommitCapAction and creates/transfers the commit cap.
-public fun do_create_commit_cap<Config, Outcome: store, IW: drop>(
+public fun do_create_commit_cap<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     ctx: &mut TxContext,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -1008,8 +1008,8 @@ public fun delete_create_commit_cap(expired: &mut Expired) {
 // === Package Funtions ===
 
 /// Borrows the UpgradeCap for a given package address.
-public(package) fun borrow_cap<Config>(
-    account: &Account<Config>,
+public(package) fun borrow_cap<Config: store>(
+    account: &Account,
     package_addr: address
 ): &UpgradeCap {
     let name = get_package_name(account, package_addr);
@@ -1021,8 +1021,8 @@ public(package) fun borrow_cap<Config>(
 
 /// Borrow the commit cap from the account (removes it temporarily)
 /// Must be returned in the same transaction using return_commit_cap
-public fun borrow_commit_cap<Config>(
-    account: &mut Account<Config>,
+public fun borrow_commit_cap<Config: store>(
+    account: &mut Account,
     package_name: String,
     version_witness: VersionWitness,
 ): UpgradeCommitCap {
@@ -1030,8 +1030,8 @@ public fun borrow_commit_cap<Config>(
 }
 
 /// Return the commit cap to the account after use
-public fun return_commit_cap<Config>(
-    account: &mut Account<Config>,
+public fun return_commit_cap<Config: store>(
+    account: &mut Account,
     commit_cap: UpgradeCommitCap,
     version_witness: VersionWitness,
 ) {
@@ -1062,9 +1062,9 @@ public fun transfer_commit_cap(cap: UpgradeCommitCap, recipient: address) {
 /// Anyone holding the cap can call this to destroy it
 /// This resets nonce to 0, clears any pending reclaim, giving DAO immediate control
 /// Use this when core team wants to hand over control immediately
-public fun destroy_commit_cap<Config>(
+public fun destroy_commit_cap<Config: store>(
     cap: UpgradeCommitCap,
-    account: &mut Account<Config>,
+    account: &mut Account,
     ctx: &TxContext,
 ) {
     let UpgradeCommitCap { id, package_name, valid_nonce: _ } = cap;
@@ -1095,9 +1095,9 @@ public fun destroy_commit_cap<Config>(
 /// Starts the timelock countdown (e.g., 6 months)
 /// IMMEDIATELY increments nonce, invalidating all existing commit caps
 /// This gives core team notice that DAO wants to reclaim control
-public fun request_reclaim_commit_cap<Config>(
+public fun request_reclaim_commit_cap<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     package_name: String,
     clock: &Clock,
 ) {
@@ -1133,9 +1133,9 @@ public fun request_reclaim_commit_cap<Config>(
 /// After timelock expires, DAO can use do_commit_dao_only() without calling this
 /// This just clears the reclaim_request_time for cleaner state
 /// Can only be called after request_reclaim_commit_cap + reclaim_delay_ms
-public fun clear_reclaim_request<Config>(
+public fun clear_reclaim_request<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     package_name: String,
     clock: &Clock,
 ) {
@@ -1174,8 +1174,8 @@ public fun clear_reclaim_request<Config>(
 }
 
 /// Check if a reclaim request is pending
-public fun has_reclaim_request<Config>(
-    account: &Account<Config>,
+public fun has_reclaim_request(
+    account: &Account,
     package_name: String,
 ): bool {
     let rules: &UpgradeRules = account.borrow_managed_data(
@@ -1186,8 +1186,8 @@ public fun has_reclaim_request<Config>(
 }
 
 /// Get the timestamp when reclaim will be available (if request exists)
-public fun get_reclaim_available_time<Config>(
-    account: &Account<Config>,
+public fun get_reclaim_available_time(
+    account: &Account,
     package_name: String,
 ): Option<u64> {
     let rules: &UpgradeRules = account.borrow_managed_data(
@@ -1208,9 +1208,9 @@ public fun get_reclaim_available_time<Config>(
 /// Phase 1: Propose an upgrade digest for governance voting
 /// This creates a proposal that can be voted on over time (multi-day)
 /// The digest is just data (has `store`), not a hot potato
-public fun propose_upgrade_digest<Config>(
+public fun propose_upgrade_digest(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     package_name: String,
     digest: vector<u8>,
     execution_time_ms: u64,
@@ -1259,9 +1259,9 @@ public fun propose_upgrade_digest<Config>(
 
 /// Called by governance system when vote passes
 /// Marks the digest as approved for execution
-public fun approve_upgrade_proposal<Config>(
+public fun approve_upgrade_proposal<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     package_name: String,
     digest: vector<u8>,
     clock: &Clock,
@@ -1286,8 +1286,8 @@ public fun approve_upgrade_proposal<Config>(
 /// Phase 2a: Execute approved upgrade atomically (DAO-only mode)
 /// This creates the UpgradeTicket (hot potato) which MUST be consumed in same PTB
 /// Returns ticket that caller must immediately consume via sui upgrade command
-public fun execute_approved_upgrade_dao_only<Config>(
-    account: &mut Account<Config>,
+public fun execute_approved_upgrade_dao_only<Config: store>(
+    account: &mut Account,
     package_name: String,
     digest: vector<u8>,
     clock: &Clock,
@@ -1338,8 +1338,8 @@ public fun execute_approved_upgrade_dao_only<Config>(
 
 /// Phase 2b: Complete the upgrade by consuming the receipt (DAO-only mode)
 /// This MUST be called in same PTB after sui upgrade command
-public fun complete_approved_upgrade_dao_only<Config>(
-    account: &mut Account<Config>,
+public fun complete_approved_upgrade_dao_only<Config: store>(
+    account: &mut Account,
     package_name: String,
     digest: vector<u8>,
     receipt: UpgradeReceipt,
@@ -1387,8 +1387,8 @@ public fun complete_approved_upgrade_dao_only<Config>(
 
 /// Phase 2a: Execute approved upgrade atomically (with commit cap)
 /// This requires the commit cap to be provided, validating nonce
-public fun execute_approved_upgrade_with_cap<Config>(
-    account: &mut Account<Config>,
+public fun execute_approved_upgrade_with_cap<Config: store>(
+    account: &mut Account,
     package_name: String,
     digest: vector<u8>,
     commit_cap: &UpgradeCommitCap,
@@ -1432,8 +1432,8 @@ public fun execute_approved_upgrade_with_cap<Config>(
 }
 
 /// Phase 2b: Complete the upgrade by consuming the receipt (with commit cap)
-public fun complete_approved_upgrade_with_cap<Config>(
-    account: &mut Account<Config>,
+public fun complete_approved_upgrade_with_cap<Config: store>(
+    account: &mut Account,
     package_name: String,
     digest: vector<u8>,
     receipt: UpgradeReceipt,
@@ -1486,8 +1486,8 @@ public fun complete_approved_upgrade_with_cap<Config>(
 }
 
 /// Check if a specific upgrade digest proposal exists
-public fun has_upgrade_proposal<Config>(
-    account: &Account<Config>,
+public fun has_upgrade_proposal(
+    account: &Account,
     package_name: String,
     digest: vector<u8>,
 ): bool {
@@ -1495,8 +1495,8 @@ public fun has_upgrade_proposal<Config>(
 }
 
 /// Check if a specific upgrade digest is approved
-public fun is_upgrade_approved<Config>(
-    account: &Account<Config>,
+public fun is_upgrade_approved(
+    account: &Account,
     package_name: String,
     digest: vector<u8>,
 ): bool {
@@ -1512,8 +1512,8 @@ public fun is_upgrade_approved<Config>(
 }
 
 /// Get upgrade proposal details
-public fun get_upgrade_proposal<Config>(
-    account: &Account<Config>,
+public fun get_upgrade_proposal(
+    account: &Account,
     package_name: String,
     digest: vector<u8>,
 ): (vector<u8>, u64, u64, bool) {

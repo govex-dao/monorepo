@@ -12,7 +12,7 @@ futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 futarchy_actions = { local = "../futarchy_actions" }
-futarchy_stream_actions = { local = "../futarchy_stream_actions" }
+futarchy_stream_actions = { local = "../v3_streams/futarchy_stream_actions" }
 # futarchy_factory = { local = "../futarchy_factory" } # Moved to governance_actions
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]

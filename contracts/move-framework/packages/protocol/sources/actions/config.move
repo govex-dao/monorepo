@@ -145,9 +145,9 @@ fun peel_vector_string(reader: &mut BCS): vector<String> {
 // === Public functions ===
 
 /// Authorized addresses can configure object deposit settings directly
-public fun configure_deposits<Config>(
+public fun configure_deposits<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     enable: bool,
     new_max: Option<u128>,
     reset_counter: bool,
@@ -158,9 +158,9 @@ public fun configure_deposits<Config>(
 }
 
 /// Authorized addresses can edit the metadata of the account
-public fun edit_metadata<Config>(
+public fun edit_metadata<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     keys: vector<String>,
     values: vector<String>,
 ) {
@@ -169,9 +169,9 @@ public fun edit_metadata<Config>(
 }
 
 /// Authorized addresses can update the existing dependencies of the account to the latest versions
-public fun update_extensions_to_latest<Config>(
+public fun update_extensions_to_latest<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     extensions: &Extensions,
 ) {
     account.verify(auth);
@@ -202,9 +202,9 @@ public fun update_extensions_to_latest<Config>(
 }
 
 /// Creates an intent to update the dependencies of the account
-public fun request_config_deps<Config, Outcome: store>(
+public fun request_config_deps<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>, 
+    account: &mut Account, 
     params: Params,
     outcome: Outcome,
     extensions: &Extensions,
@@ -247,9 +247,9 @@ public fun request_config_deps<Config, Outcome: store>(
 }
 
 /// Executes an intent updating the dependencies of the account
-public fun execute_config_deps<Config, Outcome: store>(
+public fun execute_config_deps<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     extensions: &Extensions,
 ) {
     account.process_intent!(
@@ -292,9 +292,9 @@ public fun delete_config_deps(expired: &mut Expired) {
 }
 
 /// Creates an intent to toggle the unverified_allowed flag of the account
-public fun request_toggle_unverified_allowed<Config, Outcome: store>(
+public fun request_toggle_unverified_allowed<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>, 
+    account: &mut Account, 
     params: Params,
     outcome: Outcome,
     ctx: &mut TxContext
@@ -330,9 +330,9 @@ public fun request_toggle_unverified_allowed<Config, Outcome: store>(
 }
 
 /// Executes an intent toggling the unverified_allowed flag of the account
-public fun execute_toggle_unverified_allowed<Config, Outcome: store>(
+public fun execute_toggle_unverified_allowed<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>, 
+    account: &mut Account, 
 ) {
     account.process_intent!(
         executable, 
@@ -355,9 +355,9 @@ public fun delete_toggle_unverified_allowed(expired: &mut Expired) {
 }
 
 /// Creates an intent to configure object deposit settings
-public fun request_configure_deposits<Config, Outcome: store>(
+public fun request_configure_deposits<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     outcome: Outcome,
     params: Params,
     enable: bool,
@@ -394,9 +394,9 @@ public fun request_configure_deposits<Config, Outcome: store>(
 }
 
 /// Executes an intent to configure object deposit settings
-public fun execute_configure_deposits<Config, Outcome: store>(
+public fun execute_configure_deposits<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
 ) {
     account.process_intent!(
         executable,
@@ -439,9 +439,9 @@ public fun delete_configure_deposits(expired: &mut Expired) {
 }
 
 /// Creates an intent to manage type whitelist
-public fun request_manage_whitelist<Config, Outcome: store>(
+public fun request_manage_whitelist<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     outcome: Outcome,
     params: Params,
     add_types: vector<String>,
@@ -477,9 +477,9 @@ public fun request_manage_whitelist<Config, Outcome: store>(
 }
 
 /// Executes an intent to manage type whitelist
-public fun execute_manage_whitelist<Config, Outcome: store>(
+public fun execute_manage_whitelist<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
 ) {
     account.process_intent!(
         executable,

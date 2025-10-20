@@ -4,7 +4,7 @@
 // Portions of this file are derived from the account.tech Move Framework project.
 // Those portions remain licensed under the Apache License, Version 2.0.
 
-/// This is the core module managing the account Account<Config>.
+/// This is the core module managing the account Account.
 /// It provides the apis to create, approve and execute intents with actions.
 ///
 /// The flow is as follows:
@@ -65,13 +65,16 @@ const EObjectCountUnderflow: u64 = 12;
 const EWhitelistTooLarge: u64 = 13;
 const EObjectLimitReached: u64 = 14;
 const EMaxObjectsReached: u64 = 14;
+const EWrongConfigType: u64 = 15;
+const ENotConfigModule: u64 = 16;
 
 // === Structs ===
 
 public struct ACCOUNT has drop {}
 
 /// Shared multisig Account object.
-public struct Account<Config> has key, store {
+/// Config is stored as a dynamic field to allow runtime config migration
+public struct Account has key, store {
     id: UID,
     // arbitrary data that can be proposed and added by members
     // first field is a human readable name to differentiate the multisig accounts
@@ -81,8 +84,7 @@ public struct Account<Config> has key, store {
     deps: Deps,
     // open intents, key should be a unique descriptive name
     intents: Intents,
-    // config can be anything (e.g. Multisig, coin-based DAO, etc.)
-    config: Config,
+    // config: Config,  ← MOVED TO DYNAMIC FIELD (see ConfigKey below)
 }
 
 /// Object tracking state stored as dynamic field
@@ -100,6 +102,14 @@ public struct ObjectTrackerState has copy, store {
     // Store canonical string representation for serializability
     whitelisted_types: VecSet<String>,
 }
+
+// === Dynamic Field Keys for Config Storage ===
+
+/// Key for storing config as a dynamic field
+public struct ConfigKey has copy, drop, store {}
+
+/// Key for storing config type name (for runtime validation)
+public struct ConfigTypeKey has copy, drop, store {}
 
 // === Events ===
 
@@ -131,7 +141,7 @@ fun init(otw: ACCOUNT, ctx: &mut TxContext) {
 }
 
 /// Initialize object tracking for an account (called during account creation)
-public(package) fun init_object_tracker<Config>(account: &mut Account<Config>, max_objects: u128) {
+public(package) fun init_object_tracker(account: &mut Account, max_objects: u128) {
     if (!df::exists_(&account.id, ObjectTracker {})) {
         df::add(
             &mut account.id,
@@ -147,8 +157,8 @@ public(package) fun init_object_tracker<Config>(account: &mut Account<Config>, m
 }
 
 /// Get or create object tracker state
-public(package) fun ensure_object_tracker<Config>(
-    account: &mut Account<Config>,
+public(package) fun ensure_object_tracker(
+    account: &mut Account,
 ): &mut ObjectTrackerState {
     if (!df::exists_(&account.id, ObjectTracker {})) {
         init_object_tracker(account, default_max_objects());
@@ -157,8 +167,8 @@ public(package) fun ensure_object_tracker<Config>(
 }
 
 /// Apply deposit configuration changes
-public(package) fun apply_deposit_config<Config>(
-    account: &mut Account<Config>,
+public(package) fun apply_deposit_config(
+    account: &mut Account,
     enable: bool,
     new_max: Option<u128>,
     reset_counter: bool,
@@ -176,8 +186,8 @@ public(package) fun apply_deposit_config<Config>(
 }
 
 /// Apply whitelist changes
-public(package) fun apply_whitelist_changes<Config>(
-    account: &mut Account<Config>,
+public(package) fun apply_whitelist_changes(
+    account: &mut Account,
     add_types: &vector<String>,
     remove_types: &vector<String>,
 ) {
@@ -210,8 +220,8 @@ public(package) fun apply_whitelist_changes<Config>(
 
 /// Verifies all actions have been processed and destroys the executable.
 /// Called to complete the intent execution.
-public fun confirm_execution<Config, Outcome: drop + store>(
-    account: &mut Account<Config>,
+public fun confirm_execution<Outcome: drop + store>(
+    account: &mut Account,
     executable: Executable<Outcome>,
 ) {
     let actions_length = executable.intent().action_specs().length();
@@ -225,8 +235,8 @@ public fun confirm_execution<Config, Outcome: drop + store>(
 
 /// Destroys an intent if it has no remaining execution.
 /// Expired needs to be emptied by deleting each action in the bag within their own module.
-public fun destroy_empty_intent<Config, Outcome: store + drop>(
-    account: &mut Account<Config>,
+public fun destroy_empty_intent<Outcome: store + drop>(
+    account: &mut Account,
     key: String,
     ctx: &mut TxContext,
 ): Expired {
@@ -236,8 +246,8 @@ public fun destroy_empty_intent<Config, Outcome: store + drop>(
 
 /// Destroys an intent if it has expired.
 /// Expired needs to be emptied by deleting each action in the bag within their own module.
-public fun delete_expired_intent<Config, Outcome: store + drop>(
-    account: &mut Account<Config>,
+public fun delete_expired_intent<Outcome: store + drop>(
+    account: &mut Account,
     key: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -250,16 +260,45 @@ public fun delete_expired_intent<Config, Outcome: store + drop>(
 }
 
 /// Asserts that the function is called from the module defining the config of the account.
-public(package) fun assert_is_config_module<Config, CW: drop>(
-    _account: &Account<Config>,
-    _config_witness: CW,
-) {
-    let account_type = type_name::with_defining_ids<Config>();
+/// Static version: validate witness matches config type (no account needed)
+fun assert_is_config_module_static<Config, CW: drop>() {
+    let config_type = type_name::with_defining_ids<Config>();
     let witness_type = type_name::with_defining_ids<CW>();
     assert!(
-        account_type.address_string() == witness_type.address_string() &&
-        account_type.module_string() == witness_type.module_string(),
-        ENotCalledFromConfigModule,
+        config_type.address_string() == witness_type.address_string() &&
+        config_type.module_string() == witness_type.module_string(),
+        ENotConfigModule,
+    );
+}
+
+/// Runtime version: validate witness matches stored config type
+public(package) fun assert_is_config_module<Config: store, CW: drop>(
+    account: &Account,
+    _config_witness: CW,
+) {
+    // First check the stored type matches requested type
+    let stored_type = df::borrow<ConfigTypeKey, TypeName>(&account.id, ConfigTypeKey {});
+    let requested_type = type_name::get<Config>();
+    assert!(&requested_type == stored_type, EWrongConfigType);
+
+    // Then validate witness package/module matches config
+    assert_is_config_module_static<Config, CW>();
+}
+
+/// Witness-only version: validate witness matches stored config type (no explicit Config needed)
+public(package) fun assert_is_config_module_witness<CW: drop>(
+    account: &Account,
+    _config_witness: CW,
+) {
+    // Get the stored config type
+    let stored_type = df::borrow<ConfigTypeKey, TypeName>(&account.id, ConfigTypeKey {});
+    let witness_type = type_name::with_defining_ids<CW>();
+
+    // Validate witness package/module matches stored config package/module
+    assert!(
+        stored_type.address_string() == witness_type.address_string() &&
+        stored_type.module_string() == witness_type.module_string(),
+        ENotConfigModule,
     );
 }
 
@@ -270,8 +309,8 @@ public(package) fun assert_is_config_module<Config, CW: drop>(
 /// - `deps_witness` gates **compatibility**: caller must be compiled against the
 ///   same `account_protocol` package identity/version the Account expects.
 ///   This prevents mismatched callers from older/newer packages.
-public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
-    account: &mut Account<Config>,
+public fun cancel_intent<Config: store, Outcome: store + drop, CW: drop>(
+    account: &mut Account,
     key: String,
     deps_witness: VersionWitness,
     config_witness: CW,
@@ -280,14 +319,14 @@ public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
     // Ensure the protocol dependency matches what this account expects
     account.deps().check(deps_witness);
     // Only the config module may cancel
-    assert_is_config_module(account, config_witness);
+    assert_is_config_module_witness(account, config_witness);
     // Convert to Expired - deleters will handle unlocking during drain
     account.intents.destroy_intent<Outcome>(key, ctx)
 }
 
 /// Helper function to transfer an object to the account with tracking.
 /// Excludes Coin types and whitelisted types from restrictions.
-public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, ctx: &TxContext) {
+public fun keep<T: key + store>(account: &mut Account, obj: T, ctx: &TxContext) {
     let type_name = type_name::with_defining_ids<T>();
     let is_coin = is_coin_type(type_name);
 
@@ -330,10 +369,15 @@ public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, c
 }
 
 /// Unpacks and verifies the Auth matches the account.
-public fun verify<Config>(account: &Account<Config>, auth: Auth) {
+public fun verify(account: &Account, auth: Auth) {
     let Auth { account_addr } = auth;
 
     assert!(account.addr() == account_addr, EWrongAccount);
+}
+
+/// Returns the account address from Auth.
+public fun auth_account_addr(auth: &Auth): address {
+    auth.account_addr
 }
 
 //**************************************************************************************************//
@@ -351,8 +395,8 @@ public fun verify<Config>(account: &Account<Config>, auth: Auth) {
 /// It behaves like a witness but it is usable in the entire package instead of in a single module.
 
 /// Creates a new intent. Can only be called from a dependency of the account.
-public fun create_intent<Config, Outcome: store, IW: drop>(
-    account: &Account<Config>,
+public fun create_intent<Outcome: store, IW: drop>(
+    account: &Account,
     params: Params,
     outcome: Outcome, // resolution settings
     managed_name: String, // managed struct/object name for the role
@@ -373,8 +417,8 @@ public fun create_intent<Config, Outcome: store, IW: drop>(
 }
 
 /// Adds an intent to the account. Can only be called from a dependency of the account.
-public fun insert_intent<Config, Outcome: store, IW: drop>(
-    account: &mut Account<Config>,
+public fun insert_intent<Outcome: store, IW: drop>(
+    account: &mut Account,
     intent: Intent<Outcome>,
     version_witness: VersionWitness,
     intent_witness: IW,
@@ -395,8 +439,8 @@ public fun insert_intent<Config, Outcome: store, IW: drop>(
 /// Keys must be custom types defined in the same module where the function is implemented.
 
 /// Adds a managed data struct to the account.
-public fun add_managed_data<Config, Key: copy + drop + store, Data: store>(
-    account: &mut Account<Config>,
+public fun add_managed_data<Key: copy + drop + store, Data: store>(
+    account: &mut Account,
     key: Key,
     data: Data,
     version_witness: VersionWitness,
@@ -407,16 +451,16 @@ public fun add_managed_data<Config, Key: copy + drop + store, Data: store>(
 }
 
 /// Checks if a managed data struct exists in the account.
-public fun has_managed_data<Config, Key: copy + drop + store>(
-    account: &Account<Config>,
+public fun has_managed_data<Key: copy + drop + store>(
+    account: &Account,
     key: Key,
 ): bool {
     df::exists_(&account.id, key)
 }
 
 /// Borrows a managed data struct from the account.
-public fun borrow_managed_data<Config, Key: copy + drop + store, Data: store>(
-    account: &Account<Config>,
+public fun borrow_managed_data<Key: copy + drop + store, Data: store>(
+    account: &Account,
     key: Key,
     version_witness: VersionWitness,
 ): &Data {
@@ -426,8 +470,8 @@ public fun borrow_managed_data<Config, Key: copy + drop + store, Data: store>(
 }
 
 /// Borrows a managed data struct mutably from the account.
-public fun borrow_managed_data_mut<Config, Key: copy + drop + store, Data: store>(
-    account: &mut Account<Config>,
+public fun borrow_managed_data_mut<Key: copy + drop + store, Data: store>(
+    account: &mut Account,
     key: Key,
     version_witness: VersionWitness,
 ): &mut Data {
@@ -437,8 +481,8 @@ public fun borrow_managed_data_mut<Config, Key: copy + drop + store, Data: store
 }
 
 /// Removes a managed data struct from the account.
-public fun remove_managed_data<Config, Key: copy + drop + store, A: store>(
-    account: &mut Account<Config>,
+public fun remove_managed_data<Key: copy + drop + store, A: store>(
+    account: &mut Account,
     key: Key,
     version_witness: VersionWitness,
 ): A {
@@ -448,8 +492,8 @@ public fun remove_managed_data<Config, Key: copy + drop + store, A: store>(
 }
 
 /// Adds a managed object to the account.
-public fun add_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
-    account: &mut Account<Config>,
+public fun add_managed_asset<Key: copy + drop + store, Asset: key + store>(
+    account: &mut Account,
     key: Key,
     asset: Asset,
     version_witness: VersionWitness,
@@ -460,16 +504,16 @@ public fun add_managed_asset<Config, Key: copy + drop + store, Asset: key + stor
 }
 
 /// Checks if a managed object exists in the account.
-public fun has_managed_asset<Config, Key: copy + drop + store>(
-    account: &Account<Config>,
+public fun has_managed_asset<Key: copy + drop + store>(
+    account: &Account,
     key: Key,
 ): bool {
     dof::exists_(&account.id, key)
 }
 
 /// Borrows a managed object from the account.
-public fun borrow_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
-    account: &Account<Config>,
+public fun borrow_managed_asset<Key: copy + drop + store, Asset: key + store>(
+    account: &Account,
     key: Key,
     version_witness: VersionWitness,
 ): &Asset {
@@ -479,8 +523,8 @@ public fun borrow_managed_asset<Config, Key: copy + drop + store, Asset: key + s
 }
 
 /// Borrows a managed object mutably from the account.
-public fun borrow_managed_asset_mut<Config, Key: copy + drop + store, Asset: key + store>(
-    account: &mut Account<Config>,
+public fun borrow_managed_asset_mut<Key: copy + drop + store, Asset: key + store>(
+    account: &mut Account,
     key: Key,
     version_witness: VersionWitness,
 ): &mut Asset {
@@ -490,8 +534,8 @@ public fun borrow_managed_asset_mut<Config, Key: copy + drop + store, Asset: key
 }
 
 /// Removes a managed object from the account.
-public fun remove_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
-    account: &mut Account<Config>,
+public fun remove_managed_asset<Key: copy + drop + store, Asset: key + store>(
+    account: &mut Account,
     key: Key,
     version_witness: VersionWitness,
 ): Asset {
@@ -510,42 +554,47 @@ public fun remove_managed_asset<Config, Key: copy + drop + store, Asset: key + s
 /// We provide higher level macros to facilitate the implementation of these functions.
 
 /// Creates a new account with default dependencies. Can only be called from the config module.
-public fun new<Config, CW: drop>(
+public fun new<Config: store, CW: drop>(
     config: Config,
     deps: Deps,
     version_witness: VersionWitness,
     config_witness: CW,
     ctx: &mut TxContext,
-): Account<Config> {
-    let account = Account<Config> {
+): Account {
+    // Validate witness matches config module at compile time
+    assert_is_config_module_static<Config, CW>();
+
+    let mut account = Account {
         id: object::new(ctx),
         metadata: metadata::empty(),
         deps,
         intents: intents::empty(ctx),
-        config,
     };
 
     account.deps().check(version_witness);
-    assert_is_config_module(&account, config_witness);
+
+    // Store config and its type as dynamic fields
+    df::add(&mut account.id, ConfigKey {}, config);
+    df::add(&mut account.id, ConfigTypeKey {}, type_name::get<Config>());
 
     account
 }
 
 /// Returns an Auth object that can be used to call gated functions. Can only be called from the config module.
-public fun new_auth<Config, CW: drop>(
-    account: &Account<Config>,
+public fun new_auth<Config: store, CW: drop>(
+    account: &Account,
     version_witness: VersionWitness,
     config_witness: CW,
 ): Auth {
     account.deps().check(version_witness);
-    assert_is_config_module(account, config_witness);
+    assert_is_config_module<Config, CW>(account, config_witness);
 
     Auth { account_addr: account.addr() }
 }
 
 /// Returns a tuple of the outcome that must be validated and the executable. Can only be called from the config module.
-public fun create_executable<Config, Outcome: store + copy, CW: drop>(
-    account: &mut Account<Config>,
+public fun create_executable<Config: store, Outcome: store + copy, CW: drop>(
+    account: &mut Account,
     key: String,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -553,7 +602,7 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
     ctx: &mut TxContext, // Kept for API compatibility
 ): (Outcome, Executable<Outcome>) {
     account.deps().check(version_witness);
-    assert_is_config_module(account, config_witness);
+    assert_is_config_module<Config, CW>(account, config_witness);
 
     let mut intent = account.intents.remove_intent<Outcome>(key);
     let time = intent.pop_front_execution_time();
@@ -566,27 +615,27 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
 }
 
 /// Returns a mutable reference to the intents of the account. Can only be called from the config module.
-public fun intents_mut<Config, CW: drop>(
-    account: &mut Account<Config>,
+public fun intents_mut<Config: store, CW: drop>(
+    account: &mut Account,
     version_witness: VersionWitness,
     config_witness: CW,
 ): &mut Intents {
     account.deps().check(version_witness);
-    assert_is_config_module(account, config_witness);
+    assert_is_config_module<Config, CW>(account, config_witness);
 
     &mut account.intents
 }
 
 /// Returns a mutable reference to the config of the account. Can only be called from the config module.
-public fun config_mut<Config, CW: drop>(
-    account: &mut Account<Config>,
+public fun config_mut<Config: store, CW: drop>(
+    account: &mut Account,
     version_witness: VersionWitness,
     config_witness: CW,
 ): &mut Config {
     account.deps().check(version_witness);
-    assert_is_config_module(account, config_witness);
+    assert_is_config_module<Config, CW>(account, config_witness);
 
-    &mut account.config
+    df::borrow_mut<ConfigKey, Config>(&mut account.id, ConfigKey {})
 }
 
 //**************************************************************************************************//
@@ -594,32 +643,32 @@ public fun config_mut<Config, CW: drop>(
 //**************************************************************************************************//
 
 /// Returns the address of the account.
-public fun addr<Config>(account: &Account<Config>): address {
+public fun addr(account: &Account): address {
     account.id.uid_to_inner().id_to_address()
 }
 
 /// Returns the metadata of the account.
-public fun metadata<Config>(account: &Account<Config>): &Metadata {
+public fun metadata(account: &Account): &Metadata {
     &account.metadata
 }
 
 /// Returns the dependencies of the account.
-public fun deps<Config>(account: &Account<Config>): &Deps {
+public fun deps(account: &Account): &Deps {
     &account.deps
 }
 
 /// Returns the intents of the account.
-public fun intents<Config>(account: &Account<Config>): &Intents {
+public fun intents(account: &Account): &Intents {
     &account.intents
 }
 
 /// Returns the config of the account.
-public fun config<Config>(account: &Account<Config>): &Config {
-    &account.config
+public fun config<Config: store>(account: &Account): &Config {
+    df::borrow<ConfigKey, Config>(&account.id, ConfigKey {})
 }
 
 /// Returns object tracking stats (count, deposits_open, max)
-public fun object_stats<Config>(account: &Account<Config>): (u128, bool, u128) {
+public fun object_stats(account: &Account): (u128, bool, u128) {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
         (tracker.object_count, tracker.deposits_open, tracker.max_objects)
@@ -629,7 +678,7 @@ public fun object_stats<Config>(account: &Account<Config>): (u128, bool, u128) {
 }
 
 /// Check if account is accepting object deposits
-public fun is_accepting_objects<Config>(account: &Account<Config>): bool {
+public fun is_accepting_objects<Config: store>(account: &Account): bool {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
         tracker.deposits_open && tracker.object_count < tracker.max_objects
@@ -639,9 +688,9 @@ public fun is_accepting_objects<Config>(account: &Account<Config>): bool {
 }
 
 /// Configure object deposit settings (requires Auth)
-public fun configure_object_deposits<Config>(
+public fun configure_object_deposits<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     enable: bool,
     new_max: Option<u128>,
     reset_counter: bool,
@@ -661,9 +710,9 @@ public fun configure_object_deposits<Config>(
 }
 
 /// Manage whitelist for object types (requires Auth)
-public fun manage_type_whitelist<Config>(
+public fun manage_type_whitelist<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     add_types: vector<String>,
     remove_types: vector<String>,
 ) {
@@ -697,7 +746,7 @@ public fun manage_type_whitelist<Config>(
 }
 
 /// Get whitelisted types for inspection/debugging
-public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<String> {
+public fun get_whitelisted_types<Config: store>(account: &Account): vector<String> {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
         vec_set::into_keys(tracker.whitelisted_types) // Convert VecSet to vector
@@ -707,7 +756,7 @@ public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<Stri
 }
 
 /// Check if a specific type is whitelisted
-public fun is_type_whitelisted<Config, T>(account: &Account<Config>): bool {
+public fun is_type_whitelisted<Config, T>(account: &Account): bool {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
         // Convert TypeName to String for the lookup
@@ -742,8 +791,8 @@ fun is_coin_type(type_name: TypeName): bool {
 //**************************************************************************************************//
 
 /// Returns a mutable reference to the metadata of the account.
-public(package) fun metadata_mut<Config>(
-    account: &mut Account<Config>,
+public(package) fun metadata_mut(
+    account: &mut Account,
     version_witness: VersionWitness,
 ): &mut Metadata {
     // ensures the package address is a dependency for this account
@@ -752,8 +801,8 @@ public(package) fun metadata_mut<Config>(
 }
 
 /// Returns a mutable reference to the dependencies of the account.
-public(package) fun deps_mut<Config>(
-    account: &mut Account<Config>,
+public(package) fun deps_mut(
+    account: &mut Account,
     version_witness: VersionWitness,
 ): &mut Deps {
     // ensures the package address is a dependency for this account
@@ -763,8 +812,8 @@ public(package) fun deps_mut<Config>(
 
 /// Receives an object from an account with tracking, only used in owned action lib module.
 /// NOTE: This is for WITHDRAWALS - receiving an object FROM the account to return it.
-public(package) fun receive<Config, T: key + store>(
-    account: &mut Account<Config>,
+public(package) fun receive<T: key + store>(
+    account: &mut Account,
     receiving: Receiving<T>,
 ): T {
     let type_name = type_name::with_defining_ids<T>();
@@ -791,7 +840,7 @@ public(package) fun receive<Config, T: key + store>(
 }
 
 /// Track when an object leaves the account (withdrawal/burn/transfer)
-public(package) fun track_object_removal<Config>(account: &mut Account<Config>, _object_id: ID) {
+public(package) fun track_object_removal<Config: store>(account: &mut Account, _object_id: ID) {
     let tracker = ensure_object_tracker(account);
     assert!(tracker.object_count > 0, EObjectCountUnderflow);
     tracker.object_count = tracker.object_count - 1;
@@ -1136,18 +1185,18 @@ fun test_assert_is_config_module_correct_witness() {
 // === Test Helper Functions ===
 
 #[test_only]
-public fun new_for_testing(ctx: &mut TxContext): Account<TestConfig> {
+public fun new_for_testing(ctx: &mut TxContext): Account {
     let deps = deps::new_for_testing();
     new(TestConfig {}, deps, version::current(), TestWitness(), ctx)
 }
 
 #[test_only]
-public fun destroy_for_testing<Config>(account: Account<Config>) {
+public fun destroy_for_testing<Config: store>(account: Account) {
     destroy(account);
 }
 
 #[test_only]
-public fun get_object_tracker<Config>(account: &Account<Config>): Option<ObjectTrackerState> {
+public fun get_object_tracker<Config: store>(account: &Account): Option<ObjectTrackerState> {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
         option::some(*tracker)
@@ -1157,7 +1206,7 @@ public fun get_object_tracker<Config>(account: &Account<Config>): Option<ObjectT
 }
 
 #[test_only]
-public fun track_object_addition<Config>(account: &mut Account<Config>, id: ID) {
+public fun track_object_addition<Config: store>(account: &mut Account, id: ID) {
     let tracker = ensure_object_tracker(account);
     tracker.object_count = tracker.object_count + 1;
     if (tracker.object_count >= tracker.max_objects) {
@@ -1166,7 +1215,7 @@ public fun track_object_addition<Config>(account: &mut Account<Config>, id: ID) 
 }
 
 #[test_only]
-public fun set_max_objects_for_testing<Config>(account: &mut Account<Config>, max: u128) {
+public fun set_max_objects_for_testing<Config: store>(account: &mut Account, max: u128) {
     let tracker = ensure_object_tracker(account);
     tracker.max_objects = max;
 }
@@ -1175,24 +1224,24 @@ public fun set_max_objects_for_testing<Config>(account: &mut Account<Config>, ma
 
 /// Share an account - can only be called by this module
 /// Used during DAO/account initialization after setup is complete
-public fun share_account<Config: store>(account: Account<Config>) {
+public fun share_account<Config: store>(account: Account) {
     transfer::share_object(account);
 }
 
 #[test_only]
-public fun enable_deposits_for_testing<Config>(account: &mut Account<Config>) {
+public fun enable_deposits_for_testing<Config: store>(account: &mut Account) {
     let tracker = ensure_object_tracker(account);
     tracker.deposits_open = true;
 }
 
 #[test_only]
-public fun close_deposits_for_testing<Config>(account: &mut Account<Config>) {
+public fun close_deposits_for_testing<Config: store>(account: &mut Account) {
     let tracker = ensure_object_tracker(account);
     tracker.deposits_open = false;
 }
 
 #[test_only]
-public fun check_can_receive_object<Config, T>(account: &Account<Config>) {
+public fun check_can_receive_object<Config, T>(account: &Account) {
     let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
     let type_name = type_name::with_defining_ids<T>();
     let ascii_str = type_name::into_string(type_name);

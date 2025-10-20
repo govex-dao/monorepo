@@ -20,7 +20,7 @@ use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 use futarchy_governance_actions::protocol_admin_actions;
 // REMOVED: futarchy_lifecycle::dissolution_actions moved to v3_dissolution
 use futarchy_oracle::oracle_actions;
-use futarchy_stream_actions::stream_actions;
+// REMOVED: futarchy_stream_actions - use vault streams instead
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.
@@ -183,7 +183,7 @@ public fun delete_upgrade_commit_action(expired: &mut Expired) {
 }
 
 // === Owned Object Actions ===
-public fun delete_owned_withdraw(account: &Account<FutarchyConfig>, expired: &mut Expired) {
+public fun delete_owned_withdraw(account: &Account, expired: &mut Expired) {
     account_protocol::owned::delete_withdraw_object(expired, account);
 }
 
@@ -241,49 +241,17 @@ public fun delete_return_cap<Cap>(expired: &mut Expired) {
 }
 
 // === Stream/Payment Actions ===
-public fun delete_create_payment<CoinType>(expired: &mut Expired) {
-    stream_actions::delete_create_payment<CoinType>(expired);
-}
-
-public fun delete_execute_payment<CoinType>(expired: &mut Expired) {
-    stream_actions::delete_execute_payment<CoinType>(expired);
-}
-
-public fun delete_cancel_payment<CoinType>(expired: &mut Expired) {
-    stream_actions::delete_cancel_payment<CoinType>(expired);
-}
-
-public fun delete_update_payment_recipient(expired: &mut Expired) {
-    stream_actions::delete_update_payment_recipient(expired);
-}
-
-public fun delete_add_withdrawer(expired: &mut Expired) {
-    stream_actions::delete_add_withdrawer(expired);
-}
-
-public fun delete_remove_withdrawers(expired: &mut Expired) {
-    stream_actions::delete_remove_withdrawers(expired);
-}
-
-public fun delete_toggle_payment(expired: &mut Expired) {
-    stream_actions::delete_toggle_payment(expired);
-}
-
-public fun delete_request_withdrawal<CoinType>(expired: &mut Expired) {
-    stream_actions::delete_request_withdrawal<CoinType>(expired);
-}
-
-public fun delete_challenge_withdrawals(expired: &mut Expired) {
-    stream_actions::delete_challenge_withdrawals(expired);
-}
-
-public fun delete_process_pending_withdrawal<CoinType>(_expired: &mut Expired) {
-    // Stub: Function not yet implemented in stream_actions
-}
-
-public fun delete_cancel_challenged_withdrawals(_expired: &mut Expired) {
-    // Stub: Function not yet implemented in stream_actions
-}
+// REMOVED: Stream actions migrated to vault streams
+// Use vault::delete_cancel_stream for stream cleanup
+//
+// public fun delete_create_payment<CoinType>(expired: &mut Expired) {
+//     vault::delete_cancel_stream(expired);
+// }
+//
+// For vault streams, use:
+// - vault::delete_cancel_stream(expired)
+// - vault::delete_toggle_stream_pause(expired)
+// - vault::delete_toggle_stream_freeze(expired)
 
 // === Governance Actions ===
 // REMOVED: Second-order proposals and reservation system deleted

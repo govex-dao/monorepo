@@ -42,7 +42,7 @@ public fun witness(): ConfigIntent {
 
 /// Create intent to enable/disable proposals
 public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
@@ -77,7 +77,7 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
 
 /// Create intent to update DAO name
 public fun create_update_name_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
@@ -113,7 +113,7 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
 
 /// Create intent to update DAO metadata
 public fun create_update_metadata_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     name: AsciiString,
@@ -136,7 +136,7 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                type_name::get<config_actions::SetMetadata>().into_string().to_string(),
+                type_name::get<config_actions::MetadataUpdate>().into_string().to_string(),
                 action_bytes,
                 iw,
             );
@@ -146,7 +146,7 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
 
 /// Create intent to update trading parameters
 public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     review_period_ms: u64,
@@ -172,7 +172,7 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                type_name::get<config_actions::UpdateTradingConfig>().into_string().to_string(),
+                type_name::get<config_actions::TradingParamsUpdate>().into_string().to_string(),
                 action_bytes,
                 iw,
             );
@@ -182,7 +182,7 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
 
 /// Create intent to update TWAP configuration
 public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     start_delay: u64,
@@ -207,7 +207,7 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                type_name::get<config_actions::UpdateTwapConfig>().into_string().to_string(),
+                type_name::get<config_actions::TwapConfigUpdate>().into_string().to_string(),
                 action_bytes,
                 iw,
             );
@@ -217,7 +217,7 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
 
 /// Create intent to update governance settings
 public fun create_update_governance_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     proposals_enabled: bool,
@@ -246,7 +246,7 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                type_name::get<config_actions::UpdateGovernance>().into_string().to_string(),
+                type_name::get<config_actions::GovernanceUpdate>().into_string().to_string(),
                 action_bytes,
                 iw,
             );
@@ -256,7 +256,7 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
 
 /// Create a flexible intent to update governance settings with optional parameters
 public fun create_update_governance_flexible_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     proposals_enabled: Option<bool>,
@@ -289,7 +289,7 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                type_name::get<config_actions::UpdateGovernance>().into_string().to_string(),
+                type_name::get<config_actions::GovernanceUpdate>().into_string().to_string(),
                 action_bytes,
                 iw,
             );
@@ -299,7 +299,7 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
 
 /// Create intent to update slash distribution
 public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     slasher_reward_bps: u16,
@@ -324,7 +324,7 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                type_name::get<config_actions::UpdateSlashDistribution>().into_string().to_string(),
+                type_name::get<config_actions::SlashDistributionUpdate>().into_string().to_string(),
                 action_bytes,
                 iw,
             );
@@ -334,7 +334,7 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
 
 /// Create intent to update queue parameters
 public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     max_proposer_funded: u64,
@@ -358,7 +358,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
-                type_name::get<config_actions::UpdateQueueParams>().into_string().to_string(),
+                type_name::get<config_actions::QueueParamsUpdate>().into_string().to_string(),
                 action_bytes,
                 iw,
             );
@@ -368,7 +368,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
 
 /// Create intent to update conditional metadata configuration
 public fun create_update_conditional_metadata_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
@@ -406,7 +406,7 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
 
 /// Create intent to update sponsorship configuration
 public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
@@ -448,7 +448,7 @@ public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>
 
 /// Create intent to update early resolve configuration
 public fun create_update_early_resolve_config_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
@@ -500,7 +500,7 @@ public fun create_update_early_resolve_config_intent<Outcome: store + drop + cop
 
 /// Alias for TWAP params intent (backward compatibility)
 public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     twap_start_delay: u64,
@@ -523,7 +523,7 @@ public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
 
 /// Alias for fee params intent (backward compatibility)
 public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     max_proposer_funded: u64,

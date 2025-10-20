@@ -24,12 +24,12 @@ use sui::tx_context::TxContext;
 
 /// Deposit initial funds into DAO vault during creation
 public entry fun init_vault_deposit<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
     // Use the default "treasury" vault name
-    init_actions::init_vault_deposit(
+    init_actions::init_vault_deposit<FutarchyConfig, CoinType>(
         account,
         coin,
         b"treasury",
@@ -39,12 +39,12 @@ public entry fun init_vault_deposit<CoinType: drop>(
 
 /// Deposit with custom vault name
 public entry fun init_vault_deposit_named<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     coin: Coin<CoinType>,
     vault_name: vector<u8>,
     ctx: &mut TxContext,
 ) {
-    init_actions::init_vault_deposit(
+    init_actions::init_vault_deposit<FutarchyConfig, CoinType>(
         account,
         coin,
         vault_name,
@@ -56,15 +56,15 @@ public entry fun init_vault_deposit_named<CoinType: drop>(
 
 /// Lock treasury cap in DAO during creation
 public entry fun init_lock_treasury_cap<CoinType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     cap: TreasuryCap<CoinType>,
 ) {
-    init_actions::init_lock_treasury_cap(account, cap);
+    init_actions::init_lock_treasury_cap<FutarchyConfig, CoinType>(account, cap);
 }
 
 /// Mint initial tokens during creation
 public entry fun init_mint<CoinType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     amount: u64,
     recipient: address,
     ctx: &mut TxContext,
@@ -74,7 +74,7 @@ public entry fun init_mint<CoinType>(
 
 /// Mint and deposit to vault during creation
 public entry fun init_mint_and_deposit<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     amount: u64,
     vault_name: vector<u8>,
     ctx: &mut TxContext,
@@ -86,7 +86,7 @@ public entry fun init_mint_and_deposit<CoinType: drop>(
 
 /// Create vesting schedule during DAO creation
 public entry fun init_create_vesting<CoinType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     coin: Coin<CoinType>,
     recipient: address,
     start_timestamp: u64,
@@ -95,7 +95,7 @@ public entry fun init_create_vesting<CoinType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    init_actions::init_create_vesting(
+    init_actions::init_create_vesting<FutarchyConfig, CoinType>(
         account,
         coin,
         recipient,
@@ -109,14 +109,14 @@ public entry fun init_create_vesting<CoinType>(
 
 /// Create founder vesting with standard 4-year schedule
 public entry fun init_create_founder_vesting<CoinType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     coin: Coin<CoinType>,
     founder: address,
     cliff_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    init_actions::init_create_founder_vesting(
+    init_actions::init_create_founder_vesting<FutarchyConfig, CoinType>(
         account,
         coin,
         founder,
@@ -128,7 +128,7 @@ public entry fun init_create_founder_vesting<CoinType>(
 
 /// Create team member vesting
 public entry fun init_create_team_vesting<CoinType>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     coin: Coin<CoinType>,
     team_member: address,
     duration_ms: u64,
@@ -136,7 +136,7 @@ public entry fun init_create_team_vesting<CoinType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    init_actions::init_create_team_vesting(
+    init_actions::init_create_team_vesting<FutarchyConfig, CoinType>(
         account,
         coin,
         team_member,
@@ -151,35 +151,35 @@ public entry fun init_create_team_vesting<CoinType>(
 
 /// Lock upgrade cap for controlled package upgrades
 public entry fun init_lock_upgrade_cap(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     cap: UpgradeCap,
     package_name: vector<u8>,
     delay_ms: u64,
     reclaim_delay_ms: u64,
 ) {
-    init_actions::init_lock_upgrade_cap(account, cap, package_name, delay_ms, reclaim_delay_ms);
+    init_actions::init_lock_upgrade_cap<FutarchyConfig>(account, cap, package_name, delay_ms, reclaim_delay_ms);
 }
 
 // === Access Control Actions ===
 
 /// Lock generic capability during DAO creation
 public entry fun init_lock_capability<Cap: key + store>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     cap: Cap,
 ) {
-    init_actions::init_lock_capability(account, cap);
+    init_actions::init_lock_capability<FutarchyConfig, Cap>(account, cap);
 }
 
 // === Owned Actions ===
 
 /// Store owned object during DAO creation
 public entry fun init_store_object<Key: copy + drop + store, T: key + store>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     key: Key,
     object: T,
     ctx: &mut TxContext,
 ) {
-    init_actions::init_store_object(account, key, object, ctx);
+    init_actions::init_store_object<FutarchyConfig, Key, T>(account, key, object, ctx);
 }
 
 // === Transfer Actions ===
@@ -202,7 +202,7 @@ public entry fun init_transfer_objects<T: key + store>(
 /// Create a vault stream during DAO initialization
 /// Creates a time-based payment stream for salaries, grants, etc.
 public entry fun init_create_vault_stream<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     vault_name: vector<u8>,
     beneficiary: address,
     total_amount: u64,
@@ -237,7 +237,7 @@ public entry fun init_create_vault_stream<CoinType: drop>(
 
 /// Create a simple salary stream with monthly payments
 public entry fun init_create_salary_stream<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     employee: address,
     monthly_amount: u64,
     num_months: u64,

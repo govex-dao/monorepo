@@ -284,9 +284,9 @@ public struct CancelStreamAction has store {
 // === Public Functions ===
 
 /// Authorized address can open a vault.
-public fun open<Config>(
+public fun open<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     name: String,
     ctx: &mut TxContext
 ) {
@@ -300,9 +300,9 @@ public fun open<Config>(
 }
 
 /// Deposits coins owned by a an authorized address into a vault.
-public fun deposit<Config, CoinType: drop>(
+public fun deposit<Config: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     name: String, 
     coin: Coin<CoinType>, 
 ) {
@@ -326,8 +326,8 @@ public fun deposit<Config, CoinType: drop>(
 /// 1. Only approved types can be deposited
 /// 2. Deposits increase DAO assets, never decrease
 /// 3. Creates balance entry on first deposit if needed
-public fun deposit_approved<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public fun deposit_approved<Config: store, CoinType: drop>(
+    account: &mut Account,
     name: String,
     coin: Coin<CoinType>,
 ) {
@@ -349,9 +349,9 @@ public fun deposit_approved<Config, CoinType: drop>(
 
 /// Approve a coin type for permissionless deposits (requires Auth)
 /// After approval, anyone can deposit this coin type to the vault
-public fun approve_coin_type<Config, CoinType>(
+public fun approve_coin_type<Config: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     name: String,
 ) {
     account.verify(auth);
@@ -368,9 +368,9 @@ public fun approve_coin_type<Config, CoinType>(
 /// Remove approval for a coin type (requires Auth)
 /// Prevents future permissionless deposits of this type
 /// Does not affect existing balances
-public fun remove_approved_coin_type<Config, CoinType>(
+public fun remove_approved_coin_type<Config: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     name: String,
 ) {
     account.verify(auth);
@@ -385,8 +385,8 @@ public fun remove_approved_coin_type<Config, CoinType>(
 }
 
 /// Check if a coin type is approved for permissionless deposits
-public fun is_coin_type_approved<Config, CoinType>(
-    account: &Account<Config>,
+public fun is_coin_type_approved<Config: store, CoinType>(
+    account: &Account,
     name: String,
 ): bool {
     if (!has_vault(account, name)) {
@@ -401,9 +401,9 @@ public fun is_coin_type_approved<Config, CoinType>(
 /// Withdraws coins from a vault with authorization.
 /// This is the Auth-based counterpart to `deposit`, used for direct withdrawals
 /// outside of intent execution (e.g., for liquidity subsidy escrow funding).
-public fun spend<Config, CoinType: drop>(
+public fun spend<Config: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     name: String,
     amount: u64,
     ctx: &mut TxContext,
@@ -432,8 +432,8 @@ public fun spend<Config, CoinType: drop>(
 
 /// Returns the balance of a specific coin type in a vault.
 /// Convenience function that combines vault existence check with balance lookup.
-public fun balance<Config, CoinType: drop>(
-    account: &Account<Config>,
+public fun balance<Config: store, CoinType: drop>(
+    account: &Account,
     name: String,
 ): u64 {
     if (!has_vault(account, name)) {
@@ -460,8 +460,8 @@ public fun default_vault_name(): String {
 /// SAFETY: This function MUST only be called on unshared Accounts.
 /// Calling this on a shared Account bypasses Auth checks.
 /// The package(package) visibility helps enforce this constraint.
-public(package) fun do_deposit_unshared<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public(package) fun do_deposit_unshared< CoinType: drop>(
+    account: &mut Account,
     name: String,
     coin: Coin<CoinType>,
     ctx: &mut tx_context::TxContext,
@@ -496,9 +496,9 @@ public(package) fun do_deposit_unshared<Config, CoinType: drop>(
 }
 
 /// Closes the vault if empty.
-public fun close<Config>(
+public fun close<Config: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     name: String,
 ) {
     account.verify(auth);
@@ -512,16 +512,16 @@ public fun close<Config>(
 }
 
 /// Returns true if the vault exists.
-public fun has_vault<Config>(
-    account: &Account<Config>, 
+public fun has_vault(
+    account: &Account, 
     name: String
 ): bool {
     account.has_managed_data(VaultKey(name))
 }
 
 /// Returns a reference to the vault.
-public fun borrow_vault<Config>(
-    account: &Account<Config>, 
+public fun borrow_vault(
+    account: &Account,
     name: String
 ): &Vault {
     account.borrow_managed_data(VaultKey(name), version::current())
@@ -609,9 +609,9 @@ public fun new_deposit<Outcome, CoinType, IW: drop>(
 }
 
 /// Processes a DepositAction and deposits a coin to the vault.
-public fun do_deposit<Config, Outcome: store, CoinType: drop, IW: drop>(
+public fun do_deposit<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     coin: Coin<CoinType>,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -791,9 +791,9 @@ public fun new_cancel_stream<Outcome, IW: drop>(
 // === Execution Functions ===
 
 /// Execute toggle stream pause action
-public fun do_toggle_stream_pause<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_toggle_stream_pause<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -840,9 +840,9 @@ public fun do_toggle_stream_pause<Config, Outcome: store, CoinType, IW: drop>(
 }
 
 /// Execute toggle stream freeze action
-public fun do_toggle_stream_freeze<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_toggle_stream_freeze<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -886,9 +886,9 @@ public fun do_toggle_stream_freeze<Config, Outcome: store, CoinType, IW: drop>(
 }
 
 /// Execute cancel stream action
-public fun do_cancel_stream<Config, Outcome: store, CoinType: drop, IW: drop>(
+public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -972,9 +972,9 @@ public fun do_cancel_stream<Config, Outcome: store, CoinType: drop, IW: drop>(
 }
 
 /// Processes a SpendAction and takes a coin from the vault.
-public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
+public fun do_spend<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     version_witness: VersionWitness,
     _intent_witness: IW,
     ctx: &mut TxContext
@@ -1025,9 +1025,9 @@ public fun delete_spend<CoinType>(expired: &mut Expired) {
 }
 
 /// Processes an ApproveCoinTypeAction and approves the coin type.
-public fun do_approve_coin_type<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_approve_coin_type<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -1065,9 +1065,9 @@ public fun do_approve_coin_type<Config, Outcome: store, CoinType, IW: drop>(
 }
 
 /// Processes a RemoveApprovedCoinTypeAction and removes the coin type approval.
-public fun do_remove_approved_coin_type<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_remove_approved_coin_type<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -1142,9 +1142,9 @@ public fun delete_toggle_stream_freeze(expired: &mut Expired) {
 // === Stream Management Functions ===
 
 /// Creates a new stream in the vault
-public fun create_stream<Config, CoinType: drop>(
+public fun create_stream<Config: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     beneficiary: address,
     total_amount: u64,
@@ -1226,9 +1226,9 @@ public fun create_stream<Config, CoinType: drop>(
 }
 
 /// Cancel a stream and return unused funds
-public fun cancel_stream<Config, CoinType: drop>(
+public fun cancel_stream<Config: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     stream_id: ID,
     clock: &Clock,
@@ -1288,8 +1288,8 @@ public fun cancel_stream<Config, CoinType: drop>(
 }
 
 /// Withdraw from a stream
-public fun withdraw_from_stream<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public fun withdraw_from_stream<Config: store, CoinType: drop>(
+    account: &mut Account,
     vault_name: String,
     stream_id: ID,
     amount: u64,
@@ -1369,8 +1369,8 @@ public fun withdraw_from_stream<Config, CoinType: drop>(
 }
 
 /// Calculate how much can be claimed from a stream
-public fun calculate_claimable<Config>(
-    account: &Account<Config>,
+public fun calculate_claimable<Config: store>(
+    account: &Account,
     vault_name: String,
     stream_id: ID,
     clock: &Clock,
@@ -1393,8 +1393,8 @@ public fun calculate_claimable<Config>(
 }
 
 /// Get stream information
-public fun stream_info<Config>(
-    account: &Account<Config>,
+public fun stream_info<Config: store>(
+    account: &Account,
     vault_name: String,
     stream_id: ID,
 ): (address, u64, u64, u64, u64, bool, bool) {
@@ -1414,8 +1414,8 @@ public fun stream_info<Config>(
 }
 
 /// Check if a stream exists
-public fun has_stream<Config>(
-    account: &Account<Config>,
+public fun has_stream(
+    account: &Account,
     vault_name: String,
     stream_id: ID,
 ): bool {
@@ -1433,8 +1433,8 @@ public fun has_stream<Config>(
 /// during the initialization phase before the Account is shared.
 /// Once an Account is shared, this function will fail as it bypasses
 /// the normal Auth checks that protect shared Accounts.
-public(package) fun create_stream_unshared<Config, CoinType: drop>(
-    account: &mut Account<Config>,
+public(package) fun create_stream_unshared<Config: store, CoinType: drop>(
+    account: &mut Account,
     vault_name: String,
     beneficiary: address,
     total_amount: u64,

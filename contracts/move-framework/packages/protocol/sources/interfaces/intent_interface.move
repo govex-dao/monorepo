@@ -54,8 +54,8 @@ use std::string::String;
 /// ```
 
 /// Creates an intent with actions and adds it to the account.
-public macro fun build_intent<$Config, $Outcome, $IW: drop>(
-    $account: &mut Account<$Config>,
+public macro fun build_intent<$Config: store, $Outcome, $IW: drop>(
+    $account: &mut Account,
     $params: Params,
     $outcome: $Outcome,
     $managed_name: String,
@@ -101,8 +101,8 @@ public macro fun build_intent<$Config, $Outcome, $IW: drop>(
 /// ```
 
 /// Executes the actions from the executable intent.
-public macro fun process_intent<$Config, $Outcome: store, $IW: drop>(
-    $account: &Account<$Config>,
+public macro fun process_intent<$Config: store, $Outcome: store, $IW: drop>(
+    $account: &Account,
     $executable: &mut Executable<$Outcome>,
     $version_witness: VersionWitness,
     $intent_witness: $IW,

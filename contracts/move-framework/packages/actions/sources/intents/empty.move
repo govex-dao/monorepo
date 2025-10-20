@@ -27,9 +27,9 @@ public struct EmptyIntent() has copy, drop;
 // === Public functions ===
 
 /// Creates an EmptyIntent and adds it to an Account.
-public fun request_empty<Config, Outcome: store>(
+public fun request_empty<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     ctx: &mut TxContext,
@@ -48,9 +48,9 @@ public fun request_empty<Config, Outcome: store>(
 }
 
 /// Executes an EmptyIntent (to be able to delete it)
-public fun execute_empty<Config, Outcome: store>(
+public fun execute_empty<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
 ) {
     account.process_intent!(executable, version::current(), EmptyIntent(), |_executable, _iw| {})
 }

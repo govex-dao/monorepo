@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "0D02C8755CE5552115B65232017D456E81A2B2DBA8205C4B78823707DA9C8AEA"
-deps_digest = "8F9BD4D43B441329BCE386405F5CE4BBCEE357C855F8BA61CBE667926E5A11A2"
+manifest_digest = "FE821B513DD1624C21171C5E7753E2F232F7C77BCA760CE89010571399176356"
+deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -19,7 +19,6 @@ dependencies = [
   { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_oracle", name = "futarchy_oracle" },
-  { id = "futarchy_stream_actions", name = "futarchy_stream_actions" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -218,28 +217,14 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "futarchy_stream_actions"
-source = { local = "../futarchy_stream_actions" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
-]
-
-[[move.package]]
 id = "futarchy_types"
 source = { local = "../futarchy_types" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.57.2"
+edition = "2024.beta"
+flavor = "sui"

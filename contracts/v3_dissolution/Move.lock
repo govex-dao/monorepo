@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "A872F57009D3BAD54D7B5B7184653EE073B0499B5AF119409B552D31F8257BDC"
+manifest_digest = "ADD67B44D1AC0638E1E7CC0ED57CC2336019BED951A7BC9B399115AF1D72D3B3"
 deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -198,7 +198,7 @@ dependencies = [
 
 [[move.package]]
 id = "futarchy_stream_actions"
-source = { local = "../futarchy_stream_actions" }
+source = { local = "../v3_streams/futarchy_stream_actions" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -222,8 +222,3 @@ source = { local = "../futarchy_types" }
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
-
-[move.toolchain-version]
-compiler-version = "1.57.2"
-edition = "2024.beta"
-flavor = "sui"

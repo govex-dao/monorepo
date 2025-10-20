@@ -77,9 +77,9 @@ public fun destroy_withdraw_coin_action(action: WithdrawCoinAction) {
 // === Public functions ===
 
 /// Creates a new WithdrawObjectAction and add it to an intent
-public fun new_withdraw_object<Config, Outcome, IW: drop>(
+public fun new_withdraw_object<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
-    account: &Account<Config>,
+    account: &Account,
     object_id: ID,
     intent_witness: IW,
 ) {
@@ -103,9 +103,9 @@ public fun new_withdraw_object<Config, Outcome, IW: drop>(
 }
 
 /// Executes a WithdrawObjectAction and returns the object
-public fun do_withdraw_object<Config, Outcome: store, T: key + store, IW: drop>(
+public fun do_withdraw_object<Outcome: store, T: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receiving: Receiving<T>,
     intent_witness: IW,
 ): T {
@@ -137,7 +137,7 @@ public fun do_withdraw_object<Config, Outcome: store, T: key + store, IW: drop>(
 }
 
 /// Deletes a WithdrawObjectAction from an expired intent
-public fun delete_withdraw_object<Config>(expired: &mut Expired, account: &Account<Config>) {
+public fun delete_withdraw_object(expired: &mut Expired, account: &Account) {
     expired.assert_is_account(account.addr());
 
     let spec = intents::remove_action_spec(expired);
@@ -151,9 +151,9 @@ public fun delete_withdraw_object<Config>(expired: &mut Expired, account: &Accou
 }
 
 /// Creates a new WithdrawCoinAction and add it to an intent
-public fun new_withdraw_coin<Config, Outcome, IW: drop>(
+public fun new_withdraw_coin<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
-    account: &Account<Config>,
+    account: &Account,
     coin_type: String,
     coin_amount: u64,
     intent_witness: IW,
@@ -178,9 +178,9 @@ public fun new_withdraw_coin<Config, Outcome, IW: drop>(
 }
 
 /// Executes a WithdrawCoinAction and returns the coin
-public fun do_withdraw_coin<Config, Outcome: store, CoinType, IW: drop>(
+public fun do_withdraw_coin<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     receiving: Receiving<Coin<CoinType>>,
     intent_witness: IW,
 ): Coin<CoinType> {
@@ -220,7 +220,7 @@ public fun do_withdraw_coin<Config, Outcome: store, CoinType, IW: drop>(
 }
 
 /// Deletes a WithdrawCoinAction from an expired intent
-public fun delete_withdraw_coin<Config>(expired: &mut Expired, account: &Account<Config>) {
+public fun delete_withdraw_coin(expired: &mut Expired, account: &Account) {
     expired.assert_is_account(account.addr());
 
     let spec = intents::remove_action_spec(expired);
@@ -238,9 +238,9 @@ public fun delete_withdraw_coin<Config>(expired: &mut Expired, account: &Account
 
 /// Authorized addresses can merge and split coins.
 /// Returns the IDs to use in a following intent, conserves the order.
-public fun merge_and_split<Config, CoinType>(
+public fun merge_and_split<Config: store, CoinType>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     to_merge: vector<Receiving<Coin<CoinType>>>, // there can be only one coin if we just want to split
     to_split: vector<u64>, // there can be no amount if we just want to merge
     ctx: &mut TxContext
@@ -271,8 +271,8 @@ fun merge<CoinType>(
     merged
 }
 
-fun split<Config, CoinType>(
-    account: &mut Account<Config>,
+fun split<CoinType>(
+    account: &mut Account,
     mut coin: Coin<CoinType>,
     amounts: vector<u64>,
     ctx: &mut TxContext

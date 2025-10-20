@@ -453,31 +453,31 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Action registry removed - using statically-typed pattern
 
     // Initialize the default treasury vault using base vault module
-    let auth = account::new_auth(
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
     );
-    vault::open(auth, &mut account, std::string::utf8(b"treasury"), ctx);
+    vault::open<FutarchyConfig>(auth, &mut account, std::string::utf8(b"treasury"), ctx);
 
     // Pre-approve common coin types for permissionless deposits
     // This enables anyone to send SUI, AssetType, or StableType to the DAO
     // (enables revenue/donations without governance proposals)
-    let auth = account::new_auth(
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
     );
     vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, std::string::utf8(b"treasury"));
 
-    let auth = account::new_auth(
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
     );
     vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, std::string::utf8(b"treasury"));
 
-    let auth = account::new_auth(
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
@@ -489,7 +489,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         let cap = treasury_cap.extract();
         // Use Move framework's currency::lock_cap for proper treasury cap storage
         // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth(
+        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             version::current(),
             futarchy_config::authenticate(&account, ctx),
@@ -717,29 +717,29 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     {
         use account_protocol::version_witness;
         let test_version = version_witness::new_for_testing(@account_protocol);
-        let auth = account::new_auth(
+        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             test_version,
             futarchy_config::authenticate(&account, ctx),
         );
-        vault::open(auth, &mut account, std::string::utf8(b"treasury"), ctx);
+        vault::open<FutarchyConfig>(auth, &mut account, std::string::utf8(b"treasury"), ctx);
 
         // Pre-approve common coin types for permissionless deposits
-        let auth = account::new_auth(
+        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             test_version,
             futarchy_config::authenticate(&account, ctx),
         );
         vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, std::string::utf8(b"treasury"));
 
-        let auth = account::new_auth(
+        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             test_version,
             futarchy_config::authenticate(&account, ctx),
         );
         vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, std::string::utf8(b"treasury"));
 
-        let auth = account::new_auth(
+        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             test_version,
             futarchy_config::authenticate(&account, ctx),
@@ -752,7 +752,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         let cap = treasury_cap.extract();
         // Use Move framework's currency::lock_cap for proper treasury cap storage
         // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth(
+        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             version::current(),
             futarchy_config::authenticate(&account, ctx),
@@ -847,7 +847,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Account<FutarchyConfig>, ProposalQueue<StableType>, UnifiedSpotPool<AssetType, StableType>) {
+): (Account, ProposalQueue<StableType>, UnifiedSpotPool<AssetType, StableType>) {
     // Check factory is not permanently disabled
     assert!(!factory.permanently_disabled, EPermanentlyDisabled);
 
@@ -937,7 +937,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     // Setup treasury cap if provided
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
-        let auth = account::new_auth(
+        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             version::current(),
             futarchy_config::authenticate(&account, ctx),
@@ -973,12 +973,12 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
 /// Share all DAO components after initialization is complete
 /// This is called at the end of the PTB after all init actions
 public fun finalize_and_share_dao<AssetType, StableType>(
-    account: Account<FutarchyConfig>,
+    account: Account,
     queue: ProposalQueue<StableType>,
     spot_pool: UnifiedSpotPool<AssetType, StableType>,
 ) {
     // Each module provides its own share function
-    account::share_account(account);
+    account::share_account<FutarchyConfig>(account);
     priority_queue::share_queue(queue);
     unified_spot_pool::share(spot_pool);
 }

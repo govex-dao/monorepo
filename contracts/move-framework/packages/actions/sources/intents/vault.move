@@ -36,9 +36,9 @@ public struct SpendAndTransferIntent() has copy, drop;
 // === Public Functions ===
 
 /// Creates a SpendAndTransferIntent and adds it to an Account.
-public fun request_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
+public fun request_spend_and_transfer<Config: store, Outcome: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     vault_name: String,
@@ -71,9 +71,9 @@ public fun request_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
 }
 
 /// Executes a SpendAndTransferIntent, transfers coins from the vault to the recipients. Can be looped over.
-public fun execute_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
+public fun execute_spend_and_transfer<Config: store, Outcome: store, CoinType: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     ctx: &mut TxContext,
 ) {
     account.process_intent!(
@@ -81,7 +81,7 @@ public fun execute_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
         version::current(),
         SpendAndTransferIntent(),
         |executable, iw| {
-            let coin = vault::do_spend<_, _, CoinType, _>(
+            let coin = vault::do_spend<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 version::current(),
@@ -96,9 +96,9 @@ public fun execute_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
 // === Stream Control Actions ===
 
 /// Request to toggle stream pause (pause or resume)
-public fun request_toggle_stream_pause<Config, Outcome: store>(
+public fun request_toggle_stream_pause<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     vault_name: String,
@@ -122,9 +122,9 @@ public fun request_toggle_stream_pause<Config, Outcome: store>(
 }
 
 /// Request to toggle stream emergency freeze
-public fun request_toggle_stream_freeze<Config, Outcome: store>(
+public fun request_toggle_stream_freeze<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     vault_name: String,
@@ -148,9 +148,9 @@ public fun request_toggle_stream_freeze<Config, Outcome: store>(
 }
 
 /// Request to cancel a stream
-public fun request_cancel_stream<Config, Outcome: store>(
+public fun request_cancel_stream<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>,
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
     vault_name: String,
@@ -175,9 +175,9 @@ public fun request_cancel_stream<Config, Outcome: store>(
 // === Execution Functions ===
 
 /// Executes toggle stream pause action
-public fun execute_toggle_stream_pause<Config, Outcome: store, CoinType>(
+public fun execute_toggle_stream_pause<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     clock: &sui::clock::Clock,
     ctx: &mut TxContext,
@@ -187,7 +187,7 @@ public fun execute_toggle_stream_pause<Config, Outcome: store, CoinType>(
         version::current(),
         SpendAndTransferIntent(),
         |executable, iw| {
-            vault::do_toggle_stream_pause<_, _, CoinType, _>(
+            vault::do_toggle_stream_pause<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 vault_name,
@@ -201,9 +201,9 @@ public fun execute_toggle_stream_pause<Config, Outcome: store, CoinType>(
 }
 
 /// Executes toggle stream freeze action
-public fun execute_toggle_stream_freeze<Config, Outcome: store, CoinType>(
+public fun execute_toggle_stream_freeze<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     clock: &sui::clock::Clock,
     ctx: &mut TxContext,
@@ -213,7 +213,7 @@ public fun execute_toggle_stream_freeze<Config, Outcome: store, CoinType>(
         version::current(),
         SpendAndTransferIntent(),
         |executable, iw| {
-            vault::do_toggle_stream_freeze<_, _, CoinType, _>(
+            vault::do_toggle_stream_freeze<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 vault_name,
@@ -226,9 +226,9 @@ public fun execute_toggle_stream_freeze<Config, Outcome: store, CoinType>(
 }
 
 /// Executes cancel stream action
-public fun execute_cancel_stream<Config, Outcome: store, CoinType: drop>(
+public fun execute_cancel_stream<Config: store, Outcome: store, CoinType: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account,
     vault_name: String,
     clock: &sui::clock::Clock,
     ctx: &mut TxContext,
@@ -241,7 +241,7 @@ public fun execute_cancel_stream<Config, Outcome: store, CoinType: drop>(
         version::current(),
         SpendAndTransferIntent(),
         |executable, iw| {
-            let (coin, amount) = vault::do_cancel_stream<_, _, CoinType, _>(
+            let (coin, amount) = vault::do_cancel_stream<Config, Outcome, CoinType, _>(
                 executable,
                 account,
                 vault_name,

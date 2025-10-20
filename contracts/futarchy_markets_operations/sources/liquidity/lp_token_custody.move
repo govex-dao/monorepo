@@ -78,7 +78,7 @@ public struct LPTokenWithdrawn has copy, drop {
 // === Public Functions ===
 
 /// Initialize LP token custody for an account
-public fun init_custody(account: &mut Account<FutarchyConfig>, ctx: &mut TxContext) {
+public fun init_custody(account: &mut Account, ctx: &mut TxContext) {
     if (!has_custody(account)) {
         account::add_managed_data(
             account,
@@ -97,20 +97,20 @@ public fun init_custody(account: &mut Account<FutarchyConfig>, ctx: &mut TxConte
 }
 
 /// Check if account has LP custody initialized
-public fun has_custody(account: &Account<FutarchyConfig>): bool {
+public fun has_custody(account: &Account): bool {
     account::has_managed_data(account, LPCustodyKey {})
 }
 
 /// Deposit an LP token into custody
 public fun deposit_lp_token<AssetType, StableType, W: drop>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     pool_id: ID,
     token: LPToken<AssetType, StableType>,
     witness: W,
     ctx: &mut TxContext,
 ) {
     // Create Auth from witness for account verification
-    let auth = account::new_auth(account, version::current(), witness);
+    let auth = account::new_auth<FutarchyConfig, W>(account, version::current(), witness);
     account::verify(account, auth);
 
     // Get account ID before mutable borrowing
@@ -182,14 +182,14 @@ public fun deposit_lp_token<AssetType, StableType, W: drop>(
 /// Withdraw LP token from custody and return it to caller
 /// The token_id identifies which LP token to withdraw from managed assets
 public fun withdraw_lp_token<AssetType, StableType, W: drop>(
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account,
     pool_id: ID,
     token_id: ID,
     witness: W,
     _ctx: &mut TxContext,
 ): LPToken<AssetType, StableType> {
     // Create Auth from witness for account verification
-    let auth = account::new_auth(account, version::current(), witness);
+    let auth = account::new_auth<FutarchyConfig, W>(account, version::current(), witness);
     account::verify(account, auth);
 
     // Get account ID before mutable borrowing
@@ -265,7 +265,7 @@ public fun withdraw_lp_token<AssetType, StableType, W: drop>(
 }
 
 /// Get total value locked in LP tokens
-public fun get_total_value_locked(account: &Account<FutarchyConfig>): u64 {
+public fun get_total_value_locked(account: &Account): u64 {
     if (!has_custody(account)) {
         return 0
     };
@@ -280,7 +280,7 @@ public fun get_total_value_locked(account: &Account<FutarchyConfig>): u64 {
 }
 
 /// Get LP token IDs for a specific pool
-public fun get_pool_tokens(account: &Account<FutarchyConfig>, pool_id: ID): vector<ID> {
+public fun get_pool_tokens(account: &Account, pool_id: ID): vector<ID> {
     if (!has_custody(account)) {
         return vector::empty()
     };
@@ -299,7 +299,7 @@ public fun get_pool_tokens(account: &Account<FutarchyConfig>, pool_id: ID): vect
 }
 
 /// Get amount for a specific LP token
-public fun get_token_amount(account: &Account<FutarchyConfig>, token_id: ID): u64 {
+public fun get_token_amount(account: &Account, token_id: ID): u64 {
     if (!has_custody(account)) {
         return 0
     };
@@ -318,7 +318,7 @@ public fun get_token_amount(account: &Account<FutarchyConfig>, token_id: ID): u6
 }
 
 /// Get the pool ID that contains a specific LP token
-public fun get_token_pool(account: &Account<FutarchyConfig>, token_id: ID): Option<ID> {
+public fun get_token_pool(account: &Account, token_id: ID): Option<ID> {
     if (!has_custody(account)) {
         return option::none()
     };
@@ -337,7 +337,7 @@ public fun get_token_pool(account: &Account<FutarchyConfig>, token_id: ID): Opti
 }
 
 /// Get total LP token amount for a specific pool
-public fun get_pool_total(account: &Account<FutarchyConfig>, pool_id: ID): u64 {
+public fun get_pool_total(account: &Account, pool_id: ID): u64 {
     if (!has_custody(account)) {
         return 0
     };
@@ -356,7 +356,7 @@ public fun get_pool_total(account: &Account<FutarchyConfig>, pool_id: ID): u64 {
 }
 
 /// Get all active pool IDs (pools that have LP tokens)
-public fun get_active_pools(account: &Account<FutarchyConfig>): vector<ID> {
+public fun get_active_pools(account: &Account): vector<ID> {
     if (!has_custody(account)) {
         return vector::empty()
     };
@@ -371,7 +371,7 @@ public fun get_active_pools(account: &Account<FutarchyConfig>): vector<ID> {
 }
 
 /// Check if account has any LP tokens for a specific pool
-public fun has_tokens_for_pool(account: &Account<FutarchyConfig>, pool_id: ID): bool {
+public fun has_tokens_for_pool(account: &Account, pool_id: ID): bool {
     if (!has_custody(account)) {
         return false
     };
@@ -386,7 +386,7 @@ public fun has_tokens_for_pool(account: &Account<FutarchyConfig>, pool_id: ID): 
 }
 
 /// Get summary statistics for all LP token holdings
-public fun get_custody_summary(account: &Account<FutarchyConfig>): (u64, u64, vector<ID>) {
+public fun get_custody_summary(account: &Account): (u64, u64, vector<ID>) {
     if (!has_custody(account)) {
         return (0, 0, vector::empty())
     };
