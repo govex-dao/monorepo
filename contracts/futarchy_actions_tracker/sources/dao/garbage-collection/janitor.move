@@ -17,15 +17,16 @@ use sui::tx_context::TxContext;
 /// This handles all non-generic and common generic actions.
 fun drain_all(expired: &mut Expired) {
     // DAO File Actions
-    gc_registry::delete_dao_file_create_registry(expired);
-    gc_registry::delete_dao_file_create_root_document(expired);
-    gc_registry::delete_dao_file_delete_document(expired);
-    gc_registry::delete_dao_file_add_chunk(expired);
-    gc_registry::delete_dao_file_update(expired);
-    gc_registry::delete_dao_file_remove(expired);
-    gc_registry::delete_dao_file_set_chunk_immutable(expired);
-    gc_registry::delete_dao_file_set_document_immutable(expired);
-    gc_registry::delete_dao_file_set_registry_immutable(expired);
+    // REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
+    // gc_registry::delete_dao_file_create_registry(expired);
+    // gc_registry::delete_dao_file_create_root_document(expired);
+    // gc_registry::delete_dao_file_delete_document(expired);
+    // gc_registry::delete_dao_file_add_chunk(expired);
+    // gc_registry::delete_dao_file_update(expired);
+    // gc_registry::delete_dao_file_remove(expired);
+    // gc_registry::delete_dao_file_set_chunk_immutable(expired);
+    // gc_registry::delete_dao_file_set_document_immutable(expired);
+    // gc_registry::delete_dao_file_set_registry_immutable(expired);
 
     // Config Actions
     gc_registry::delete_config_update(expired);
@@ -80,7 +81,8 @@ fun drain_all(expired: &mut Expired) {
     // REMOVED: Platform Fee Actions (deprecated system deleted)
 
     // Walrus Renewal Actions
-    gc_registry::delete_walrus_renewal(expired);
+    // REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
+    // gc_registry::delete_walrus_renewal(expired);
 
 
     // Quota Actions
@@ -100,8 +102,9 @@ fun drain_all(expired: &mut Expired) {
     gc_registry::delete_queue_params_update<FutarchyConfig>(expired);
 
     // Additional DAO File Actions
-    gc_registry::delete_set_document_insert_allowed(expired);
-    gc_registry::delete_set_document_remove_allowed(expired);
+    // REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
+    // gc_registry::delete_set_document_insert_allowed(expired);
+    // gc_registry::delete_set_document_remove_allowed(expired);
 
     // Additional Dissolution Actions (non-generic)
     gc_registry::delete_calculate_pro_rata_shares(expired);

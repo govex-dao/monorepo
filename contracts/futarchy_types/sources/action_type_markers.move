@@ -10,6 +10,7 @@ use std::type_name::{Self, TypeName};
 // === Config Action Types ===
 
 public struct SetProposalsEnabled has copy, drop {}
+public struct TerminateDao has copy, drop {}
 public struct UpdateName has copy, drop {}
 public struct TradingParamsUpdate has copy, drop {}
 public struct MetadataUpdate has copy, drop {}
@@ -215,10 +216,6 @@ public struct SetTypePolicy has drop {}
 public struct SetObjectPolicy has drop {}
 public struct RegisterCouncil has drop {}
 
-// === Memo Action Types ===
-
-public struct Memo has drop {}
-
 // === Protocol Admin Action Types ===
 
 public struct SetFactoryPaused has drop {}
@@ -273,6 +270,8 @@ public struct VaultMint has drop {}
 
 // Config actions
 public fun set_proposals_enabled(): TypeName { type_name::with_defining_ids<SetProposalsEnabled>() }
+
+public fun terminate_dao(): TypeName { type_name::with_defining_ids<TerminateDao>() }
 
 public fun update_name(): TypeName { type_name::with_defining_ids<UpdateName>() }
 
@@ -534,13 +533,6 @@ public fun set_type_policy(): TypeName { type_name::with_defining_ids<SetTypePol
 public fun set_object_policy(): TypeName { type_name::with_defining_ids<SetObjectPolicy>() }
 
 public fun register_council(): TypeName { type_name::with_defining_ids<RegisterCouncil>() }
-
-// Memo actions
-public fun memo(): TypeName { type_name::with_defining_ids<Memo>() }
-
-public fun emit_memo(): TypeName { type_name::with_defining_ids<Memo>() }
-
-public fun emit_decision(): TypeName { type_name::with_defining_ids<Memo>() }
 
 // Protocol admin actions
 public fun set_factory_paused(): TypeName { type_name::with_defining_ids<SetFactoryPaused>() }

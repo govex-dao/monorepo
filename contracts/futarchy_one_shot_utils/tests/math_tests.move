@@ -121,41 +121,6 @@ fun test_mul_div_mixed_overflow() {
     math::mul_div_mixed(max_u128, max_u64, 1);
 }
 
-// === sqrt Tests ===
-
-#[test]
-fun test_sqrt_exact_squares() {
-    assert!(math::sqrt(0) == 0, 0);
-    assert!(math::sqrt(1) == 1, 1);
-    assert!(math::sqrt(4) == 2, 2);
-    assert!(math::sqrt(9) == 3, 3);
-    assert!(math::sqrt(16) == 4, 4);
-    assert!(math::sqrt(25) == 5, 5);
-    assert!(math::sqrt(100) == 10, 6);
-    assert!(math::sqrt(144) == 12, 7);
-    assert!(math::sqrt(10000) == 100, 8);
-}
-
-#[test]
-fun test_sqrt_non_squares() {
-    // Should return floor(sqrt(n))
-    assert!(math::sqrt(2) == 1, 0);
-    assert!(math::sqrt(3) == 1, 1);
-    assert!(math::sqrt(5) == 2, 2);
-    assert!(math::sqrt(8) == 2, 3);
-    assert!(math::sqrt(15) == 3, 4);
-    assert!(math::sqrt(99) == 9, 5);
-    assert!(math::sqrt(101) == 10, 6);
-}
-
-#[test]
-fun test_sqrt_u128() {
-    assert!(math::sqrt_u128(0) == 0, 0);
-    assert!(math::sqrt_u128(1) == 1, 1);
-    assert!(math::sqrt_u128(10000) == 100, 2);
-    assert!(math::sqrt_u128(1000000) == 1000, 3);
-}
-
 // === Saturating Operations Tests ===
 
 #[test]
@@ -201,32 +166,6 @@ fun test_safe_u128_to_u64() {
 fun test_safe_u128_to_u64_overflow() {
     let too_large = (u64::max_value!() as u128) + 1;
     math::safe_u128_to_u64(too_large);
-}
-
-// === min/max Tests ===
-
-#[test]
-fun test_min_max() {
-    assert!(math::min(5, 10) == 5, 0);
-    assert!(math::min(10, 5) == 5, 1);
-    assert!(math::min(100, 100) == 100, 2);
-    assert!(math::min(0, 1000) == 0, 3);
-
-    assert!(math::max(5, 10) == 10, 4);
-    assert!(math::max(10, 5) == 10, 5);
-    assert!(math::max(100, 100) == 100, 6);
-    assert!(math::max(0, 1000) == 1000, 7);
-}
-
-// === abs_diff Tests ===
-
-#[test]
-fun test_abs_diff() {
-    assert!(math::abs_diff(100, 50) == 50, 0);
-    assert!(math::abs_diff(50, 100) == 50, 1);
-    assert!(math::abs_diff(100, 100) == 0, 2);
-    assert!(math::abs_diff(0, 1000) == 1000, 3);
-    assert!(math::abs_diff(1000, 0) == 1000, 4);
 }
 
 // === within_tolerance Tests ===

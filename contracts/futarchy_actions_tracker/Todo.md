@@ -139,7 +139,11 @@ and patara.app
 - [X] Need psecial amm empty function that ignored amm min amount check for daos portion when  dao terminated, but what about edge case of ongoign proposal. Also need to block amm some how like shut it down if that is triggered
 - [x] for withdraw protion dont count dao owned LP assets as total suply, do count dao lp owned stable as in treasury
 - [ ] move discord bot to its owan channel
-- [ ] negative twap threshold for team
+- [X] negative twap threshold for team
+- [ ] make launchpad just have max rasie amount nothing else, pro rata and max raise amount
+- [ ] see if its easy to add new actions later loot at account framework and can drop disolution??
+- [ ] simplify oracle actions??
+
 
 1) dao needs to supside LPs during proposals ( use proposer fee)\
 2) I need to slwly replace aftermath!!! \

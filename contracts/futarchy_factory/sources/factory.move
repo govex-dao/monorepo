@@ -353,7 +353,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         20, // max_actions_per_outcome (protocol limit)
         1000000, // proposal_fee_per_outcome (1 token per outcome)
         100_000_000, // required_bond_amount
-        50, // max_concurrent_proposals
         100, // fee_escalation_basis_points
         true, // proposal_creation_enabled
         true, // accept_new_proposals
@@ -628,7 +627,6 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         20, // max_actions_per_outcome (protocol limit)
         1000000, // proposal_fee_per_outcome (1 token per outcome)
         100_000_000, // required_bond_amount
-        50, // max_concurrent_proposals
         100, // fee_escalation_basis_points
         true, // proposal_creation_enabled
         true, // accept_new_proposals

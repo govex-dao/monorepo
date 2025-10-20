@@ -414,7 +414,7 @@ public fun add_liquidity_proportional(
     let (lp_to_mint, new_lp_supply) = if (pool.lp_supply == 0) {
         // First liquidity provider - bootstrap the pool
         let k_squared = math::mul_div_to_128(asset_amount, stable_amount, 1);
-        let k = (math::sqrt_u128(k_squared) as u64);
+        let k = (k_squared.sqrt() as u64);
         assert!(k > (MINIMUM_LIQUIDITY as u64), ELowLiquidity);
         // For the first liquidity provider, a small amount of LP tokens (MINIMUM_LIQUIDITY)
         // is intentionally burned and locked in the pool. This is a standard practice in Uniswap V2
@@ -451,7 +451,7 @@ public fun add_liquidity_proportional(
         assert!(max_delta <= avg / 100, EImbalancedLiquidity);
 
         // Use minimum to ensure proper ratio (after imbalance check passes)
-        let minted = math::min(lp_from_asset, lp_from_stable);
+        let minted = lp_from_asset.min(lp_from_stable);
         (minted, pool.lp_supply + minted)
     };
 
@@ -1050,7 +1050,7 @@ public fun add_liquidity_for_testing<AssetType, StableType>(
     if (pool.lp_supply == 0) {
         // First liquidity provider
         let k_squared = math::mul_div_to_128(asset_amount, stable_amount, 1);
-        let k = (math::sqrt_u128(k_squared) as u64);
+        let k = (k_squared.sqrt() as u64);
         pool.lp_supply = k;
     } else {
         // Subsequent providers - mint proportionally

@@ -20,9 +20,31 @@ get in here
 - [ ] alwasy show data on trading UI looks weird without ?
 - [ ] metrics on site home page
 - [ ] add 1.5 second delay to more places in front end so dont have recombine or redeem coin bug
-- [ ] shop twp staart verticle dashed line in graph
+- [ ] show twap start verticle dashed line in graph
 - [ ] show exact time of trade on frontend
-- [ ] start on proposal descrption tab not your coins?
-- [ ] we are only cahing actions
+- [ ] start on proposal description tab not your coins?
+- [ ] we are only caching actions
 - [ ] base trading price UI argins TWAPs, spot
 - [ ] make CA visable in UI
+- [ ] allow for coin creation in UI and use new coin metadata registry
+- [ ] 
+```
+Docs repo
+main Legal and research etc
+
+V1 app repo
+dev V1 frontend and backend testnet 
+main V1 frontend and backend mainnet 
+
+V1 contract repo
+dev V1 contract testnet 
+main V1 contract mainnet
+
+V2 app repo
+dev V2 frontend and backend testnet 
+main V2 frontend and backend mainnet 
+
+V2 contract repo
+dev V2 contract testnet 
+main V2 contract mainnet ( dont have this yet)
+```

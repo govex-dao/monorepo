@@ -537,7 +537,7 @@ public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy +
         {
             let dao_state = futarchy_config::state_mut_from_account(account);
             assert!(
-                futarchy_config::operational_state(dao_state) == futarchy_config::state_dissolving(),
+                futarchy_config::operational_state(dao_state) == futarchy_config::state_terminated(),
                 EBypassNotAllowed
             );
         };
@@ -810,7 +810,7 @@ public fun enable_remove_liquidity_bypass<AssetType, StableType>(
     {
         let dao_state = futarchy_config::state_mut_from_account(account);
         assert!(
-            futarchy_config::operational_state(dao_state) == futarchy_config::state_dissolving(),
+            futarchy_config::operational_state(dao_state) == futarchy_config::state_terminated(),
             EBypassNotAllowed
         );
     };

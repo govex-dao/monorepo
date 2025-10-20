@@ -422,7 +422,6 @@ public fun new<StableCoin>(
 public fun new_with_config<StableCoin>(
     dao_id: ID,
     max_proposer_funded: u64,
-    _max_concurrent_proposals: u64, // Ignored - we allow only 1 proposal at a time now
     _max_queue_size: u64, // Ignored - we use MAX_QUEUE_SIZE constant
     eviction_grace_period_ms: u64,
     ctx: &mut TxContext,
@@ -1077,16 +1076,6 @@ public fun update_max_proposer_funded<StableCoin>(
     queue.max_proposer_funded = new_max;
 }
 
-/// Update the maximum concurrent proposals allowed (deprecated - kept for compatibility)
-/// Since we now use a simple boolean flag (only 1 proposal at a time), this is a no-op
-public fun update_max_concurrent_proposals<StableCoin>(
-    _queue: &mut ProposalQueue<StableCoin>,
-    new_max: u64,
-) {
-    // Validate parameter but don't use it (we always allow 1 proposal)
-    assert!(new_max > 0, EInvalidProposalId);
-    // No-op: field no longer exists
-}
 
 /// Cancel a proposal and refund the fee - secured to prevent theft
 /// Now this is an entry function that transfers funds directly to the proposer

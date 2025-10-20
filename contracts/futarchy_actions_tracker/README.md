@@ -82,7 +82,6 @@ find \
     contracts/futarchy_oracle_actions/sources \
     contracts/futarchy_factory/sources \
     contracts/futarchy_dissolution_actions/sources \
-    contracts/futarchy_legal_actions/sources \
     contracts/futarchy_governance/sources \
     contracts/futarchy_governance_actions/sources \
     contracts/futarchy_actions/sources \

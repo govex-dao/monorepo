@@ -5,6 +5,7 @@ module futarchy_actions_tracker::gc_registry;
 
 use account_actions::access_control;
 use account_actions::currency;
+use account_actions::memo;
 use account_actions::package_upgrade;
 use account_actions::transfer;
 use account_actions::vault;
@@ -14,13 +15,10 @@ use account_protocol::intents::Expired;
 use account_protocol::owned;
 use futarchy_actions::config_actions;
 use futarchy_actions::liquidity_actions;
-use futarchy_actions::memo_actions;
 use futarchy_actions::quota_actions;
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 use futarchy_governance_actions::protocol_admin_actions;
-use futarchy_legal_actions::dao_file_actions;
-use futarchy_legal_actions::walrus_renewal;
-use futarchy_lifecycle::dissolution_actions;
+// REMOVED: futarchy_lifecycle::dissolution_actions moved to v3_dissolution
 use futarchy_oracle::oracle_actions;
 use futarchy_stream_actions::stream_actions;
 
@@ -29,41 +27,42 @@ use futarchy_stream_actions::stream_actions;
 /// Each function delegates to the appropriate module's delete function.
 
 // === DAO File Actions ===
-public fun delete_dao_file_create_registry(expired: &mut Expired) {
-    dao_file_actions::delete_create_registry(expired);
-}
-
-public fun delete_dao_file_create_root_document(expired: &mut Expired) {
-    dao_file_actions::delete_create_root_document(expired);
-}
-
-public fun delete_dao_file_delete_document(expired: &mut Expired) {
-    dao_file_actions::delete_delete_document(expired);
-}
-
-public fun delete_dao_file_add_chunk(expired: &mut Expired) {
-    dao_file_actions::delete_add_chunk(expired);
-}
-
-public fun delete_dao_file_update(expired: &mut Expired) {
-    dao_file_actions::delete_update_chunk(expired);
-}
-
-public fun delete_dao_file_remove(expired: &mut Expired) {
-    dao_file_actions::delete_remove_chunk(expired);
-}
-
-public fun delete_dao_file_set_chunk_immutable(expired: &mut Expired) {
-    dao_file_actions::delete_set_chunk_immutable(expired);
-}
-
-public fun delete_dao_file_set_document_immutable(expired: &mut Expired) {
-    dao_file_actions::delete_set_document_immutable(expired);
-}
-
-public fun delete_dao_file_set_registry_immutable(expired: &mut Expired) {
-    dao_file_actions::delete_set_registry_immutable(expired);
-}
+// REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
+// public fun delete_dao_file_create_registry(expired: &mut Expired) {
+//     dao_file_actions::delete_create_registry(expired);
+// }
+//
+// public fun delete_dao_file_create_root_document(expired: &mut Expired) {
+//     dao_file_actions::delete_create_root_document(expired);
+// }
+//
+// public fun delete_dao_file_delete_document(expired: &mut Expired) {
+//     dao_file_actions::delete_delete_document(expired);
+// }
+//
+// public fun delete_dao_file_add_chunk(expired: &mut Expired) {
+//     dao_file_actions::delete_add_chunk(expired);
+// }
+//
+// public fun delete_dao_file_update(expired: &mut Expired) {
+//     dao_file_actions::delete_update_chunk(expired);
+// }
+//
+// public fun delete_dao_file_remove(expired: &mut Expired) {
+//     dao_file_actions::delete_remove_chunk(expired);
+// }
+//
+// public fun delete_dao_file_set_chunk_immutable(expired: &mut Expired) {
+//     dao_file_actions::delete_set_chunk_immutable(expired);
+// }
+//
+// public fun delete_dao_file_set_document_immutable(expired: &mut Expired) {
+//     dao_file_actions::delete_set_document_immutable(expired);
+// }
+//
+// public fun delete_dao_file_set_registry_immutable(expired: &mut Expired) {
+//     dao_file_actions::delete_set_registry_immutable(expired);
+// }
 
 // === Config Actions ===
 public fun delete_config_update(expired: &mut Expired) {
@@ -153,21 +152,22 @@ public fun delete_update_pool_params(expired: &mut Expired) {
 }
 
 // === Dissolution Actions ===
-public fun delete_initiate_dissolution(expired: &mut Expired) {
-    dissolution_actions::delete_initiate_dissolution(expired);
-}
-
-public fun delete_batch_distribute(expired: &mut Expired) {
-    dissolution_actions::delete_batch_distribute(expired);
-}
-
-public fun delete_finalize_dissolution(expired: &mut Expired) {
-    dissolution_actions::delete_finalize_dissolution(expired);
-}
-
-public fun delete_cancel_dissolution(expired: &mut Expired) {
-    dissolution_actions::delete_cancel_dissolution(expired);
-}
+// REMOVED: Moved to v3_dissolution package
+// public fun delete_initiate_dissolution(expired: &mut Expired) {
+//     dissolution_actions::delete_initiate_dissolution(expired);
+// }
+//
+// public fun delete_batch_distribute(expired: &mut Expired) {
+//     dissolution_actions::delete_batch_distribute(expired);
+// }
+//
+// public fun delete_finalize_dissolution(expired: &mut Expired) {
+//     dissolution_actions::delete_finalize_dissolution(expired);
+// }
+//
+// public fun delete_cancel_dissolution(expired: &mut Expired) {
+//     dissolution_actions::delete_cancel_dissolution(expired);
+// }
 
 // === Package Upgrade Actions ===
 public fun delete_upgrade_commit(expired: &mut Expired) {
@@ -294,16 +294,17 @@ public fun delete_cancel_challenged_withdrawals(_expired: &mut Expired) {
 
 // === Memo Actions ===
 public fun delete_memo(expired: &mut Expired) {
-    memo_actions::delete_memo(expired);
+    memo::delete_memo(expired);
 }
 
 // === Platform Fee Actions ===
 // REMOVED: Deprecated platform fee collection system deleted
 
 // === Walrus Renewal Actions ===
-public fun delete_walrus_renewal(expired: &mut Expired) {
-    walrus_renewal::delete_walrus_renewal(expired);
-}
+// REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
+// public fun delete_walrus_renewal(expired: &mut Expired) {
+//     walrus_renewal::delete_walrus_renewal(expired);
+// }
 
 // === Quota Actions ===
 public fun delete_set_quotas(expired: &mut Expired) {
@@ -354,28 +355,30 @@ public fun delete_queue_params_update<Config>(expired: &mut Expired) {
 }
 
 // === Additional DAO File Actions ===
-public fun delete_set_document_insert_allowed(expired: &mut Expired) {
-    dao_file_actions::delete_set_document_insert_allowed(expired);
-}
-
-public fun delete_set_document_remove_allowed(expired: &mut Expired) {
-    dao_file_actions::delete_set_document_remove_allowed(expired);
-}
+// REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
+// public fun delete_set_document_insert_allowed(expired: &mut Expired) {
+//     dao_file_actions::delete_set_document_insert_allowed(expired);
+// }
+//
+// public fun delete_set_document_remove_allowed(expired: &mut Expired) {
+//     dao_file_actions::delete_set_document_remove_allowed(expired);
+// }
 
 // === Additional Dissolution Actions ===
-public fun delete_calculate_pro_rata_shares(expired: &mut Expired) {
-    dissolution_actions::delete_calculate_pro_rata_shares(expired);
-}
-
-public fun delete_cancel_all_streams(expired: &mut Expired) {
-    dissolution_actions::delete_cancel_all_streams(expired);
-}
-
-public fun delete_distribute_assets<CoinType>(expired: &mut Expired) {
-    dissolution_actions::delete_distribute_assets<CoinType>(expired);
-}
-
-public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Expired) {
-    dissolution_actions::delete_withdraw_amm_liquidity<AssetType, StableType>(expired);
-}
+// REMOVED: Moved to v3_dissolution package
+// public fun delete_calculate_pro_rata_shares(expired: &mut Expired) {
+//     dissolution_actions::delete_calculate_pro_rata_shares(expired);
+// }
+//
+// public fun delete_cancel_all_streams(expired: &mut Expired) {
+//     dissolution_actions::delete_cancel_all_streams(expired);
+// }
+//
+// public fun delete_distribute_assets<CoinType>(expired: &mut Expired) {
+//     dissolution_actions::delete_distribute_assets<CoinType>(expired);
+// }
+//
+// public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Expired) {
+//     dissolution_actions::delete_withdraw_amm_liquidity<AssetType, StableType>(expired);
+// }
 

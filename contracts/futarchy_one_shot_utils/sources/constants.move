@@ -70,9 +70,6 @@ public fun default_permit_expiry_ms(): u64 { 5 * 60_000 }
 
 // === Governance Constants ===
 
-/// Maximum concurrent proposals allowed in the queue
-public fun max_concurrent_proposals(): u64 { 100 }
-
 /// Maximum queue size for proposals
 public fun max_queue_size(): u64 { 100 }
 

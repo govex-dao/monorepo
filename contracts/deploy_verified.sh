@@ -206,7 +206,6 @@ declare -a PACKAGES=(
     "futarchy_lifecycle:/Users/admin/monorepo/contracts/futarchy_lifecycle:futarchy_lifecycle"
     "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
     "futarchy_governance_actions:/Users/admin/monorepo/contracts/futarchy_governance_actions:futarchy_governance_actions"
-    "futarchy_legal_actions:/Users/admin/monorepo/contracts/futarchy_legal_actions:futarchy_legal_actions"
     "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
     "futarchy_dao:/Users/admin/monorepo/contracts/futarchy_dao:futarchy_dao"
 )

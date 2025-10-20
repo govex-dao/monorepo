@@ -122,6 +122,11 @@ public struct OwnedWithdrawObject has drop {}
 /// Withdraw owned coin by type and amount
 public struct OwnedWithdrawCoin has drop {}
 
+// ======== Memo Actions ========
+
+/// Emit a text memo with optional object reference
+public struct Memo has drop {}
+
 // ======== Minimal Constructors for Cross-Module Usage ========
 // These are required because Sui Move doesn't allow instantiating
 // empty structs from other modules without constructors.
@@ -187,3 +192,5 @@ public fun config_manage_whitelist(): ConfigManageWhitelist { ConfigManageWhitel
 public fun owned_withdraw_object(): OwnedWithdrawObject { OwnedWithdrawObject {} }
 
 public fun owned_withdraw_coin(): OwnedWithdrawCoin { OwnedWithdrawCoin {} }
+
+public fun memo(): Memo { Memo {} }

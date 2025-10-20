@@ -610,7 +610,6 @@ public fun decode_queue_params_update_action(
     let mut bcs_data = bcs::new(action_data);
 
     let max_proposer_funded = decode_option_u64(&mut bcs_data);
-    let max_concurrent_proposals = decode_option_u64(&mut bcs_data);
     let max_queue_size = decode_option_u64(&mut bcs_data);
     let fee_escalation_basis_points = decode_option_u64(&mut bcs_data);
 
@@ -637,35 +636,14 @@ public fun decode_queue_params_update_action(
 }
 
 /// Decode storage config update action
+/// REMOVED: Function deprecated - Walrus functionality moved to v3_futarchy_legal
+/// StorageConfig now has no fields, so this returns an empty vector
 public fun decode_storage_config_update_action(
     _decoder: &StorageConfigUpdateActionDecoder,
-    action_data: vector<u8>,
+    _action_data: vector<u8>,
 ): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-
-    let allow_walrus_blobs = decode_option_bool(&mut bcs_data);
-
-    // Security: ensure all bytes are consumed
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    let mut fields = vector::empty();
-
-    if (allow_walrus_blobs.is_some()) {
-        let value = if (allow_walrus_blobs.destroy_some()) { b"true".to_string() } else {
-            b"false".to_string()
-        };
-        fields.push_back(
-            schema::new_field(
-                b"allow_walrus_blobs".to_string(),
-                value,
-                b"bool".to_string(),
-            ),
-        );
-    } else {
-        allow_walrus_blobs.destroy_none();
-    };
-
-    fields
+    // Return empty fields since StorageConfig is now empty
+    vector::empty()
 }
 
 /// Decode ConditionalMetadataUpdateAction to human-readable fields

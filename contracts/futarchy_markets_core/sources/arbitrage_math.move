@@ -270,7 +270,7 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
         } else {
             (hint_u128 as u64)
         };
-        math::min(global_ub, hint_u64)
+        global_ub.min(hint_u64)
     };
 
     // OPTIMIZATION 4: B-parameterization ternary search (F(b) is concave)
@@ -364,7 +364,7 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
         } else {
             (hint_u128 as u64)
         };
-        math::min(global_ub, hint_u64)
+        global_ub.min(hint_u64)
     };
 
     // Ternary search for optimal b (F(b) is concave, single peak)
@@ -1006,7 +1006,7 @@ fun simulate_spot_to_conditional_profit<AssetType, StableType>(
             conditional_amm::simulate_swap_stable_to_asset(conditional, spot_output)
         };
 
-        min_conditional_output = math::min(min_conditional_output, cond_output);
+        min_conditional_output = min_conditional_output.min(cond_output);
         i = i + 1;
     };
 

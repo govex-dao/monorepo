@@ -87,7 +87,6 @@ public struct GovernanceConfig has copy, drop, store {
     max_actions_per_outcome: u64, // Maximum actions allowed per single outcome
     proposal_fee_per_outcome: u64,
     required_bond_amount: u64,
-    max_concurrent_proposals: u64,
     fee_escalation_basis_points: u64,
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
@@ -115,7 +114,7 @@ public struct SecurityConfig has copy, drop, store {
 
 /// Storage configuration for DAO files
 public struct StorageConfig has copy, drop, store {
-    allow_walrus_blobs: bool, // If true, allow Walrus blob storage; if false, string-only
+    // REMOVED: allow_walrus_blobs - Walrus functionality moved to v3_futarchy_legal
 }
 
 /// Conditional coin metadata configuration for proposals
@@ -241,7 +240,6 @@ public fun new_governance_config(
     max_actions_per_outcome: u64,
     proposal_fee_per_outcome: u64,
     required_bond_amount: u64,
-    max_concurrent_proposals: u64,
     fee_escalation_basis_points: u64,
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
@@ -259,7 +257,6 @@ public fun new_governance_config(
     );
     assert!(proposal_fee_per_outcome > 0, EInvalidProposalFee);
     assert!(required_bond_amount > 0, EInvalidBondAmount);
-    assert!(max_concurrent_proposals > 0, EInvalidMaxConcurrentProposals);
     assert!(fee_escalation_basis_points <= constants::max_fee_bps(), EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
     assert!(
@@ -272,7 +269,6 @@ public fun new_governance_config(
         max_actions_per_outcome,
         proposal_fee_per_outcome,
         required_bond_amount,
-        max_concurrent_proposals,
         fee_escalation_basis_points,
         proposal_creation_enabled,
         accept_new_proposals,
@@ -310,10 +306,8 @@ public fun new_security_config(
 }
 
 /// Create a new storage configuration
-public fun new_storage_config(allow_walrus_blobs: bool): StorageConfig {
-    StorageConfig {
-        allow_walrus_blobs,
-    }
+public fun new_storage_config(): StorageConfig {
+    StorageConfig {}
 }
 
 /// Create conditional coin config
@@ -488,8 +482,6 @@ public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_
 
 public fun required_bond_amount(gov: &GovernanceConfig): u64 { gov.required_bond_amount }
 
-public fun max_concurrent_proposals(gov: &GovernanceConfig): u64 { gov.max_concurrent_proposals }
-
 // REMOVED: proposal_recreation_window_ms and max_proposal_chain_depth (second-order proposals deleted)
 
 public fun fee_escalation_basis_points(gov: &GovernanceConfig): u64 {
@@ -543,7 +535,7 @@ public fun storage_config_mut(config: &mut DaoConfig): &mut StorageConfig {
     &mut config.storage_config
 }
 
-public fun allow_walrus_blobs(storage: &StorageConfig): bool { storage.allow_walrus_blobs }
+// REMOVED: allow_walrus_blobs getter - Walrus functionality moved to v3_futarchy_legal
 
 // Conditional coin config getters
 public fun conditional_coin_config(config: &DaoConfig): &ConditionalCoinConfig {
@@ -662,12 +654,7 @@ public fun validate_config_update(
     let current_gov = governance_config(current_config);
     let new_gov = governance_config(new_config);
 
-    // Check 1: Can't reduce max_concurrent_proposals below active count
-    if (max_concurrent_proposals(new_gov) < active_proposals) {
-        return false
-    };
-
-    // Check 2: Can't reduce max_outcomes below what existing proposals might have
+    // Check 1: Can't reduce max_outcomes below what existing proposals might have
     // This is a conservative check - in production you'd check actual proposals
     if (max_outcomes(new_gov) < max_outcomes(current_gov)) {
         if (active_proposals > 0) {
@@ -804,12 +791,6 @@ public(package) fun set_required_bond_amount(gov: &mut GovernanceConfig, amount:
     gov.required_bond_amount = amount;
 }
 
-public(package) fun set_max_concurrent_proposals(gov: &mut GovernanceConfig, max: u64) {
-    assert!(max > 0, EInvalidMaxConcurrentProposals);
-    // Note: Caller must ensure this doesn't drop below active proposal count
-    gov.max_concurrent_proposals = max;
-}
-
 // REMOVED: Setters for proposal_recreation_window_ms and max_proposal_chain_depth
 
 public(package) fun set_fee_escalation_basis_points(gov: &mut GovernanceConfig, points: u64) {
@@ -875,10 +856,7 @@ public(package) fun set_require_deadman_council(sec: &mut SecurityConfig, val: b
 }
 
 // Storage config direct setters
-
-public fun set_allow_walrus_blobs(storage: &mut StorageConfig, val: bool) {
-    storage.allow_walrus_blobs = val;
-}
+// REMOVED: set_allow_walrus_blobs - Walrus functionality moved to v3_futarchy_legal
 
 // Conditional coin config direct setters
 
@@ -1138,7 +1116,6 @@ public fun default_governance_config(): GovernanceConfig {
         max_actions_per_outcome: constants::default_max_actions_per_outcome(),
         proposal_fee_per_outcome: 1000000, // 1 token per outcome
         required_bond_amount: 10000000, // 10 tokens
-        max_concurrent_proposals: 5,
         fee_escalation_basis_points: constants::default_fee_escalation_bps(),
         proposal_creation_enabled: true,
         accept_new_proposals: true,
@@ -1160,9 +1137,7 @@ public fun default_security_config(): SecurityConfig {
 
 /// Get default storage configuration
 public fun default_storage_config(): StorageConfig {
-    StorageConfig {
-        allow_walrus_blobs: true, // Allow Walrus blobs by default
-    }
+    StorageConfig {}
 }
 
 /// Get default conditional coin configuration (dynamic mode - derives from base token)

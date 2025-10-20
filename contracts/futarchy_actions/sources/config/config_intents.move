@@ -339,7 +339,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
     params: Params,
     outcome: Outcome,
     max_proposer_funded: u64,
-    max_concurrent_proposals: u64,
+    
     fee_escalation_basis_points: u64,
     ctx: &mut TxContext,
 ) {
@@ -353,7 +353,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
         |intent, iw| {
             let action = config_actions::new_queue_params_update_action(
                 option::some(max_proposer_funded),
-                option::some(max_concurrent_proposals),
+                
                 option::none(), // max_queue_size - not specified
                 option::some(fee_escalation_basis_points),
             );
@@ -528,7 +528,6 @@ public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
     params: Params,
     outcome: Outcome,
     max_proposer_funded: u64,
-    max_concurrent_proposals: u64,
     fee_escalation_basis_points: u64,
     ctx: &mut TxContext,
 ) {
@@ -537,7 +536,6 @@ public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
         params,
         outcome,
         max_proposer_funded,
-        max_concurrent_proposals,
         fee_escalation_basis_points,
         ctx,
     );

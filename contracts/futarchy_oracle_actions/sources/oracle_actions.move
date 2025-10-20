@@ -57,8 +57,8 @@ use futarchy_markets_operations::price_based_unlocks_oracle as pass_through_orac
 const PRICE_MULTIPLIER_SCALE: u64 = 1_000_000_000; // 1e9
 const MAX_VESTING_DURATION_MS: u64 = 315_360_000_000; // 10 years
 
-// DAO operational states (for dissolution check)
-const DAO_STATE_DISSOLVING: u8 = 1;
+// DAO operational states (for termination check)
+const DAO_STATE_TERMINATED: u8 = 1;
 
 // === Strike Price Decimal Configuration ===
 // IMPORTANT: These constants define the decimal assumptions for strike price calculations
@@ -1462,7 +1462,7 @@ fun assert_not_dissolving(account: &Account<FutarchyConfig>, version_witness: Ve
     );
 
     assert!(
-        futarchy_config::operational_state(dao_state) != DAO_STATE_DISSOLVING,
+        futarchy_config::operational_state(dao_state) != DAO_STATE_TERMINATED,
         EDaoDissolving
     );
 }

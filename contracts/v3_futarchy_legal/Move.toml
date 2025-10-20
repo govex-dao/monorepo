@@ -11,7 +11,7 @@ futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
-futarchy_lifecycle = { local = "../futarchy_dissolution_actions" }
+# REMOVED: futarchy_lifecycle (dissolution) - moved to v3_dissolution, not used here
 Walrus = { local = "../walrus_walrus" }
 WAL = { local = "../walrus_wal" }
 [addresses]
@@ -21,7 +21,7 @@ futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8
 futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
 futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
-futarchy_lifecycle = "0x8f72dd124237359d6117977c13933f6c93581d381ed6d43713b35aa14b1b6275"
+# REMOVED: futarchy_lifecycle address - no longer used
 account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
 account_extensions = "0xa9ca20a7a38f897b021b35147070b3997e236c8b6791d6f115e264f3bb67ccd4"
 walrus = "0x66d71f5ebd9975e2715c3a71b3a1dd1c5b55f82a200ee859622efd92e11ccedb"

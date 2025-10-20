@@ -48,8 +48,6 @@ const EInvalidConfigType: u64 = 5;
 const EInvalidSlashDistribution: u64 = 6;
 const EWrongAction: u64 = 7;
 const EUnsupportedActionVersion: u64 = 8;
-const ENotActive: u64 = 9; // DAO must be in ACTIVE state for this operation
-const EInvalidRatio: u64 = 10; // Invalid ratio or empty string
 
 // === Witness ===
 
@@ -70,13 +68,6 @@ const CONFIG_TYPE_QUEUE_PARAMS: u8 = 5;
 public struct ProposalsEnabledChanged has copy, drop {
     account_id: ID,
     enabled: bool,
-    timestamp: u64,
-}
-
-/// Emitted when DAO is terminated (irreversible)
-public struct DaoTerminated has copy, drop {
-    account_id: ID,
-    reason: String,
     timestamp: u64,
 }
 
@@ -122,11 +113,11 @@ public struct SlashDistributionChanged has copy, drop {
 }
 
 /// Emitted when storage config is updated
-/// REMOVED: StorageConfigChanged event - Walrus functionality moved to v3_futarchy_legal
-// public struct StorageConfigChanged has copy, drop {
-//     account_id: ID,
-//     timestamp: u64,
-// }
+public struct StorageConfigChanged has copy, drop {
+    account_id: ID,
+    allow_walrus_blobs: bool,
+    timestamp: u64,
+}
 
 /// Emitted when conditional metadata config is updated
 public struct ConditionalMetadataChanged has copy, drop {
@@ -157,15 +148,6 @@ public struct SponsorshipConfigChanged has copy, drop {
 /// It must go through the normal futarchy governance process
 public struct SetProposalsEnabledAction has store, drop, copy {
     enabled: bool,
-}
-
-/// Action to permanently terminate the DAO
-/// WARNING: This is IRREVERSIBLE - DAO cannot be reactivated after termination
-/// Sets operational state to TERMINATED, blocking all new proposals
-/// Existing proposals may still complete, but no new ones can be created
-/// This must go through the normal futarchy governance process
-public struct TerminateDaoAction has store, drop, copy {
-    reason: String,  // Why DAO is being terminated (for transparency/audit trail)
 }
 
 /// Action to update the DAO name
@@ -235,9 +217,8 @@ public struct QueueParamsUpdateAction has store, drop, copy {
 }
 
 /// Storage configuration update action
-/// REMOVED: Action deprecated - Walrus functionality moved to v3_futarchy_legal
 public struct StorageConfigUpdateAction has store, drop, copy {
-    // REMOVED: allow_walrus_blobs field
+    allow_walrus_blobs: Option<bool>,
 }
 
 /// Conditional metadata configuration update action
@@ -356,70 +337,6 @@ public fun do_set_proposals_enabled_internal(
         enabled,
         timestamp: clock.timestamp_ms(),
     });
-}
-
-/// Execute a terminate DAO action
-/// WARNING: This is IRREVERSIBLE - sets operational state to TERMINATED
-public fun do_terminate_dao<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    intent_witness: IW,
-    clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Get action spec
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-
-    // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::TerminateDao>(spec);
-
-    // Get action data
-    let action_data = protocol_intents::action_spec_data(spec);
-
-    // Check version before deserialization
-    let spec_version = protocol_intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    // Safe deserialization with BCS reader
-    let mut reader = bcs::new(*action_data);
-    let reason_bytes = reader.peel_vec_u8();
-    let reason = string::utf8(reason_bytes);
-
-    // Validate all bytes consumed
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Validate reason is not empty
-    assert!(reason.length() > 0, EInvalidRatio);
-
-    // Get dao state and verify we're currently active
-    let dao_state = futarchy_config::state_mut_from_account(account);
-    assert!(
-        futarchy_config::operational_state(dao_state) == futarchy_config::state_active(),
-        ENotActive
-    );
-
-    // CRITICAL: This is irreversible - set to TERMINATED
-    futarchy_config::set_operational_state(dao_state, futarchy_config::state_terminated());
-
-    // Also disable proposal creation in governance config (belt and suspenders)
-    let config = futarchy_config::internal_config_mut(account, version);
-    let gov_config = futarchy_config::governance_config_mut(config);
-    dao_config::set_proposal_creation_enabled(gov_config, false);
-    dao_config::set_accept_new_proposals(gov_config, false);
-
-    // Emit event
-    event::emit(DaoTerminated {
-        account_id: object::id(account),
-        reason,
-        timestamp: clock.timestamp_ms(),
-    });
-
-    let _ = intent_witness;
-
-    // Increment action index
-    executable::increment_action_idx(executable);
 }
 
 /// Execute an update name action
@@ -944,6 +861,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     // Safe deserialization with BCS reader
     let mut reader = bcs::new(*action_data);
     let max_proposer_funded = reader.peel_option_u64();
+    let max_concurrent_proposals = reader.peel_option_u64();
     let max_queue_size = reader.peel_option_u64();
     let fee_escalation_basis_points = reader.peel_option_u64();
 
@@ -953,6 +871,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     // Create action struct for validation
     let action = QueueParamsUpdateAction {
         max_proposer_funded,
+        max_concurrent_proposals,
         max_queue_size,
         fee_escalation_basis_points,
     };
@@ -964,6 +883,9 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     let config = account::config_mut(account, version, ConfigActionsWitness {});
 
     // Apply updates if provided
+    if (action.max_concurrent_proposals.is_some()) {
+        futarchy_config::set_max_concurrent_proposals(config, *action.max_concurrent_proposals.borrow());
+    };
     if (action.fee_escalation_basis_points.is_some()) {
         futarchy_config::set_fee_escalation_basis_points(config, *action.fee_escalation_basis_points.borrow());
     };
@@ -1052,18 +974,59 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
 }
 
 /// Execute a storage config update action
-/// REMOVED: Function deprecated - Walrus functionality moved to v3_futarchy_legal
-/// StorageConfig now has no fields, so this action is a no-op
 public fun do_update_storage_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
-    _version: VersionWitness,
-    _intent_witness: IW,
-    _clock: &Clock,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    // Just increment action index and do nothing
-    // StorageConfig is now empty (Walrus moved to v3_futarchy_legal)
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::StorageConfigUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let allow_walrus_blobs_opt = bcs::peel_option!(&mut reader, |r| r.peel_bool());
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Get account ID first before taking mutable borrows
+    let account_id = object::id(account);
+
+    // Get mutable config through Account protocol with witness
+    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let dao_cfg = futarchy_config::dao_config_mut(config);
+    let storage_cfg = dao_config::storage_config_mut(dao_cfg);
+
+    // Apply updates
+    if (allow_walrus_blobs_opt.is_some()) {
+        dao_config::set_allow_walrus_blobs(storage_cfg, allow_walrus_blobs_opt.destroy_some());
+    };
+
+    // Get the final value after updates
+    let final_value = dao_config::allow_walrus_blobs(storage_cfg);
+
+    // Emit event
+    event::emit(StorageConfigChanged {
+        account_id,
+        allow_walrus_blobs: final_value,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Increment action index
     executable::increment_action_idx(executable);
 }
 
@@ -1412,6 +1375,7 @@ public fun destroy_slash_distribution_update(action: SlashDistributionUpdateActi
 public fun destroy_queue_params_update(action: QueueParamsUpdateAction) {
     let QueueParamsUpdateAction {
         max_proposer_funded: _,
+        max_concurrent_proposals: _,
         max_queue_size: _,
         fee_escalation_basis_points: _,
     } = action;
@@ -1744,11 +1708,13 @@ public fun new_metadata_table_update_action(
 /// Create a queue params update action
 public fun new_queue_params_update_action(
     max_proposer_funded: Option<u64>,
+    max_concurrent_proposals: Option<u64>,
     max_queue_size: Option<u64>,
     fee_escalation_basis_points: Option<u64>,
 ): QueueParamsUpdateAction {
     let action = QueueParamsUpdateAction {
         max_proposer_funded,
+        max_concurrent_proposals,
         max_queue_size,
         fee_escalation_basis_points,
     };
@@ -1757,9 +1723,12 @@ public fun new_queue_params_update_action(
 }
 
 /// Create a storage config update action
-/// REMOVED: Function deprecated - Walrus functionality moved to v3_futarchy_legal
-public fun new_storage_config_update_action(): StorageConfigUpdateAction {
-    StorageConfigUpdateAction {}
+public fun new_storage_config_update_action(
+    allow_walrus_blobs: Option<bool>,
+): StorageConfigUpdateAction {
+    StorageConfigUpdateAction {
+        allow_walrus_blobs,
+    }
 }
 
 /// Create a conditional metadata update action
@@ -2011,12 +1980,14 @@ public fun new_slash_distribution_update<Outcome, IW: drop>(
 public fun new_queue_params_update<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     max_proposer_funded: Option<u64>,
+    max_concurrent_proposals: Option<u64>,
     max_queue_size: Option<u64>,
     fee_escalation_basis_points: Option<u64>,
     intent_witness: IW,
 ) {
     let action = QueueParamsUpdateAction {
         max_proposer_funded,
+        max_concurrent_proposals,
         max_queue_size,
         fee_escalation_basis_points,
     };
@@ -2170,6 +2141,7 @@ public fun get_queue_params_fields(update: &QueueParamsUpdateAction): (
 ) {
     (
         &update.max_proposer_funded,
+        &update.max_concurrent_proposals,
         &update.max_queue_size,
         &update.fee_escalation_basis_points
     )
@@ -2317,6 +2289,9 @@ fun validate_governance_update(action: &GovernanceUpdateAction) {
 fun validate_queue_params_update(action: &QueueParamsUpdateAction) {
     if (action.max_proposer_funded.is_some()) {
         assert!(*action.max_proposer_funded.borrow() > 0, EInvalidParameter);
+    };
+    if (action.max_concurrent_proposals.is_some()) {
+        assert!(*action.max_concurrent_proposals.borrow() > 0, EInvalidParameter);
     };
     if (action.max_queue_size.is_some()) {
         assert!(*action.max_queue_size.borrow() > 0, EInvalidParameter);
@@ -2473,6 +2448,7 @@ public(package) fun queue_params_update_action_from_bytes(bytes: vector<u8>): Qu
     let mut bcs = bcs::new(bytes);
     QueueParamsUpdateAction {
         max_proposer_funded: bcs.peel_option_u64(),
+        max_concurrent_proposals: bcs.peel_option_u64(),
         max_queue_size: bcs.peel_option_u64(),
         fee_escalation_basis_points: bcs.peel_option_u64(),
     }

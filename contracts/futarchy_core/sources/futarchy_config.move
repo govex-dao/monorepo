@@ -24,10 +24,8 @@ use sui::tx_context::TxContext;
 // === Constants ===
 
 // Operational states
-const DAO_STATE_ACTIVE: u8 = 0;
-const DAO_STATE_DISSOLVING: u8 = 1;
-const DAO_STATE_PAUSED: u8 = 2;
-const DAO_STATE_DISSOLVED: u8 = 3;
+const DAO_STATE_ACTIVE: u8 = 0;      // Normal operation - proposals can be created
+const DAO_STATE_TERMINATED: u8 = 1;  // Permanent shutdown - no new proposals (irreversible)
 
 // TWAP scale factor (prices are in 1e12 scale)
 const TWAP_SCALE: u128 = 1_000_000_000_000; // 1e12
@@ -36,11 +34,6 @@ const TWAP_SCALE: u128 = 1_000_000_000_000; // 1e12
 // This prevents DAOs from setting extreme thresholds that could break markets
 const PROTOCOL_MAX_THRESHOLD_POSITIVE: u128 = 50_000_000_000; // +5% (0.05 * 1e12)
 const PROTOCOL_MAX_THRESHOLD_NEGATIVE: u128 = 50_000_000_000; // -5% (stored as magnitude)
-
-/// Public getter for the dissolving state code
-public fun state_dissolving(): u8 {
-    DAO_STATE_DISSOLVING
-}
 
 /// Get the TWAP scale factor (1e12)
 public fun twap_scale(): u128 {
@@ -62,6 +55,7 @@ public fun protocol_max_threshold_negative(): u128 {
 const EInvalidSlashDistribution: u64 = 0;
 const ELaunchpadPriceAlreadySet: u64 = 101;
 const EThresholdExceedsProtocolMax: u64 = 102;
+const EDAOTerminated: u64 = 103; // DAO is terminated, operation not allowed
 
 // === Structs ===
 
@@ -407,6 +401,21 @@ public fun verification_pending(state: &DaoState): bool {
     state.verification_pending
 }
 
+/// Check if DAO is operational (can create/accept proposals)
+public fun is_operational(state: &DaoState): bool {
+    state.operational_state == DAO_STATE_ACTIVE
+}
+
+/// Check if DAO is terminated (no new proposals allowed)
+public fun is_terminated(state: &DaoState): bool {
+    state.operational_state == DAO_STATE_TERMINATED
+}
+
+/// Assert DAO is not terminated (use before operations that require active state)
+public fun assert_not_terminated(state: &DaoState) {
+    assert!(state.operational_state != DAO_STATE_TERMINATED, EDAOTerminated);
+}
+
 // === Setters for DaoState (mutable) ===
 
 public fun set_operational_state(state: &mut DaoState, new_state: u8) {
@@ -688,12 +697,14 @@ public fun witness(): ConfigWitness {
     ConfigWitness {}
 }
 
+/// Get ACTIVE state constant (0)
 public fun state_active(): u8 {
     DAO_STATE_ACTIVE
 }
 
-public fun state_paused(): u8 {
-    DAO_STATE_PAUSED
+/// Get TERMINATED state constant (1)
+public fun state_terminated(): u8 {
+    DAO_STATE_TERMINATED
 }
 
 public fun internal_config_mut(
@@ -816,11 +827,6 @@ public fun set_proposal_intent_expiry_ms(config: &mut FutarchyConfig, expiry: u6
     dao_config::set_proposal_intent_expiry_ms(gov_cfg, expiry);
 }
 
-public fun set_max_concurrent_proposals(config: &mut FutarchyConfig, max: u64) {
-    let gov_cfg = dao_config::governance_config_mut(&mut config.config);
-    dao_config::set_max_concurrent_proposals(gov_cfg, max);
-}
-
 public fun set_fee_escalation_basis_points(config: &mut FutarchyConfig, points: u64) {
     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
     dao_config::set_fee_escalation_basis_points(gov_cfg, points);
@@ -897,13 +903,21 @@ public fun update_slash_distribution(
         };
 }
 
+/// Set proposal enablement state
+///
+/// IMPORTANT: Disabling proposals when in ACTIVE state moves to TERMINATED.
+/// TERMINATED state is IRREVERSIBLE - cannot return to ACTIVE.
+///
+/// # State Transitions:
+/// - ACTIVE + enabled=false  → TERMINATED ✅ (one-way door)
+/// - TERMINATED + enabled=true → NO CHANGE ❌ (can't resurrect)
+/// - TERMINATED + enabled=false → NO CHANGE (already terminated)
 public fun set_proposals_enabled(state: &mut DaoState, enabled: bool) {
-    // If disabling, mark as paused
     if (!enabled && state.operational_state == DAO_STATE_ACTIVE) {
-        state.operational_state = DAO_STATE_PAUSED;
-    } else if (enabled && state.operational_state == DAO_STATE_PAUSED) {
-        state.operational_state = DAO_STATE_ACTIVE;
+        // One-way transition to terminated state
+        state.operational_state = DAO_STATE_TERMINATED;
     }
+    // Note: No logic to re-enable from TERMINATED - intentionally irreversible
 }
 
 // === Account Creation Functions ===
