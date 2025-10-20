@@ -8,7 +8,6 @@ use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
 use account_protocol::owned;
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
 use futarchy_factory::factory::{FactoryOwnerCap, ValidatorAdminCap};
@@ -16,7 +15,7 @@ use futarchy_governance_actions::protocol_admin_actions;
 use futarchy_markets_core::fee::FeeAdminCap;
 use std::bcs;
 use std::string::String;
-use std::type_name::TypeName;
+use std::type_name::{Self, TypeName};
 use sui::object::ID;
 use sui::transfer::Receiving;
 
@@ -274,7 +273,7 @@ public fun add_set_factory_paused_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_set_factory_paused(paused);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::set_factory_paused(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::SetFactoryPaused>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Add stable type to factory whitelist
@@ -285,7 +284,7 @@ public fun add_stable_type_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_add_stable_type(stable_type);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::add_stable_type(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::AddStableType>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Remove stable type from factory whitelist
@@ -296,7 +295,7 @@ public fun remove_stable_type_from_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_remove_stable_type(stable_type);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::remove_stable_type(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::RemoveStableType>().into_string().to_string(), action_data, intent_witness);
 }
 
 // === Fee Management Intent Helpers ===
@@ -309,7 +308,7 @@ public fun add_update_dao_creation_fee_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_update_dao_creation_fee(new_fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_dao_creation_fee(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::UpdateDaoCreationFee>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Update proposal fee
@@ -320,7 +319,7 @@ public fun add_update_proposal_fee_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_update_proposal_fee(new_fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_proposal_fee(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::UpdateProposalFee>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Update verification fee
@@ -332,7 +331,7 @@ public fun add_update_verification_fee_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_update_verification_fee(level, new_fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_verification_fee(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::UpdateVerificationFee>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Update recovery fee
@@ -343,7 +342,7 @@ public fun add_update_recovery_fee_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_update_recovery_fee(new_fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_recovery_fee(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::UpdateRecoveryFee>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Withdraw fees to treasury
@@ -354,7 +353,7 @@ public fun add_withdraw_fees_to_treasury_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_withdraw_fees_to_treasury(amount);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::withdraw_fees_to_treasury(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::WithdrawFeesToTreasury>().into_string().to_string(), action_data, intent_witness);
 }
 
 // === Verification Intent Helpers ===
@@ -368,7 +367,7 @@ public fun add_verification_level_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_add_verification_level(level, fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::add_verification_level(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::AddVerificationLevel>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Remove verification level
@@ -379,7 +378,7 @@ public fun remove_verification_level_from_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_remove_verification_level(level);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::remove_verification_level(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::RemoveVerificationLevel>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Request DAO verification (DAO requests its own verification)
@@ -391,7 +390,7 @@ public fun add_request_verification_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_request_verification(level, attestation_url);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::request_verification(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::RequestVerification>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Approve verification request (validator action)
@@ -410,7 +409,7 @@ public fun add_approve_verification_to_intent<Outcome: store, IW: drop>(
         attestation_url,
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::approve_verification(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::ApproveVerification>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Reject verification request (validator action)
@@ -423,7 +422,7 @@ public fun add_reject_verification_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_reject_verification(dao_id, verification_id, reason);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::reject_verification(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::RejectVerification>().into_string().to_string(), action_data, intent_witness);
 }
 
 // === DAO Management Intent Helpers ===
@@ -438,7 +437,7 @@ public fun add_set_dao_score_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_set_dao_score(dao_id, score, reason);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::set_dao_score(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::SetDaoScore>().into_string().to_string(), action_data, intent_witness);
 }
 
 // === Coin Fee Configuration Intent Helpers ===
@@ -461,7 +460,7 @@ public fun add_coin_fee_config_to_intent<Outcome: store, IW: drop>(
         recovery_fee,
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::add_coin_fee_config(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::AddCoinFeeConfig>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Update coin creation fee
@@ -473,7 +472,7 @@ public fun add_update_coin_creation_fee_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_update_coin_creation_fee(coin_type, new_fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_coin_creation_fee(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::UpdateCoinCreationFee>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Update coin proposal fee
@@ -485,7 +484,7 @@ public fun add_update_coin_proposal_fee_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_update_coin_proposal_fee(coin_type, new_fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_coin_proposal_fee(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::UpdateCoinProposalFee>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Update coin recovery fee
@@ -497,7 +496,7 @@ public fun add_update_coin_recovery_fee_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_update_coin_recovery_fee(coin_type, new_fee);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_coin_recovery_fee(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::UpdateCoinRecoveryFee>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Apply pending coin fees
@@ -508,7 +507,7 @@ public fun add_apply_pending_coin_fees_to_intent<Outcome: store, IW: drop>(
 ) {
     let action = protocol_admin_actions::new_apply_pending_coin_fees(coin_type);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::apply_pending_coin_fees(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::ApplyPendingCoinFees>().into_string().to_string(), action_data, intent_witness);
 }
 
 // === Launchpad Admin Intent Helpers ===
@@ -527,5 +526,5 @@ public fun add_set_launchpad_trust_score_to_intent<Outcome: store, IW: drop>(
         review_text,
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::set_launchpad_trust_score(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<protocol_admin_actions::SetLaunchpadTrustScore>().into_string().to_string(), action_data, intent_witness);
 }

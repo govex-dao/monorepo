@@ -23,7 +23,6 @@ use account_protocol::{
     version_witness::VersionWitness,
     bcs_validation,
 };
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     action_validation,
@@ -34,6 +33,29 @@ use futarchy_markets_operations::lp_token_custody;
 use futarchy_stream_actions::stream_actions;
 use futarchy_lifecycle::dissolution_auction;
 use account_actions::vault;
+
+// === Action Type Markers ===
+
+/// Initiate DAO dissolution
+public struct InitiateDissolution has drop {}
+
+/// Batch distribute multiple assets
+public struct BatchDistribute has drop {}
+
+/// Finalize dissolution and destroy the DAO
+public struct FinalizeDissolution has drop {}
+
+/// Cancel dissolution (if allowed)
+public struct CancelDissolution has drop {}
+
+/// Calculate pro-rata shares
+public struct CalculateProRataShares has drop {}
+
+/// Cancel all active streams
+public struct CancelAllStreams has drop {}
+
+/// Create liquidation auction
+public struct CreateAuction has drop {}
 
 // === Constants ===
 
@@ -160,7 +182,7 @@ public fun do_initiate_dissolution<Outcome: store, IW: drop + copy>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::InitiateDissolution>(spec);
+    action_validation::assert_action_type<InitiateDissolution>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -233,7 +255,7 @@ public fun do_batch_distribute<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::DistributeAsset>(spec);
+    action_validation::assert_action_type<DistributeAsset>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -277,7 +299,7 @@ public fun do_finalize_dissolution<Outcome: store, IW: drop + copy>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::FinalizeDissolution>(spec);
+    action_validation::assert_action_type<FinalizeDissolution>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -338,7 +360,7 @@ public fun do_cancel_dissolution<Outcome: store, IW: drop + copy>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CancelDissolution>(spec);
+    action_validation::assert_action_type<CancelDissolution>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -416,7 +438,7 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CalculateProRataShares>(spec);
+    action_validation::assert_action_type<CalculateProRataShares>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -462,7 +484,7 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CancelAllStreams>(spec);
+    action_validation::assert_action_type<CancelAllStreams>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -544,7 +566,7 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::WithdrawAllSpotLiquidity>(spec);
+    action_validation::assert_action_type<WithdrawAllSpotLiquidity>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -721,7 +743,7 @@ public fun do_distribute_assets<Outcome: store, CoinType: drop, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
     // DistributeAssets doesn't exist, using DistributeAsset (singular)
-    action_validation::assert_action_type<action_types::DistributeAsset>(spec);
+    action_validation::assert_action_type<DistributeAsset>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -833,7 +855,7 @@ public fun do_create_auction<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CreateAuction>(spec);
+    action_validation::assert_action_type<CreateAuction>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -921,7 +943,7 @@ public fun delete_initiate_dissolution(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
     // Validate it was the expected action type
-    action_validation::assert_action_type<action_types::InitiateDissolution>(&spec);
+    action_validation::assert_action_type<InitiateDissolution>(&spec);
 }
 
 /// Delete a batch distribute action from an expired intent
@@ -929,7 +951,7 @@ public fun delete_batch_distribute(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
     // Validate it was the expected action type
-    action_validation::assert_action_type<action_types::DistributeAsset>(&spec);
+    action_validation::assert_action_type<DistributeAsset>(&spec);
 }
 
 /// Delete a finalize dissolution action from an expired intent
@@ -937,7 +959,7 @@ public fun delete_finalize_dissolution(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
     // Validate it was the expected action type
-    action_validation::assert_action_type<action_types::FinalizeDissolution>(&spec);
+    action_validation::assert_action_type<FinalizeDissolution>(&spec);
 }
 
 /// Delete a cancel dissolution action from an expired intent
@@ -945,21 +967,21 @@ public fun delete_cancel_dissolution(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
     // Validate it was the expected action type
-    action_validation::assert_action_type<action_types::CancelDissolution>(&spec);
+    action_validation::assert_action_type<CancelDissolution>(&spec);
 }
 
 /// Delete a calculate pro rata shares action from an expired intent
 public fun delete_calculate_pro_rata_shares(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
-    action_validation::assert_action_type<action_types::CalculateProRataShares>(&spec);
+    action_validation::assert_action_type<CalculateProRataShares>(&spec);
 }
 
 /// Delete a cancel all streams action from an expired intent
 public fun delete_cancel_all_streams(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
-    action_validation::assert_action_type<action_types::CancelAllStreams>(&spec);
+    action_validation::assert_action_type<CancelAllStreams>(&spec);
 }
 
 /// Delete a withdraw AMM liquidity action from an expired intent
@@ -974,14 +996,14 @@ public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Ex
 public fun delete_distribute_assets<CoinType>(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
-    action_validation::assert_action_type<action_types::DistributeAsset>(&spec);
+    action_validation::assert_action_type<DistributeAsset>(&spec);
 }
 
 /// Delete a create auction action from an expired intent
 public fun delete_create_auction<T: key + store, BidCoin>(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
-    action_validation::assert_action_type<action_types::CreateAuction>(&spec);
+    action_validation::assert_action_type<CreateAuction>(&spec);
 }
 
 // === Helper Functions ===

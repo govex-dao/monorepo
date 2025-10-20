@@ -8,7 +8,6 @@ module futarchy_lifecycle::dissolution_intents;
 
 use account_protocol::intents::{Self, Intent};
 use account_protocol::metadata;
-use futarchy_types::action_type_markers as action_types;
 use futarchy_lifecycle::dissolution_actions;
 use std::string::String;
 use sui::bcs;

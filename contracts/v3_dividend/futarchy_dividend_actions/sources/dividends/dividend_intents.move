@@ -5,7 +5,6 @@
 module futarchy_dividend_actions::dividend_intents;
 
 use account_protocol::intents::Intent;
-use futarchy_types::action_type_markers as action_types;
 use futarchy_dividend_actions::dividend_actions;
 use std::bcs;
 use sui::clock::Clock;

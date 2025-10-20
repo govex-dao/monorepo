@@ -5,7 +5,6 @@ module futarchy_actions::liquidity_intents;
 
 use account_protocol::intents::{Self, Intent};
 use futarchy_actions::liquidity_actions;
-use futarchy_types::action_type_markers as action_types;
 use std::option;
 use std::string::String;
 use std::type_name;
@@ -43,7 +42,7 @@ public fun add_liquidity_to_intent<Outcome: store, AssetType, StableType, IW: dr
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::add_liquidity(),
+        type_name::get<liquidity_actions::AddLiquidity>().into_string().to_string(),
         action_data,
         intent_witness,
     );
@@ -78,7 +77,7 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::remove_liquidity(),
+        type_name::get<liquidity_actions::RemoveLiquidity>().into_string().to_string(),
         action_data,
         intent_witness,
     );
@@ -98,7 +97,7 @@ public fun withdraw_lp_token_from_intent<Outcome: store, AssetType, StableType, 
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::withdraw_lp_token(),
+        type_name::get<liquidity_actions::WithdrawLpToken>().into_string().to_string(),
         action_data,
         intent_witness,
     );
@@ -122,7 +121,7 @@ public fun create_pool_to_intent<Outcome: store, AssetType, StableType, IW: drop
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::create_pool(),
+        type_name::get<liquidity_actions::CreatePool>().into_string().to_string(),
         action_data,
         intent_witness,
     );
@@ -144,7 +143,7 @@ public fun update_pool_params_to_intent<Outcome: store, IW: drop>(
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::update_pool_params(),
+        type_name::get<liquidity_actions::UpdatePoolParams>().into_string().to_string(),
         action_data,
         intent_witness,
     );
@@ -164,7 +163,7 @@ public fun set_pool_status_to_intent<Outcome: store, IW: drop>(
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::set_pool_status(),
+        type_name::get<liquidity_actions::SetPoolStatus>().into_string().to_string(),
         action_data,
         intent_witness,
     );

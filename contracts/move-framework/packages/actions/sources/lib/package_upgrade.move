@@ -35,7 +35,6 @@ use account_protocol::{
 use account_actions::{
     version,
 };
-use account_extensions::framework_action_types::{Self, PackageUpgrade, PackageCommit, PackageRestrict, PackageCreateCommitCap};
 
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
@@ -54,6 +53,9 @@ const ECapRevoked: u64 = 8;
 const EReclaimNotExpired: u64 = 9;
 const EReclaimPending: u64 = 10;
 const EReclaimAlreadyPending: u64 = 11;
+const EProposalNotApproved: u64 = 12;
+const EProposalNotFound: u64 = 13;
+const EDigestMismatch: u64 = 14;
 
 // === Events ===
 
@@ -120,6 +122,52 @@ public struct ReclaimDelayUpdated has copy, drop {
     updated_via: address, // Address receiving the new cap
 }
 
+/// Emitted when a new upgrade digest is proposed
+public struct UpgradeDigestProposed has copy, drop {
+    package_name: String,
+    digest: vector<u8>,
+    proposed_at_ms: u64,
+    execution_time_ms: u64,
+}
+
+/// Emitted when an upgrade digest is approved by governance
+public struct UpgradeDigestApproved has copy, drop {
+    package_name: String,
+    digest: vector<u8>,
+    approved_at_ms: u64,
+}
+
+/// Emitted when an approved upgrade is executed (ticket created)
+public struct UpgradeTicketCreated has copy, drop {
+    package_name: String,
+    digest: vector<u8>,
+    mode: String, // "dao_only" or "with_cap"
+}
+
+/// Emitted when an upgrade is completed (receipt consumed)
+public struct UpgradeCompleted has copy, drop {
+    package_name: String,
+    digest: vector<u8>,
+    new_package_addr: address,
+    mode: String, // "dao_only" or "with_cap"
+}
+
+// === Action Type Markers ===
+
+/// Upgrade package
+public struct PackageUpgrade has drop {}
+/// Commit upgrade
+public struct PackageCommit has drop {}
+/// Restrict upgrade policy
+public struct PackageRestrict has drop {}
+/// Create and transfer commit cap
+public struct PackageCreateCommitCap has drop {}
+
+public fun package_upgrade(): PackageUpgrade { PackageUpgrade {} }
+public fun package_commit(): PackageCommit { PackageCommit {} }
+public fun package_restrict(): PackageRestrict { PackageRestrict {} }
+public fun package_create_commit_cap(): PackageCreateCommitCap { PackageCreateCommitCap {} }
+
 // === Structs ===
 
 /// Dynamic Object Field key for the UpgradeCap.
@@ -130,6 +178,28 @@ public struct UpgradeRulesKey(String) has copy, drop, store;
 public struct UpgradeIndexKey() has copy, drop, store;
 /// Dynamic Object Field key for the UpgradeCommitCap.
 public struct UpgradeCommitCapKey(String) has copy, drop, store;
+/// Dynamic field key for UpgradeProposal (keyed by package_name + digest hash)
+public struct UpgradeProposalKey has copy, drop, store {
+    package_name: String,
+    digest_hash: address, // hash of digest for unique key
+}
+
+/// Helper to create UpgradeProposalKey from digest
+fun proposal_key(package_name: String, digest: vector<u8>): UpgradeProposalKey {
+    use sui::hash;
+    let digest_hash = object::id_from_bytes(hash::blake2b256(&digest)).to_address();
+    UpgradeProposalKey { package_name, digest_hash }
+}
+
+/// Proposal for a package upgrade - stores the digest for governance voting
+/// This replaces the hot-potato UpgradeAction pattern
+public struct UpgradeProposal has store {
+    package_name: String,
+    digest: vector<u8>,
+    proposed_time_ms: u64,
+    execution_time_ms: u64,  // Can't execute before this (timelock)
+    approved: bool,
+}
 
 /// Capability granting authority to commit package upgrades
 /// Held by core team/multisig to restrict who can finalize upgrades
@@ -160,32 +230,30 @@ public struct UpgradeIndex has store {
     packages_info: VecMap<String, address>,
 }
 
-/// Action to upgrade a package using a locked UpgradeCap.
-public struct UpgradeAction has drop, store {
-    // name of the package
-    name: String,
-    // digest of the package build we want to publish
-    digest: vector<u8>,
-}
-/// Action to commit an upgrade.
-public struct CommitAction has drop, store {
-    // name of the package
-    name: String,
-}
-/// Action to restrict the policy of a locked UpgradeCap.
+/// DEPRECATED: Old intent-based action structs (DO NOT USE - use digest-based flow instead)
+/// These are kept only for the restrict action which still works
 public struct RestrictAction has drop, store {
     // name of the package
     name: String,
     // downgrades to this policy
     policy: u8,
 }
-/// Action to create and transfer a commit cap.
-public struct CreateCommitCapAction has drop, store {
-    // name of the package
+
+/// Action for upgrading a package
+public struct UpgradeAction has drop, store {
     name: String,
-    // address to receive the commit cap
+    digest: vector<u8>,
+}
+
+/// Action for committing an upgrade
+public struct CommitAction has drop, store {
+    name: String,
+}
+
+/// Action for creating a commit cap
+public struct CreateCommitCapAction has drop, store {
+    name: String,
     recipient: address,
-    // new reclaim delay (in ms) to set when creating the cap
     new_reclaim_delay_ms: u64,
 }
 
@@ -529,7 +597,7 @@ public fun new_upgrade<Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::package_upgrade(),
+        package_upgrade(),
         action_data,
         intent_witness
     );
@@ -603,7 +671,7 @@ public fun new_commit<Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::package_commit(),
+        package_commit(),
         action_data,
         intent_witness
     );
@@ -762,7 +830,7 @@ public fun new_restrict<Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::package_restrict(),
+        package_restrict(),
         action_data,
         intent_witness
     );
@@ -842,7 +910,7 @@ public fun new_create_commit_cap<Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::package_create_commit_cap(),
+        package_create_commit_cap(),
         action_data,
         intent_witness
     );
@@ -1133,4 +1201,325 @@ public fun get_reclaim_available_time<Config>(
 
     let request_time = *option::borrow(&rules.reclaim_request_time);
     option::some(request_time + rules.reclaim_delay_ms)
+}
+
+// === NEW: Digest-Based Upgrade System (Fixes Hot Potato Issue) ===
+
+/// Phase 1: Propose an upgrade digest for governance voting
+/// This creates a proposal that can be voted on over time (multi-day)
+/// The digest is just data (has `store`), not a hot potato
+public fun propose_upgrade_digest<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+    execution_time_ms: u64,
+    clock: &Clock,
+) {
+    account.verify(auth);
+
+    // Validate package exists
+    assert!(has_cap(account, package_name), EPackageDoesntExist);
+
+    // Validate timelock
+    let rules: &UpgradeRules = account.borrow_managed_data(
+        UpgradeRulesKey(package_name),
+        version::current()
+    );
+    let current_time = clock.timestamp_ms();
+    assert!(
+        execution_time_ms >= current_time + rules.delay_ms,
+        EUpgradeTooEarly
+    );
+
+    // Create proposal
+    let proposal = UpgradeProposal {
+        package_name,
+        digest,
+        proposed_time_ms: current_time,
+        execution_time_ms,
+        approved: false,
+    };
+
+    // Store proposal for voting
+    account.add_managed_data(
+        proposal_key(package_name, digest),
+        proposal,
+        version::current()
+    );
+
+    // Emit event
+    sui::event::emit(UpgradeDigestProposed {
+        package_name,
+        digest,
+        proposed_at_ms: current_time,
+        execution_time_ms,
+    });
+}
+
+/// Called by governance system when vote passes
+/// Marks the digest as approved for execution
+public fun approve_upgrade_proposal<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+    clock: &Clock,
+) {
+    account.verify(auth);
+
+    let proposal: &mut UpgradeProposal = account.borrow_managed_data_mut(
+        proposal_key(package_name, digest),
+        version::current()
+    );
+
+    proposal.approved = true;
+
+    // Emit event
+    sui::event::emit(UpgradeDigestApproved {
+        package_name,
+        digest,
+        approved_at_ms: clock.timestamp_ms(),
+    });
+}
+
+/// Phase 2a: Execute approved upgrade atomically (DAO-only mode)
+/// This creates the UpgradeTicket (hot potato) which MUST be consumed in same PTB
+/// Returns ticket that caller must immediately consume via sui upgrade command
+public fun execute_approved_upgrade_dao_only<Config>(
+    account: &mut Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+    clock: &Clock,
+    version_witness: VersionWitness,
+): UpgradeTicket {
+    // 1. Validate proposal exists and is approved
+    let proposal: &UpgradeProposal = account.borrow_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+    assert!(proposal.approved, EProposalNotApproved);
+
+    // 2. Validate execution time
+    let current_time = clock.timestamp_ms();
+    assert!(current_time >= proposal.execution_time_ms, EUpgradeTooEarly);
+
+    // 3. Check reclaim logic (if applicable)
+    let rules: &UpgradeRules = account.borrow_managed_data(
+        UpgradeRulesKey(package_name),
+        version_witness
+    );
+    if (option::is_some(&rules.reclaim_request_time)) {
+        let request_time = *option::borrow(&rules.reclaim_request_time);
+        assert!(
+            current_time >= request_time + rules.reclaim_delay_ms,
+            EReclaimNotExpired
+        );
+    };
+
+    // 4. Create upgrade ticket (HOT POTATO STARTS HERE!)
+    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        UpgradeCapKey(package_name),
+        version_witness
+    );
+    let policy = cap.policy();
+    let ticket = cap.authorize_upgrade(policy, digest);
+
+    // Emit event
+    sui::event::emit(UpgradeTicketCreated {
+        package_name,
+        digest,
+        mode: b"dao_only".to_string(),
+    });
+
+    // Return ticket - caller MUST consume in same PTB!
+    ticket
+}
+
+/// Phase 2b: Complete the upgrade by consuming the receipt (DAO-only mode)
+/// This MUST be called in same PTB after sui upgrade command
+public fun complete_approved_upgrade_dao_only<Config>(
+    account: &mut Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+    receipt: UpgradeReceipt,
+    version_witness: VersionWitness,
+) {
+    // Validate this matches an approved upgrade
+    let proposal: &UpgradeProposal = account.borrow_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+    assert!(proposal.approved, EProposalNotApproved);
+
+    // Validate digest matches receipt
+    assert!(receipt.package() == get_cap_package(account, package_name).to_id(), EDigestMismatch);
+
+    // Commit the upgrade
+    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        UpgradeCapKey(package_name),
+        version_witness
+    );
+    cap.commit_upgrade(receipt);
+
+    // Update package index
+    let new_addr = cap.package().to_address();
+    let index: &mut UpgradeIndex = account.borrow_managed_data_mut(
+        UpgradeIndexKey(),
+        version_witness
+    );
+    *index.packages_info.get_mut(&package_name) = new_addr;
+
+    // Clean up proposal
+    let _removed_proposal: UpgradeProposal = account.remove_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+
+    // Emit event
+    sui::event::emit(UpgradeCompleted {
+        package_name,
+        digest,
+        new_package_addr: new_addr,
+        mode: b"dao_only".to_string(),
+    });
+}
+
+/// Phase 2a: Execute approved upgrade atomically (with commit cap)
+/// This requires the commit cap to be provided, validating nonce
+public fun execute_approved_upgrade_with_cap<Config>(
+    account: &mut Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+    commit_cap: &UpgradeCommitCap,
+    clock: &Clock,
+    version_witness: VersionWitness,
+): UpgradeTicket {
+    // 1. Validate proposal exists and is approved
+    let proposal: &UpgradeProposal = account.borrow_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+    assert!(proposal.approved, EProposalNotApproved);
+
+    // 2. Validate execution time
+    assert!(clock.timestamp_ms() >= proposal.execution_time_ms, EUpgradeTooEarly);
+
+    // 3. Validate commit cap
+    assert!(commit_cap.package_name == package_name, ECommitCapMismatch);
+    let rules: &UpgradeRules = account.borrow_managed_data(
+        UpgradeRulesKey(package_name),
+        version_witness
+    );
+    assert!(commit_cap.valid_nonce == rules.commit_nonce, ECapRevoked);
+
+    // 4. Create upgrade ticket
+    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        UpgradeCapKey(package_name),
+        version_witness
+    );
+    let policy = cap.policy();
+    let ticket = cap.authorize_upgrade(policy, digest);
+
+    // Emit event
+    sui::event::emit(UpgradeTicketCreated {
+        package_name,
+        digest,
+        mode: b"with_cap".to_string(),
+    });
+
+    ticket
+}
+
+/// Phase 2b: Complete the upgrade by consuming the receipt (with commit cap)
+public fun complete_approved_upgrade_with_cap<Config>(
+    account: &mut Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+    receipt: UpgradeReceipt,
+    commit_cap: &UpgradeCommitCap,
+    version_witness: VersionWitness,
+) {
+    // Validate proposal
+    let proposal: &UpgradeProposal = account.borrow_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+    assert!(proposal.approved, EProposalNotApproved);
+
+    // Validate commit cap again (defense in depth)
+    assert!(commit_cap.package_name == package_name, ECommitCapMismatch);
+    let rules: &UpgradeRules = account.borrow_managed_data(
+        UpgradeRulesKey(package_name),
+        version_witness
+    );
+    assert!(commit_cap.valid_nonce == rules.commit_nonce, ECapRevoked);
+
+    // Commit upgrade
+    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        UpgradeCapKey(package_name),
+        version_witness
+    );
+    cap.commit_upgrade(receipt);
+
+    // Update package index
+    let new_addr = cap.package().to_address();
+    let index: &mut UpgradeIndex = account.borrow_managed_data_mut(
+        UpgradeIndexKey(),
+        version_witness
+    );
+    *index.packages_info.get_mut(&package_name) = new_addr;
+
+    // Clean up proposal
+    let _removed_proposal: UpgradeProposal = account.remove_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+
+    // Emit event
+    sui::event::emit(UpgradeCompleted {
+        package_name,
+        digest,
+        new_package_addr: new_addr,
+        mode: b"with_cap".to_string(),
+    });
+}
+
+/// Check if a specific upgrade digest proposal exists
+public fun has_upgrade_proposal<Config>(
+    account: &Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+): bool {
+    account.has_managed_data(proposal_key(package_name, digest))
+}
+
+/// Check if a specific upgrade digest is approved
+public fun is_upgrade_approved<Config>(
+    account: &Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+): bool {
+    if (!has_upgrade_proposal(account, package_name, digest)) {
+        return false
+    };
+
+    let proposal: &UpgradeProposal = account.borrow_managed_data(
+        proposal_key(package_name, digest),
+        version::current()
+    );
+    proposal.approved
+}
+
+/// Get upgrade proposal details
+public fun get_upgrade_proposal<Config>(
+    account: &Account<Config>,
+    package_name: String,
+    digest: vector<u8>,
+): (vector<u8>, u64, u64, bool) {
+    let proposal: &UpgradeProposal = account.borrow_managed_data(
+        proposal_key(package_name, digest),
+        version::current()
+    );
+    (proposal.digest, proposal.proposed_time_ms, proposal.execution_time_ms, proposal.approved)
 }

@@ -7,13 +7,12 @@
 module futarchy_stream_actions::stream_intents;
 
 use account_actions::vault;
-use account_extensions::framework_action_types;
 use account_protocol::intents::Intent;
-use futarchy_types::action_type_markers as action_types;
 use futarchy_stream_actions::stream_actions;
 use std::bcs;
 use std::option::Option;
 use std::string::String;
+use std::type_name;
 use sui::clock::Clock;
 
 // === Use Fun Aliases ===
@@ -61,7 +60,7 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
         0, // max_beneficiaries: 0 for unlimited
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::create_payment(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<stream_actions::CreateStream>().into_string().to_string(), action_data, intent_witness);
 
     // Direct treasury streams don't need upfront funding
     // Funds will be withdrawn on each claim via vault::SpendAction
@@ -99,7 +98,7 @@ public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy +
         0, // max_beneficiaries: 0 for unlimited
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::create_payment(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<stream_actions::CreateStream>().into_string().to_string(), action_data, intent_witness);
 
     // Then add a vault spend action to fund the isolated pool
     vault::new_spend<Outcome, CoinType, IW>(
@@ -141,7 +140,7 @@ public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy
         0, // max_beneficiaries: 0 for unlimited
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::create_payment(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<stream_actions::CreateStream>().into_string().to_string(), action_data, intent_witness);
 
     // Calculate total funding needed
     let total_funding = if (total_payments > 0) {
@@ -183,7 +182,7 @@ public fun execute_payment_in_intent<Outcome: store, CoinType, IW: copy + drop>(
         payment_id,
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::create_payment(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<stream_actions::CreateStream>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Add a cancel stream action to an existing intent
@@ -199,7 +198,7 @@ public fun cancel_stream_in_intent<Outcome: store, CoinType, IW: drop>(
         stream_id,
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::cancel_payment(), action_data, intent_witness);
+    intent.add_typed_action(type_name::get<stream_actions::CancelStream>().into_string().to_string(), action_data, intent_witness);
 }
 
 /// Create a unique key for a stream intent

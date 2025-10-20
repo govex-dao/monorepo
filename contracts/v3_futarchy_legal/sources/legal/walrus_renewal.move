@@ -38,7 +38,6 @@ use account_protocol::{
     intents::{Self, Intent},
 };
 use account_actions::vault;
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     action_validation,
     // action_types moved to futarchy_types
@@ -177,7 +176,7 @@ public fun do_walrus_renewal<Config, Outcome: store, IW: drop>(
     // 3. Deserialize APPROVED limits from intent
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
-    action_validation::assert_action_type<action_types::WalrusRenewal>(spec);
+    action_validation::assert_action_type<WalrusRenewal>(spec);
 
     let action_data = intents::action_spec_data(spec);
     let mut reader = bcs::new(*action_data);

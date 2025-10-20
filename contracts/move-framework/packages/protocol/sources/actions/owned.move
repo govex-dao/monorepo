@@ -27,7 +27,6 @@ use account_protocol::{
     intents::{Self, Expired, Intent},
     executable::Executable,
 };
-use account_extensions::framework_action_types;
 
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
@@ -36,6 +35,16 @@ use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 const EWrongObject: u64 = 0;
 const EWrongAmount: u64 = 1;
 const EWrongCoinType: u64 = 2;
+
+// === Action Type Markers ===
+
+/// Withdraw owned object by ID
+public struct OwnedWithdrawObject has drop {}
+/// Withdraw owned coin by type and amount
+public struct OwnedWithdrawCoin has drop {}
+
+public fun owned_withdraw_object(): OwnedWithdrawObject { OwnedWithdrawObject {} }
+public fun owned_withdraw_coin(): OwnedWithdrawCoin { OwnedWithdrawCoin {} }
 
 // === Structs ===
 
@@ -84,7 +93,7 @@ public fun new_withdraw_object<Config, Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::owned_withdraw_object(),
+        owned_withdraw_object(),
         action_data,
         intent_witness
     );
@@ -107,7 +116,7 @@ public fun do_withdraw_object<Config, Outcome: store, T: key + store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::OwnedWithdrawObject>(spec);
+    action_validation::assert_action_type<OwnedWithdrawObject>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -159,7 +168,7 @@ public fun new_withdraw_coin<Config, Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::owned_withdraw_coin(),
+        owned_withdraw_coin(),
         action_data,
         intent_witness
     );
@@ -182,7 +191,7 @@ public fun do_withdraw_coin<Config, Outcome: store, CoinType, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::OwnedWithdrawCoin>(spec);
+    action_validation::assert_action_type<OwnedWithdrawCoin>(spec);
 
     let action_data = intents::action_spec_data(spec);
 

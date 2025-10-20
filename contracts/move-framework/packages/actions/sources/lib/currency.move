@@ -33,9 +33,8 @@ use account_protocol::{
 };
 use account_actions::{
     currency,
-    version
+    version,
 };
-use account_extensions::framework_action_types::{Self, CurrencyDisable, CurrencyMint, CurrencyBurn, CurrencyUpdate};
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
 
@@ -52,7 +51,26 @@ const ECannotUpdateIcon: u64 = 7;
 const EMaxSupply: u64 = 8;
 const EUnsupportedActionVersion: u64 = 9;
 
-// === Structs ===    
+// === Action Type Markers ===
+
+/// Lock treasury cap
+public struct CurrencyLockCap has drop {}
+/// Disable currency operations
+public struct CurrencyDisable has drop {}
+/// Mint new currency
+public struct CurrencyMint has drop {}
+/// Burn currency
+public struct CurrencyBurn has drop {}
+/// Update currency metadata
+public struct CurrencyUpdate has drop {}
+
+public fun currency_lock_cap(): CurrencyLockCap { CurrencyLockCap {} }
+public fun currency_disable(): CurrencyDisable { CurrencyDisable {} }
+public fun currency_mint(): CurrencyMint { CurrencyMint {} }
+public fun currency_burn(): CurrencyBurn { CurrencyBurn {} }
+public fun currency_update(): CurrencyUpdate { CurrencyUpdate {} }
+
+// === Structs ===
 
 /// Dynamic Object Field key for the TreasuryCap.
 public struct TreasuryCapKey<phantom CoinType>() has copy, drop, store;
@@ -344,7 +362,7 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
 
     // Add to intent with type marker (not action struct)
     intent.add_typed_action(
-        framework_action_types::currency_disable(),  // Type marker
+        currency_disable(),  // Type marker
         action_data,
         intent_witness
     );
@@ -425,7 +443,7 @@ public fun new_update<Outcome, CoinType, IW: drop>(
 
     // Add to intent with type marker (not action struct)
     intent.add_typed_action(
-        framework_action_types::currency_update(),  // Type marker
+        currency_update(),  // Type marker
         action_data,
         intent_witness
     );
@@ -529,7 +547,7 @@ public fun new_mint<Outcome, CoinType, IW: drop>(
     // Add to intent with type marker (not action struct)
     // Use CurrencyMint marker so validation matches in do_mint
     intent.add_typed_action(
-        framework_action_types::currency_mint(),  // Type marker
+        currency_mint(),  // Type marker
         action_data,
         intent_witness
     );
@@ -611,7 +629,7 @@ public fun new_burn<Outcome, CoinType, IW: drop>(
     // Add to intent with type marker (not action struct)
     // Use CurrencyBurn marker so validation matches in do_burn
     intent.add_typed_action(
-        framework_action_types::currency_burn(),  // Type marker
+        currency_burn(),  // Type marker
         action_data,
         intent_witness
     );

@@ -14,11 +14,15 @@ use account_protocol::{
     bcs_validation,
     action_validation,
 };
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     futarchy_config::FutarchyConfig,
     proposal_quota_registry::ProposalQuotaRegistry,
 };
+
+// === Action Type Markers ===
+
+/// Set quotas for addresses
+public struct SetQuotas has drop {}
 
 // === Errors ===
 const EUnsupportedActionVersion: u64 = 0;
@@ -57,7 +61,7 @@ public fun do_set_quotas<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::SetQuotas>(spec);
+    action_validation::assert_action_type<SetQuotas>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);

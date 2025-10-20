@@ -5,9 +5,9 @@
 module futarchy_oracle::oracle_intents;
 
 use account_protocol::intents::{Self, Intent};
-use futarchy_types::action_type_markers as action_types;
 use futarchy_oracle::oracle_actions;
 use std::string::String;
+use std::type_name;
 use sui::bcs;
 use sui::clock::Clock;
 use sui::object::ID;
@@ -62,7 +62,7 @@ public fun create_grant_in_intent<Outcome: store, AssetType, StableType, IW: dro
 
     intents::add_typed_action(
         intent,
-        action_types::create_oracle_grant(),
+        type_name::get<oracle_actions::CreateOracleGrant>().into_string().to_string(),
         bcs::to_bytes(&action),
         intent_witness,
     );
@@ -77,7 +77,7 @@ public fun cancel_grant_in_intent<Outcome: store, IW: drop>(
     let action = oracle_actions::new_cancel_grant(grant_id);
     intents::add_typed_action(
         intent,
-        action_types::cancel_grant(),
+        type_name::get<oracle_actions::CancelGrant>().into_string().to_string(),
         bcs::to_bytes(&action),
         intent_witness,
     );
@@ -93,7 +93,7 @@ public fun pause_grant_in_intent<Outcome: store, IW: drop>(
     let action = oracle_actions::new_pause_grant(grant_id, pause_duration_ms);
     intents::add_typed_action(
         intent,
-        action_types::pause_grant(),
+        type_name::get<oracle_actions::PauseGrant>().into_string().to_string(),
         bcs::to_bytes(&action),
         intent_witness,
     );
@@ -108,7 +108,7 @@ public fun unpause_grant_in_intent<Outcome: store, IW: drop>(
     let action = oracle_actions::new_unpause_grant(grant_id);
     intents::add_typed_action(
         intent,
-        action_types::unpause_grant(),
+        type_name::get<oracle_actions::UnpauseGrant>().into_string().to_string(),
         bcs::to_bytes(&action),
         intent_witness,
     );
@@ -123,7 +123,7 @@ public fun emergency_freeze_grant_in_intent<Outcome: store, IW: drop>(
     let action = oracle_actions::new_emergency_freeze_grant(grant_id);
     intents::add_typed_action(
         intent,
-        action_types::emergency_freeze_grant(),
+        type_name::get<oracle_actions::EmergencyFreezeGrant>().into_string().to_string(),
         bcs::to_bytes(&action),
         intent_witness,
     );
@@ -138,7 +138,7 @@ public fun emergency_unfreeze_grant_in_intent<Outcome: store, IW: drop>(
     let action = oracle_actions::new_emergency_unfreeze_grant(grant_id);
     intents::add_typed_action(
         intent,
-        action_types::emergency_unfreeze_grant(),
+        type_name::get<oracle_actions::EmergencyUnfreezeGrant>().into_string().to_string(),
         bcs::to_bytes(&action),
         intent_witness,
     );

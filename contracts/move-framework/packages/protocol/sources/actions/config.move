@@ -33,7 +33,6 @@ use account_protocol::{
     intent_interface,
 };
 use account_extensions::extensions::Extensions;
-use account_extensions::framework_action_types::{Self, ConfigUpdateDeps, ConfigUpdateMetadata};
 
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
@@ -41,6 +40,25 @@ use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 use fun intent_interface::build_intent as Account.build_intent;
 use fun intent_interface::process_intent as Account.process_intent;
+
+// === Action Type Markers ===
+
+/// Update account dependencies
+public struct ConfigUpdateDeps has drop {}
+/// Toggle unverified packages allowed
+public struct ConfigToggleUnverified has drop {}
+/// Update account metadata
+public struct ConfigUpdateMetadata has drop {}
+/// Configure object deposit settings
+public struct ConfigUpdateDeposits has drop {}
+/// Manage type whitelist for deposits
+public struct ConfigManageWhitelist has drop {}
+
+public fun config_update_deps(): ConfigUpdateDeps { ConfigUpdateDeps {} }
+public fun config_toggle_unverified(): ConfigToggleUnverified { ConfigToggleUnverified {} }
+public fun config_update_metadata(): ConfigUpdateMetadata { ConfigUpdateMetadata {} }
+public fun config_update_deposits(): ConfigUpdateDeposits { ConfigUpdateDeposits {} }
+public fun config_manage_whitelist(): ConfigManageWhitelist { ConfigManageWhitelist {} }
 
 // === Structs ===
 
@@ -217,7 +235,7 @@ public fun request_config_deps<Config, Outcome: store>(
 
             // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                framework_action_types::config_update_deps(),
+                config_update_deps(),
                 action_data,
                 iw
             );
@@ -300,7 +318,7 @@ public fun request_toggle_unverified_allowed<Config, Outcome: store>(
 
             // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                framework_action_types::config_toggle_unverified(),
+                config_toggle_unverified(),
                 action_data,
                 iw
             );
@@ -364,7 +382,7 @@ public fun request_configure_deposits<Config, Outcome: store>(
 
             // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                framework_action_types::config_update_deposits(),
+                config_update_deposits(),
                 action_data,
                 iw
             );
@@ -447,7 +465,7 @@ public fun request_manage_whitelist<Config, Outcome: store>(
 
             // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                framework_action_types::config_manage_whitelist(),
+                config_manage_whitelist(),
                 action_data,
                 iw
             );

@@ -47,7 +47,6 @@ use sui::{
     bcs::{Self, BCS},
     table,
 };
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     // action_types moved to futarchy_types
     version,
@@ -63,6 +62,11 @@ use account_protocol::{
 };
 use account_actions::vault::{Self, Vault};
 use futarchy_dividend_actions::dividend_tree::{Self, DividendTree};
+
+// === Action Type Markers ===
+
+/// Create a dividend distribution
+public struct CreateDividend has drop {}
 
 // === Errors ===
 const ETreeNotFinalized: u64 = 2;
@@ -220,7 +224,7 @@ public fun do_create_dividend<Config: store, Outcome: store, CoinType: drop, IW:
     // Get spec and validate type
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CreateDividend>(spec);
+    action_validation::assert_action_type<CreateDividend>(spec);
 
     // Deserialize action data
     let action_data = intents::action_spec_data(spec);

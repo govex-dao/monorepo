@@ -34,7 +34,6 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use account_actions::version;
-use account_extensions::framework_action_types;
 
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
@@ -43,6 +42,19 @@ use account_extensions::framework_action_types;
 
 /// BorrowAction requires a matching ReturnAction in the same intent to ensure capability is returned
 const ENoReturn: u64 = 0;
+
+// === Action Type Markers ===
+
+/// Store/lock capability
+public struct AccessControlStore has drop {}
+/// Borrow capability
+public struct AccessControlBorrow has drop {}
+/// Return borrowed capability
+public struct AccessControlReturn has drop {}
+
+public fun access_control_store(): AccessControlStore { AccessControlStore {} }
+public fun access_control_borrow(): AccessControlBorrow { AccessControlBorrow {} }
+public fun access_control_return(): AccessControlReturn { AccessControlReturn {} }
 
 // === Structs ===    
 
@@ -109,7 +121,7 @@ public fun new_borrow<Outcome, Cap, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::access_control_borrow(),
+        access_control_borrow(),
         action_data,
         intent_witness
     );
@@ -132,7 +144,7 @@ public fun do_borrow<Config, Outcome: store, Cap: key + store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::AccessControlBorrow>(spec);
+    action_validation::assert_action_type<AccessControlBorrow>(spec);
 
     let _action_data = intents::action_spec_data(spec);
 
@@ -143,7 +155,7 @@ public fun do_borrow<Config, Outcome: store, Cap: key + store, IW: drop>(
     // This ensures the borrowed capability will be returned
     let current_idx = executable.action_idx();
     let mut return_found = false;
-    let return_action_type = action_validation::get_action_type_name<framework_action_types::AccessControlReturn>();
+    let return_action_type = action_validation::get_action_type_name<AccessControlReturn>();
 
     // Search from the next action onwards
     let mut i = current_idx + 1;
@@ -184,7 +196,7 @@ public fun new_return<Outcome, Cap, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::access_control_return(),
+        access_control_return(),
         action_data,
         intent_witness
     );
@@ -208,7 +220,7 @@ public fun do_return<Config, Outcome: store, Cap: key + store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::AccessControlReturn>(spec);
+    action_validation::assert_action_type<AccessControlReturn>(spec);
 
     let _action_data = intents::action_spec_data(spec);
 

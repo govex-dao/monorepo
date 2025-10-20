@@ -9,7 +9,6 @@ use account_protocol::account::Account;
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::version;
 use futarchy_legal_actions::dao_file_actions;
 use std::string::String;

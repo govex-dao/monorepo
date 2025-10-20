@@ -38,7 +38,6 @@ use account_protocol::{
     action_validation,
 };
 use account_actions::{version, stream_utils};
-use account_extensions::framework_action_types::{Self, VaultDeposit, VaultSpend};
 
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
@@ -74,6 +73,29 @@ const ETimeCalculationOverflow: u64 = 24;
 const EVestingPaused: u64 = 25;  // Reusing vesting error code for stream pause
 const EEmergencyFrozen: u64 = 26;
 const EVestingNotPaused: u64 = 27;
+
+// === Action Type Markers ===
+
+/// Deposit coins into vault
+public struct VaultDeposit has drop {}
+
+/// Spend coins from vault
+public struct VaultSpend has drop {}
+
+/// Approve coin type for permissionless deposits
+public struct VaultApproveCoinType has drop {}
+
+/// Remove coin type approval
+public struct VaultRemoveApprovedCoinType has drop {}
+
+/// Toggle stream pause (pause/resume)
+public struct ToggleStreamPause has drop {}
+
+/// Toggle stream emergency freeze
+public struct ToggleStreamFreeze has drop {}
+
+/// Cancel stream
+public struct CancelStream has drop {}
 
 // === Structs ===
 
@@ -724,7 +746,7 @@ public fun new_toggle_stream_pause<Outcome, IW: drop>(
     let action = ToggleStreamPauseAction { vault_name, stream_id, pause_duration_ms };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        framework_action_types::toggle_stream_pause(),
+        ToggleStreamPause {},
         action_data,
         intent_witness
     );
@@ -742,7 +764,7 @@ public fun new_toggle_stream_freeze<Outcome, IW: drop>(
     let action = ToggleStreamFreezeAction { vault_name, stream_id, freeze };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        framework_action_types::toggle_stream_freeze(),
+        ToggleStreamFreeze {},
         action_data,
         intent_witness
     );
@@ -759,7 +781,7 @@ public fun new_cancel_stream<Outcome, IW: drop>(
     let action = CancelStreamAction { vault_name, stream_id };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        framework_action_types::cancel_stream(),
+        CancelStream {},
         action_data,
         intent_witness
     );
@@ -784,7 +806,7 @@ public fun do_toggle_stream_pause<Config, Outcome: store, CoinType, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::ToggleStreamPause>(spec);
+    action_validation::assert_action_type<ToggleStreamPause>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -832,7 +854,7 @@ public fun do_toggle_stream_freeze<Config, Outcome: store, CoinType, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::ToggleStreamFreeze>(spec);
+    action_validation::assert_action_type<ToggleStreamFreeze>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -879,7 +901,7 @@ public fun do_cancel_stream<Config, Outcome: store, CoinType: drop, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::CancelStream>(spec);
+    action_validation::assert_action_type<CancelStream>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -1016,7 +1038,7 @@ public fun do_approve_coin_type<Config, Outcome: store, CoinType, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::VaultApproveCoinType>(spec);
+    action_validation::assert_action_type<VaultApproveCoinType>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -1056,7 +1078,7 @@ public fun do_remove_approved_coin_type<Config, Outcome: store, CoinType, IW: dr
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::VaultRemoveApprovedCoinType>(spec);
+    action_validation::assert_action_type<VaultRemoveApprovedCoinType>(spec);
 
     let action_data = intents::action_spec_data(spec);
 

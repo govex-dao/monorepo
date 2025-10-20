@@ -23,7 +23,6 @@ use account_protocol::{
     version_witness::VersionWitness,
     bcs_validation
 };
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     version,

@@ -33,7 +33,6 @@ use account_protocol::{
     bcs_validation,
     action_validation,
 };
-use account_extensions::framework_action_types::{Self, Memo};
 
 // === Errors ===
 
@@ -44,6 +43,13 @@ const EUnsupportedActionVersion: u64 = 2;
 // === Constants ===
 
 const MAX_MEMO_LENGTH: u64 = 10000; // Maximum memo length in bytes
+
+// === Action Type Markers ===
+
+/// Emit a text memo with optional object reference
+public struct Memo has drop {}
+
+public fun memo(): Memo { Memo {} }
 
 // === Structs ===
 
@@ -97,7 +103,7 @@ public fun new_emit_memo<Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::memo(),
+        memo(),
         action_data,
         intent_witness
     );
@@ -134,9 +140,10 @@ public fun do_emit_memo<Config: store, Outcome: store, IW: drop>(
     let memo = string::utf8(memo_bytes);
 
     // Deserialize Option<ID>
-    let has_reference = reader.peel_option_tag();
-    let reference_id = if (has_reference) {
-        let id_bytes = reader.peel_vec_u8();
+    // BCS encodes Option as: 0x00 for None, 0x01 followed by value for Some
+    let option_byte = bcs::peel_u8(&mut reader);
+    let reference_id = if (option_byte == 1) {
+        let id_bytes = bcs::peel_vec_u8(&mut reader);
         option::some(object::id_from_bytes(id_bytes))
     } else {
         option::none()

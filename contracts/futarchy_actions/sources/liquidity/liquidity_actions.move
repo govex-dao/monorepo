@@ -26,7 +26,26 @@ use account_protocol::{
     action_validation,
 };
 use account_actions::vault;
-use futarchy_types::action_type_markers as action_types;
+// === Action Type Markers ===
+
+/// Create a liquidity pool
+public struct CreatePool has drop {}
+/// Update pool parameters
+public struct UpdatePoolParams has drop {}
+/// Add liquidity to pool
+public struct AddLiquidity has drop {}
+/// Withdraw LP tokens
+public struct WithdrawLpToken has drop {}
+/// Remove liquidity from pool
+public struct RemoveLiquidity has drop {}
+/// Swap tokens
+public struct Swap has drop {}
+/// Collect trading fees
+public struct CollectFees has drop {}
+/// Set pool status (active/paused)
+public struct SetPoolStatus has drop {}
+/// Withdraw collected fees
+public struct WithdrawFees has drop {}
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     version,
@@ -130,7 +149,7 @@ public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW:
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CreatePool>(spec);
+    action_validation::assert_action_type<CreatePool>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -179,7 +198,7 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdatePoolParams>(spec);
+    action_validation::assert_action_type<UpdatePoolParams>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -220,7 +239,7 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::SetPoolStatus>(spec);
+    action_validation::assert_action_type<SetPoolStatus>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -308,7 +327,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::AddLiquidity>(spec);
+    action_validation::assert_action_type<AddLiquidity>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -418,7 +437,7 @@ public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: stor
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::WithdrawLpToken>(spec);
+    action_validation::assert_action_type<WithdrawLpToken>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -477,7 +496,7 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::RemoveLiquidity>(spec);
+    action_validation::assert_action_type<RemoveLiquidity>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -579,7 +598,7 @@ public fun do_swap<AssetType: drop, StableType: drop, Outcome: store, IW: copy +
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::Swap>(spec);
+    action_validation::assert_action_type<Swap>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -624,7 +643,7 @@ public fun do_collect_fees<AssetType: drop, StableType: drop, Outcome: store, IW
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CollectFees>(spec);
+    action_validation::assert_action_type<CollectFees>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -656,7 +675,7 @@ public fun do_withdraw_fees<AssetType: drop, StableType: drop, Outcome: store, I
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::WithdrawFees>(spec);
+    action_validation::assert_action_type<WithdrawFees>(spec);
 
     let action_data = intents::action_spec_data(spec);
 

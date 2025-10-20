@@ -38,8 +38,50 @@ use futarchy_markets_core::{
     fee::{Self, FeeManager, FeeAdminCap},
 };
 // futarchy_dao dependency removed - use ConfigWitness instead
-use futarchy_types::action_type_markers as action_types;
 use account_protocol::action_validation;
+
+// === Action Type Markers ===
+
+/// Add coin fee configuration
+public struct AddCoinFeeConfig has drop {}
+/// Add stable type
+public struct AddStableType has drop {}
+/// Add verification level
+public struct AddVerificationLevel has drop {}
+/// Apply pending coin fees
+public struct ApplyPendingCoinFees has drop {}
+/// Approve verification
+public struct ApproveVerification has drop {}
+/// Disable factory permanently
+public struct DisableFactoryPermanently has drop {}
+/// Reject verification
+public struct RejectVerification has drop {}
+/// Remove stable type
+public struct RemoveStableType has drop {}
+/// Remove verification level
+public struct RemoveVerificationLevel has drop {}
+/// Request verification
+public struct RequestVerification has drop {}
+/// Set factory paused state
+public struct SetFactoryPaused has drop {}
+/// Set launchpad trust score
+public struct SetLaunchpadTrustScore has drop {}
+/// Update coin creation fee
+public struct UpdateCoinCreationFee has drop {}
+/// Update coin proposal fee
+public struct UpdateCoinProposalFee has drop {}
+/// Update coin recovery fee
+public struct UpdateCoinRecoveryFee has drop {}
+/// Update DAO creation fee
+public struct UpdateDaoCreationFee has drop {}
+/// Update proposal fee
+public struct UpdateProposalFee has drop {}
+/// Update recovery fee
+public struct UpdateRecoveryFee has drop {}
+/// Update verification fee
+public struct UpdateVerificationFee has drop {}
+/// Withdraw fees to treasury
+public struct WithdrawFeesToTreasury has drop {}
 
 // === Errors ===
 const EInvalidAdminCap: u64 = 1;
@@ -336,7 +378,7 @@ public fun do_set_factory_paused<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::SetFactoryPaused>(spec);
+    action_validation::assert_action_type<SetFactoryPaused>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -375,7 +417,7 @@ public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::DisableFactoryPermanently>(spec);
+    action_validation::assert_action_type<DisableFactoryPermanently>(spec);
 
     // No deserialization needed - action has no fields
     let _action = DisableFactoryPermanentlyAction {};
@@ -408,7 +450,7 @@ public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::AddStableType>(spec);
+    action_validation::assert_action_type<AddStableType>(spec);
 
     // Create action with generic type
     let stable_type = type_name::get<StableType>();
@@ -439,7 +481,7 @@ public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::RemoveStableType>(spec);
+    action_validation::assert_action_type<RemoveStableType>(spec);
 
     // Create action with generic type
     let stable_type = type_name::get<StableType>();
@@ -470,7 +512,7 @@ public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateDaoCreationFee>(spec);
+    action_validation::assert_action_type<UpdateDaoCreationFee>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -503,7 +545,7 @@ public fun do_update_proposal_fee<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateProposalFee>(spec);
+    action_validation::assert_action_type<UpdateProposalFee>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -542,7 +584,7 @@ public fun do_update_verification_fee<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateVerificationFee>(spec);
+    action_validation::assert_action_type<UpdateVerificationFee>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -583,7 +625,7 @@ public fun do_add_verification_level<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::AddVerificationLevel>(spec);
+    action_validation::assert_action_type<AddVerificationLevel>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -617,7 +659,7 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::RemoveVerificationLevel>(spec);
+    action_validation::assert_action_type<RemoveVerificationLevel>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -654,7 +696,7 @@ public fun do_request_verification<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::RequestVerification>(spec);
+    action_validation::assert_action_type<RequestVerification>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -710,7 +752,7 @@ public fun do_approve_verification<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::ApproveVerification>(spec);
+    action_validation::assert_action_type<ApproveVerification>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -766,7 +808,7 @@ public fun do_reject_verification<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::RejectVerification>(spec);
+    action_validation::assert_action_type<RejectVerification>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -818,7 +860,7 @@ public fun do_update_recovery_fee<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateRecoveryFee>(spec);
+    action_validation::assert_action_type<UpdateRecoveryFee>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -851,7 +893,7 @@ public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::WithdrawFeesToTreasury>(spec);
+    action_validation::assert_action_type<WithdrawFeesToTreasury>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -890,7 +932,7 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::AddCoinFeeConfig>(spec);
+    action_validation::assert_action_type<AddCoinFeeConfig>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -942,7 +984,7 @@ public fun do_update_coin_creation_fee<Outcome: store, IW: drop, StableType>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateCoinCreationFee>(spec);
+    action_validation::assert_action_type<UpdateCoinCreationFee>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -982,7 +1024,7 @@ public fun do_update_coin_proposal_fee<Outcome: store, IW: drop, StableType>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateCoinProposalFee>(spec);
+    action_validation::assert_action_type<UpdateCoinProposalFee>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -1022,7 +1064,7 @@ public fun do_update_coin_recovery_fee<Outcome: store, IW: drop, StableType>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateCoinRecoveryFee>(spec);
+    action_validation::assert_action_type<UpdateCoinRecoveryFee>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -1067,7 +1109,7 @@ public fun do_apply_pending_coin_fees<Outcome: store, IW: drop, StableType>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::ApplyPendingCoinFees>(spec);
+    action_validation::assert_action_type<ApplyPendingCoinFees>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -1100,7 +1142,7 @@ public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, St
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::SetLaunchpadTrustScore>(spec);
+    action_validation::assert_action_type<SetLaunchpadTrustScore>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);

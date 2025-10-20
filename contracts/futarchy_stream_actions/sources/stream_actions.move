@@ -51,14 +51,11 @@ use sui::{
     tx_context::TxContext,
     bcs::{Self, BCS},
 };
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     action_validation,
-    // action_types moved to futarchy_types
     version,
     futarchy_config::{Self, FutarchyConfig},
 };
-// CreatePaymentAction is defined locally in this module
 use account_actions::{vault::{Self, Vault, VaultKey}, vault_intents};
 use account_protocol::{
     bcs_validation,
@@ -67,10 +64,37 @@ use account_protocol::{
     version_witness::VersionWitness,
     intents,
 };
-// TypeName-based routing replaces old action_descriptor system
 
+// === Action Type Markers ===
 
-// === Missing Action Structs for Decoders ===
+/// Create a stream payment
+public struct CreateStream has drop {}
+/// Cancel a stream payment
+public struct CancelStream has drop {}
+/// Update stream parameters
+public struct UpdateStream has drop {}
+/// Pause a stream
+public struct PauseStream has drop {}
+/// Resume a paused stream
+public struct ResumeStream has drop {}
+/// Create a payment
+public struct CreatePayment has drop {}
+/// Cancel a payment
+public struct CancelPayment has drop {}
+/// Process a payment
+public struct ProcessPayment has drop {}
+/// Execute a payment
+public struct ExecutePayment has drop {}
+/// Update payment recipient
+public struct UpdatePaymentRecipient has drop {}
+/// Add a withdrawer
+public struct AddWithdrawer has drop {}
+/// Remove withdrawers
+public struct RemoveWithdrawers has drop {}
+/// Toggle payment status
+public struct TogglePayment has drop {}
+
+// === Action Structs for Decoders ===
 
 /// Action to create a stream payment
 public struct CreateStreamAction<phantom CoinType> has store, drop, copy {
@@ -416,7 +440,7 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CreatePayment>(spec);
+    action_validation::assert_action_type<CreatePayment>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -641,7 +665,7 @@ public fun do_cancel_payment<Config: store, Outcome: store, CoinType: drop, IW: 
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CancelPayment>(spec);
+    action_validation::assert_action_type<CancelPayment>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -694,7 +718,7 @@ public fun do_execute_payment<Config: store, Outcome: store, CoinType: drop, IW:
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::ExecutePayment>(spec);
+    action_validation::assert_action_type<ExecutePayment>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -722,7 +746,7 @@ public fun do_update_payment_recipient<Config: store, Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdatePaymentRecipient>(spec);
+    action_validation::assert_action_type<UpdatePaymentRecipient>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -769,7 +793,7 @@ public fun do_add_withdrawer<Config: store, Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::AddWithdrawer>(spec);
+    action_validation::assert_action_type<AddWithdrawer>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -812,7 +836,7 @@ public fun do_remove_withdrawers<Config: store, Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::RemoveWithdrawers>(spec);
+    action_validation::assert_action_type<RemoveWithdrawers>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);
@@ -862,7 +886,7 @@ public fun do_toggle_payment<Config: store, Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::TogglePayment>(spec);
+    action_validation::assert_action_type<TogglePayment>(spec);
 
     // Deserialize the action data
     let action_data = intents::action_spec_data(spec);

@@ -41,7 +41,6 @@ use account_protocol::{
     action_validation,
 };
 use account_actions::{stream_utils, currency};
-use futarchy_types::action_type_markers as action_types;
 use futarchy_core::{
     futarchy_config::FutarchyConfig,
     resource_requests,
@@ -51,6 +50,27 @@ use futarchy_markets_core::{
     conditional_amm::LiquidityPool,
 };
 use futarchy_markets_operations::price_based_unlocks_oracle as pass_through_oracle;
+
+// === Action Type Markers ===
+
+/// Read oracle price
+public struct ReadOraclePrice has drop {}
+/// Create an oracle grant
+public struct CreateOracleGrant has drop {}
+/// Claim grant tokens
+public struct ClaimGrantTokens has drop {}
+/// Execute a milestone tier
+public struct ExecuteMilestoneTier has drop {}
+/// Cancel a grant
+public struct CancelGrant has drop {}
+/// Pause a grant
+public struct PauseGrant has drop {}
+/// Unpause a grant
+public struct UnpauseGrant has drop {}
+/// Emergency freeze grant
+public struct EmergencyFreezeGrant has drop {}
+/// Emergency unfreeze grant
+public struct EmergencyUnfreezeGrant has drop {}
 
 // === Constants ===
 
@@ -1673,7 +1693,7 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
     // Get spec and validate type
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CreateOracleGrant>(spec);
+    action_validation::assert_action_type<CreateOracleGrant>(spec);
 
     // Deserialize the action with vector fields
     let action_data = intents::action_spec_data(spec);
@@ -1884,7 +1904,7 @@ public fun do_pause_grant<AssetType, StableType, Outcome: store, IW: drop>(
     // Get spec and validate type
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::PauseGrant>(spec);
+    action_validation::assert_action_type<PauseGrant>(spec);
 
     // Deserialize
     let action_data = intents::action_spec_data(spec);
@@ -1913,7 +1933,7 @@ public fun do_unpause_grant<AssetType, StableType, Outcome: store, IW: drop>(
     // Get spec and validate type
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UnpauseGrant>(spec);
+    action_validation::assert_action_type<UnpauseGrant>(spec);
 
     // Deserialize
     let action_data = intents::action_spec_data(spec);
@@ -1941,7 +1961,7 @@ public fun do_emergency_freeze_grant<AssetType, StableType, Outcome: store, IW: 
     // Get spec and validate type
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::EmergencyFreezeGrant>(spec);
+    action_validation::assert_action_type<EmergencyFreezeGrant>(spec);
 
     // Deserialize
     let action_data = intents::action_spec_data(spec);
@@ -1969,7 +1989,7 @@ public fun do_emergency_unfreeze_grant<AssetType, StableType, Outcome: store, IW
     // Get spec and validate type
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::EmergencyUnfreezeGrant>(spec);
+    action_validation::assert_action_type<EmergencyUnfreezeGrant>(spec);
 
     // Deserialize
     let action_data = intents::action_spec_data(spec);
@@ -1997,7 +2017,7 @@ public fun do_cancel_grant<AssetType, StableType, Outcome: store, IW: drop>(
     // Get spec and validate type
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CancelGrant>(spec);
+    action_validation::assert_action_type<CancelGrant>(spec);
 
     // Deserialize
     let action_data = intents::action_spec_data(spec);

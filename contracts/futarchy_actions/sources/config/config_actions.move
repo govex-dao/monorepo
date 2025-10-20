@@ -10,6 +10,7 @@ use std::{
     string::{Self, String},
     ascii::{Self, String as AsciiString},
     option::{Self, Option},
+    type_name,
 };
 use sui::{
     url::{Self, Url},
@@ -25,16 +26,41 @@ use account_protocol::{
     version_witness::VersionWitness,
     bcs_validation,
 };
-use futarchy_types::action_type_markers as action_types;
 use account_protocol::action_validation;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
-    // action_types moved to futarchy_types
     dao_config,
 };
 use futarchy_types::signed::{Self as signed, SignedU128};
 
-// === Friend Modules === (removed - deprecated in 2024 edition)
+// === Action Type Markers ===
+
+/// Set proposals enabled/disabled
+public struct SetProposalsEnabled has drop {}
+/// Terminate the DAO
+public struct TerminateDao has drop {}
+/// Update DAO name
+public struct UpdateName has drop {}
+/// Update trading parameters
+public struct TradingParamsUpdate has drop {}
+/// Update metadata
+public struct MetadataUpdate has drop {}
+/// Update TWAP configuration
+public struct TwapConfigUpdate has drop {}
+/// Update governance parameters
+public struct GovernanceUpdate has drop {}
+/// Update metadata table
+public struct MetadataTableUpdate has drop {}
+/// Update slash distribution
+public struct SlashDistributionUpdate has drop {}
+/// Update queue parameters
+public struct QueueParamsUpdate has drop {}
+/// Update early resolve configuration
+public struct EarlyResolveConfigUpdate has drop {}
+/// Update sponsorship configuration
+public struct SponsorshipConfigUpdate has drop {}
+/// Update conditional metadata
+public struct UpdateConditionalMetadata has drop {}
 
 // === Aliases ===
 use account_protocol::intents as protocol_intents;
@@ -297,7 +323,7 @@ public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::SetProposalsEnabled>(spec);
+    action_validation::assert_action_type<SetProposalsEnabled>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -373,7 +399,7 @@ public fun do_terminate_dao<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::TerminateDao>(spec);
+    action_validation::assert_action_type<TerminateDao>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -436,7 +462,7 @@ public fun do_update_name<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::UpdateName>(spec);
+    action_validation::assert_action_type<UpdateName>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -516,7 +542,7 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::TradingParamsUpdate>(spec);
+    action_validation::assert_action_type<TradingParamsUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -594,7 +620,7 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::MetadataUpdate>(spec);
+    action_validation::assert_action_type<MetadataUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -676,7 +702,7 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::TwapConfigUpdate>(spec);
+    action_validation::assert_action_type<TwapConfigUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -751,7 +777,7 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::GovernanceUpdate>(spec);
+    action_validation::assert_action_type<GovernanceUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -844,7 +870,7 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::MetadataTableUpdate>(spec);
+    action_validation::assert_action_type<MetadataTableUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -932,7 +958,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::QueueParamsUpdate>(spec);
+    action_validation::assert_action_type<QueueParamsUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -993,7 +1019,7 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::SlashDistributionUpdate>(spec);
+    action_validation::assert_action_type<SlashDistributionUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -1082,7 +1108,7 @@ public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::UpdateConditionalMetadata>(spec);
+    action_validation::assert_action_type<UpdateConditionalMetadata>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -1154,7 +1180,7 @@ public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::EarlyResolveConfigUpdate>(spec);
+    action_validation::assert_action_type<EarlyResolveConfigUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -1219,7 +1245,7 @@ public fun do_update_sponsorship_config<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<action_types::SponsorshipConfigUpdate>(spec);
+    action_validation::assert_action_type<SponsorshipConfigUpdate>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -1297,7 +1323,7 @@ public fun do_batch_config<Outcome: store, IW: drop>(
     // CRITICAL - Type check BEFORE deserialization
     // Note: ConfigAction is a wrapper type that may not be in action_types
     // Using a generic config type check here
-    // action_validation::assert_action_type<action_types::ConfigAction>(spec);
+    // action_validation::assert_action_type<ConfigAction>(spec);
 
     // Get action data
     let action_data = protocol_intents::action_spec_data(spec);
@@ -1823,7 +1849,7 @@ public fun new_set_proposals_enabled<Outcome, IW: drop>(
     let action = SetProposalsEnabledAction { enabled };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::set_proposals_enabled(),
+        type_name::get<SetProposalsEnabled>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1840,7 +1866,7 @@ public fun new_update_name<Outcome, IW: drop>(
     let action = UpdateNameAction { new_name };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::update_name(),
+        type_name::get<UpdateName>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1867,7 +1893,7 @@ public fun new_trading_params_update<Outcome, IW: drop>(
     validate_trading_params_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::trading_params_update(),
+        type_name::get<UpdateTradingConfig>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1890,7 +1916,7 @@ public fun new_metadata_update<Outcome, IW: drop>(
     validate_metadata_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::metadata_update(),
+        type_name::get<SetMetadata>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1915,7 +1941,7 @@ public fun new_twap_config_update<Outcome, IW: drop>(
     validate_twap_config_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::twap_config_update(),
+        type_name::get<UpdateTwapConfig>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1948,7 +1974,7 @@ public fun new_governance_update<Outcome, IW: drop>(
     validate_governance_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::governance_update(),
+        type_name::get<UpdateGovernance>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -1971,7 +1997,7 @@ public fun new_metadata_table_update<Outcome, IW: drop>(
     };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::metadata_table_update(),
+        type_name::get<UpdateConditionalMetadata>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -2000,7 +2026,7 @@ public fun new_slash_distribution_update<Outcome, IW: drop>(
     };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::slash_distribution_update(),
+        type_name::get<UpdateSlashDistribution>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -2023,7 +2049,7 @@ public fun new_queue_params_update<Outcome, IW: drop>(
     validate_queue_params_update(&action);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::queue_params_update(),
+        type_name::get<UpdateQueueParams>().into_string().to_string(),
         action_data,
         intent_witness
     );
@@ -2055,7 +2081,7 @@ public fun new_early_resolve_config_update<Outcome, IW: drop>(
     };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        action_types::early_resolve_config_update(),
+        type_name::get<EarlyResolveConfigUpdate>().into_string().to_string(),
         action_data,
         intent_witness
     );

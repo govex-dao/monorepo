@@ -39,7 +39,6 @@ use account_protocol::{
     version_witness::VersionWitness,
     bcs_validation,
 };
-use account_extensions::framework_action_types::{Self, VestingCreate, VestingCancel};
 use account_actions::{stream_utils, version};
 
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
@@ -66,6 +65,22 @@ const EInvalidInput: u64 = 16;
 const ETimeCalculationOverflow: u64 = 17;  // Keep for pause duration validation
 const EEmergencyFrozen: u64 = 18;
 const EVestingExpired: u64 = 19;
+
+// === Action Type Markers ===
+
+/// Create vesting schedule
+public struct VestingCreate has drop {}
+/// Cancel vesting schedule
+public struct VestingCancel has drop {}
+/// Toggle vesting pause
+public struct ToggleVestingPause has drop {}
+/// Toggle vesting freeze
+public struct ToggleVestingFreeze has drop {}
+
+public fun vesting_create(): VestingCreate { VestingCreate {} }
+public fun vesting_cancel(): VestingCancel { VestingCancel {} }
+public fun toggle_vesting_pause(): ToggleVestingPause { ToggleVestingPause {} }
+public fun toggle_vesting_freeze(): ToggleVestingFreeze { ToggleVestingFreeze {} }
 
 // === Structs ===
 
@@ -289,7 +304,7 @@ public fun new_vesting<Config, Outcome, CoinType, IW: copy + drop>(
 
         // Add to intent
         intent.add_typed_action(
-            framework_action_types::vesting_create(),
+            vesting_create(),
             action_data,
             intent_witness // Now copyable, so can be used in loop
         );
@@ -968,7 +983,7 @@ public fun new_cancel_vesting<Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::vesting_cancel(),
+        vesting_cancel(),
         action_data,
         intent_witness
     );
@@ -987,7 +1002,7 @@ public fun new_toggle_vesting_pause<Outcome, IW: drop>(
     let action = ToggleVestingPauseAction { vesting_id, pause_duration_ms };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        framework_action_types::toggle_vesting_pause(),
+        toggle_vesting_pause(),
         action_data,
         intent_witness
     );
@@ -1004,7 +1019,7 @@ public fun new_toggle_vesting_freeze<Outcome, IW: drop>(
     let action = ToggleVestingFreezeAction { vesting_id, freeze };
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
-        framework_action_types::toggle_vesting_freeze(),
+        toggle_vesting_freeze(),
         action_data,
         intent_witness
     );
@@ -1027,7 +1042,7 @@ public fun do_toggle_vesting_pause<Config, Outcome: store, CoinType, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::ToggleVestingPause>(spec);
+    action_validation::assert_action_type<ToggleVestingPause>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -1065,7 +1080,7 @@ public fun do_toggle_vesting_freeze<Config, Outcome: store, CoinType, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<framework_action_types::ToggleVestingFreeze>(spec);
+    action_validation::assert_action_type<ToggleVestingFreeze>(spec);
 
     let action_data = intents::action_spec_data(spec);
 

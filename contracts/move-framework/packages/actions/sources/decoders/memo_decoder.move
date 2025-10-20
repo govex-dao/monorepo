@@ -29,8 +29,9 @@ public fun decode_memo_action(
     // Deserialize the fields directly - DO NOT reconstruct the Action struct
     let mut bcs_data = bcs::new(action_data);
     let message = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let has_reference = bcs::peel_option_tag(&mut bcs_data);
-    let reference_id = if (has_reference) {
+    // BCS encodes Option as: 0x00 for None, 0x01 followed by value for Some
+    let option_byte = bcs::peel_u8(&mut bcs_data);
+    let reference_id = if (option_byte == 1) {
         bcs::peel_vec_u8(&mut bcs_data).to_string()
     } else {
         b"None".to_string()

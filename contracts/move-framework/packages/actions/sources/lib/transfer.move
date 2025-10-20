@@ -19,7 +19,6 @@ use account_protocol::{
     executable::{Self, Executable},
     bcs_validation,
 };
-use account_extensions::framework_action_types::{Self, TransferObject};
 
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
@@ -27,6 +26,13 @@ use account_extensions::framework_action_types::{Self, TransferObject};
 // === Errors ===
 
 const EUnsupportedActionVersion: u64 = 0;
+
+// === Action Type Markers ===
+
+/// Transfer object ownership
+public struct TransferObject has drop {}
+/// Transfer object to transaction sender
+public struct TransferToSender has drop {}
 
 // === Structs ===
 
@@ -69,7 +75,7 @@ public fun new_transfer<Outcome, IW: drop>(
 
     // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        framework_action_types::transfer_object(),
+        TransferObject {},
         action_data,
         intent_witness
     );
@@ -139,7 +145,7 @@ public fun new_transfer_to_sender<Outcome, IW: drop>(
 
     // Add to intent with type marker for TransferObject (reusing existing type)
     intent.add_typed_action(
-        framework_action_types::transfer_object(),
+        TransferObject {},
         action_data,
         intent_witness
     );
@@ -160,7 +166,7 @@ public fun do_transfer_to_sender<Outcome: store, T: key + store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
 
     // CRITICAL: Assert that the action type is what we expect (using TransferObject)
-    action_validation::assert_action_type<framework_action_types::TransferObject>(spec);
+    action_validation::assert_action_type<TransferObject>(spec);
 
     let _action_data = intents::action_spec_data(spec);
 
