@@ -23,6 +23,12 @@ const EInvalidProposalState: u64 = 4;
 const EDaoMismatch: u64 = 6;
 const ETwapDelayPassed: u64 = 7;
 
+// === Constants ===
+const STATE_PREMARKET: u8 = 0;
+const STATE_REVIEW: u8 = 1;
+const STATE_TRADING: u8 = 2;
+const STATE_FINALIZED: u8 = 3;
+
 // === Events ===
 
 public struct ProposalSponsored has copy, drop {
@@ -83,7 +89,7 @@ public entry fun sponsor_proposal<AssetType, StableType>(
 
     // Validation 3: Check proposal is not finalized
     let state = proposal::get_state(proposal);
-    assert!(state != 3, EInvalidProposalState); // Cannot sponsor finalized proposals (STATE_FINALIZED=3)
+    assert!(state != STATE_FINALIZED, EInvalidProposalState);
 
     // Validation 4: Check sponsor has available quota
     let (has_quota, remaining) = proposal_quota_registry::check_sponsor_quota_available(
@@ -162,7 +168,7 @@ public entry fun sponsor_proposal_to_zero<AssetType, StableType>(
 
     // Validation 3: Check proposal is not finalized
     let state = proposal::get_state(proposal);
-    assert!(state != 3, EInvalidProposalState);
+    assert!(state != STATE_FINALIZED, EInvalidProposalState);
 
     // Validation 4: Check sponsor is a team member (has any quota entry)
     assert!(proposal_quota_registry::has_quota(quota_registry, sponsor), ENoSponsorQuota);
@@ -256,34 +262,34 @@ fun validate_sponsorship_timing<AssetType, StableType>(
 ) {
     let state = proposal::get_state(proposal);
 
-    // STATE_PREMARKET (0) and STATE_REVIEW (1) - always allowed
-    if (state == 0 || state == 1) {
+    // PREMARKET and REVIEW states - always allowed
+    if (state == STATE_PREMARKET || state == STATE_REVIEW) {
         return
     };
 
-    // STATE_TRADING (2) - check if TWAP delay has passed
-    if (state == 2) {
-        // Get market initialization time (when review period started)
-        let market_init_time = proposal::get_market_initialized_at(proposal);
-
-        // Get review period to calculate when trading started
-        let review_period = proposal::get_review_period_ms(proposal);
-        let trading_start = market_init_time + review_period;
-
-        // Get TWAP start delay
-        let twap_delay = proposal::get_twap_start_delay(proposal);
-
-        // Calculate when TWAP actually starts recording
-        let twap_start_time = trading_start + twap_delay;
-
-        // Current time
+    // TRADING state - check if TWAP delay has passed
+    if (state == STATE_TRADING) {
+        let twap_start_time = calculate_twap_start_time(proposal);
         let current_time = clock.timestamp_ms();
 
-        // Cannot sponsor after TWAP has started
+        // Cannot sponsor after TWAP has started recording prices
         assert!(current_time < twap_start_time, ETwapDelayPassed);
     };
 
-    // STATE_FINALIZED (3) is already blocked by earlier validation
+    // FINALIZED state is already blocked by earlier validation
+}
+
+/// Calculate when TWAP starts recording prices for a proposal
+/// Returns: timestamp_ms when TWAP begins
+fun calculate_twap_start_time<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): u64 {
+    let market_init_time = proposal::get_market_initialized_at(proposal);
+    let review_period = proposal::get_review_period_ms(proposal);
+    let twap_delay = proposal::get_twap_start_delay(proposal);
+
+    // trading_start + twap_delay = when TWAP actually starts
+    market_init_time + review_period + twap_delay
 }
 
 // === View Functions ===
@@ -318,18 +324,13 @@ public fun can_sponsor_proposal<AssetType, StableType>(
 
     // Check 3: Valid state (not finalized)
     let state = proposal::get_state(proposal);
-    if (state == 3) { // STATE_FINALIZED
+    if (state == STATE_FINALIZED) {
         return (false, string::utf8(b"Proposal already finalized"))
     };
 
     // Check 4: Timing - cannot sponsor after TWAP delay in trading period
-    let state = proposal::get_state(proposal);
-    if (state == 2) { // STATE_TRADING
-        let market_init_time = proposal::get_market_initialized_at(proposal);
-        let review_period = proposal::get_review_period_ms(proposal);
-        let trading_start = market_init_time + review_period;
-        let twap_delay = proposal::get_twap_start_delay(proposal);
-        let twap_start_time = trading_start + twap_delay;
+    if (state == STATE_TRADING) {
+        let twap_start_time = calculate_twap_start_time(proposal);
         let current_time = clock.timestamp_ms();
 
         if (current_time >= twap_start_time) {
