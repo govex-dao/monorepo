@@ -32,10 +32,8 @@ use account_protocol::{
 };
 use account_actions::currency;
 use futarchy_core::resource_requests;
-use futarchy_markets_core::{
-    unified_spot_pool::UnifiedSpotPool,
-    conditional_amm::LiquidityPool,
-};
+use futarchy_markets_core::unified_spot_pool::UnifiedSpotPool;
+use futarchy_markets_primitives::conditional_amm::LiquidityPool;
 use futarchy_markets_operations::price_based_unlocks_oracle as pass_through_oracle;
 
 // === Action Type Markers ===

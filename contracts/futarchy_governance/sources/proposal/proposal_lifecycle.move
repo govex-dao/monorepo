@@ -14,10 +14,10 @@ use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use futarchy_core::version;
 use futarchy_actions_tracker::gc_janitor;
 use futarchy_governance_actions::governance_intents;
-use futarchy_markets_core::coin_escrow;
-use futarchy_markets_core::conditional_amm;
+use futarchy_markets_primitives::coin_escrow;
+use futarchy_markets_primitives::conditional_amm;
 use futarchy_markets_core::early_resolve;
-use futarchy_markets_core::market_state::{Self, MarketState};
+use futarchy_markets_primitives::market_state::{Self, MarketState};
 use futarchy_markets_core::proposal::{Self, Proposal};
 use futarchy_markets_core::quantum_lp_manager;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
@@ -242,7 +242,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
 public fun finalize_proposal_market<AssetType, StableType>(
     account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
@@ -266,7 +266,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
 fun finalize_proposal_market_internal<AssetType, StableType>(
     account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
@@ -434,7 +434,7 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
 public entry fun try_early_resolve<AssetType, StableType>(
     account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
@@ -702,7 +702,7 @@ public entry fun finalize_premarket_initialization<AssetType, StableType>(
 public entry fun advance_proposal_state<AssetType, StableType>(
     account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -815,7 +815,7 @@ public fun can_execute_proposal<AssetType, StableType>(
 /// IMPORTANT: Uses effective threshold which accounts for sponsorship reduction
 public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     clock: &Clock,
 ): (u64, vector<u128>) {
     // Get TWAP prices from all pools (only computed once now)

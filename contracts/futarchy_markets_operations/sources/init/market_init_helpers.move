@@ -16,7 +16,7 @@
 /// review_period was passed during proposal creation.
 module futarchy_markets_operations::market_init_helpers;
 
-use futarchy_markets_core::market_init_strategies::{
+use futarchy_markets_operations::market_init_strategies::{
     Self as strategies,
     ConditionalRaiseConfig,
     ConditionalBuybackConfig

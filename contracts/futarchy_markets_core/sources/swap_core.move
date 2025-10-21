@@ -54,7 +54,7 @@ public fun begin_swap_session<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
 ): SwapSession {
     let market_state = coin_escrow::get_market_state(escrow);
-    let market_id = futarchy_markets_core::market_state::market_id(market_state);
+    let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
     SwapSession {
         market_id,
     }
@@ -82,7 +82,7 @@ public fun finalize_swap_session<AssetType, StableType>(
 
     // Validate session matches this market
     let market_state = coin_escrow::get_market_state_mut(escrow);
-    let escrow_market_id = futarchy_markets_core::market_state::market_id(market_state);
+    let escrow_market_id = futarchy_markets_primitives::market_state::market_id(market_state);
     assert!(market_id == escrow_market_id, ESessionMismatch);
 
     // Update early resolve metrics once per session (efficient!)
@@ -113,7 +113,7 @@ public fun swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, Sta
     // Step 1: Validate session and market
     {
         let market_state = coin_escrow::get_market_state(escrow); // Immutable borrow
-        let market_id = futarchy_markets_core::market_state::market_id(market_state);
+        let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
         assert!(session.market_id == market_id, ESessionMismatch);
     }; // market_state dropped here
 
@@ -127,15 +127,15 @@ public fun swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, Sta
     // Step 3: Calculate swap through AMM and update price leaderboard
     let amount_out = {
         let market_state = coin_escrow::get_market_state_mut(escrow);
-        let market_id = futarchy_markets_core::market_state::market_id(market_state);
+        let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
 
         // Lazy init price leaderboard on first swap (after init actions complete)
-        if (!futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
-            futarchy_markets_core::market_state::init_price_leaderboard(market_state, ctx);
+        if (!futarchy_markets_primitives::market_state::has_price_leaderboard(market_state)) {
+            futarchy_markets_primitives::market_state::init_price_leaderboard(market_state, ctx);
         };
 
         // Execute swap
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
             market_state,
             (outcome_idx as u8),
         );
@@ -149,7 +149,7 @@ public fun swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, Sta
 
         // Update price in leaderboard (O(log N))
         let new_price = pool.get_current_price();
-        futarchy_markets_core::market_state::update_price_in_leaderboard(
+        futarchy_markets_primitives::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
             new_price,
@@ -192,7 +192,7 @@ public fun swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, Sta
     // Step 1: Validate session and market
     {
         let market_state = coin_escrow::get_market_state(escrow); // Immutable borrow
-        let market_id = futarchy_markets_core::market_state::market_id(market_state);
+        let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
         assert!(session.market_id == market_id, ESessionMismatch);
     }; // market_state dropped here
 
@@ -206,15 +206,15 @@ public fun swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, Sta
     // Step 3: Calculate swap through AMM and update price leaderboard
     let amount_out = {
         let market_state = coin_escrow::get_market_state_mut(escrow);
-        let market_id = futarchy_markets_core::market_state::market_id(market_state);
+        let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
 
         // Lazy init price leaderboard on first swap (after init actions complete)
-        if (!futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
-            futarchy_markets_core::market_state::init_price_leaderboard(market_state, ctx);
+        if (!futarchy_markets_primitives::market_state::has_price_leaderboard(market_state)) {
+            futarchy_markets_primitives::market_state::init_price_leaderboard(market_state, ctx);
         };
 
         // Execute swap
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
             market_state,
             (outcome_idx as u8),
         );
@@ -228,7 +228,7 @@ public fun swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, Sta
 
         // Update price in leaderboard (O(log N))
         let new_price = pool.get_current_price();
-        futarchy_markets_core::market_state::update_price_in_leaderboard(
+        futarchy_markets_primitives::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
             new_price,
@@ -319,10 +319,10 @@ public fun swap_balance_asset_to_stable<AssetType, StableType>(
 ): u64 {
     // Get market state and validate everything from it
     let market_state = coin_escrow::get_market_state_mut(escrow);
-    let market_id = futarchy_markets_core::market_state::market_id(market_state);
+    let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
 
     // Validate market is active
-    futarchy_markets_core::market_state::assert_trading_active(market_state);
+    futarchy_markets_primitives::market_state::assert_trading_active(market_state);
 
     // Validate session matches market
     assert!(session.market_id == market_id, ESessionMismatch);
@@ -332,12 +332,12 @@ public fun swap_balance_asset_to_stable<AssetType, StableType>(
     assert!(conditional_balance::market_id(balance) == market_id, EProposalMismatch);
 
     // Validate outcome exists in market
-    let market_outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
+    let market_outcome_count = futarchy_markets_primitives::market_state::outcome_count(market_state);
     assert!((outcome_idx as u64) < market_outcome_count, EInvalidOutcome);
 
     // Lazy init price leaderboard on first swap (after init actions complete)
-    if (!futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
-        futarchy_markets_core::market_state::init_price_leaderboard(market_state, ctx);
+    if (!futarchy_markets_primitives::market_state::has_price_leaderboard(market_state)) {
+        futarchy_markets_primitives::market_state::init_price_leaderboard(market_state, ctx);
     };
 
     // Subtract from asset balance (input)
@@ -345,7 +345,7 @@ public fun swap_balance_asset_to_stable<AssetType, StableType>(
     conditional_balance::sub_from_balance(balance, outcome_idx, true, amount_in);
 
     // Calculate swap through AMM (reuse market_state and market_id)
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+    let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
         market_state,
         outcome_idx,
     );
@@ -361,7 +361,7 @@ public fun swap_balance_asset_to_stable<AssetType, StableType>(
 
     // Update price in leaderboard (O(log N))
     let new_price = pool.get_current_price();
-    futarchy_markets_core::market_state::update_price_in_leaderboard(
+    futarchy_markets_primitives::market_state::update_price_in_leaderboard(
         market_state,
         (outcome_idx as u64),
         new_price,
@@ -405,10 +405,10 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
 ): u64 {
     // Get market state and validate everything from it
     let market_state = coin_escrow::get_market_state_mut(escrow);
-    let market_id = futarchy_markets_core::market_state::market_id(market_state);
+    let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
 
     // Validate market is active
-    futarchy_markets_core::market_state::assert_trading_active(market_state);
+    futarchy_markets_primitives::market_state::assert_trading_active(market_state);
 
     // Validate session matches market
     assert!(session.market_id == market_id, ESessionMismatch);
@@ -418,12 +418,12 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
     assert!(conditional_balance::market_id(balance) == market_id, EProposalMismatch);
 
     // Validate outcome exists in market
-    let market_outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
+    let market_outcome_count = futarchy_markets_primitives::market_state::outcome_count(market_state);
     assert!((outcome_idx as u64) < market_outcome_count, EInvalidOutcome);
 
     // Lazy init price leaderboard on first swap (after init actions complete)
-    if (!futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
-        futarchy_markets_core::market_state::init_price_leaderboard(market_state, ctx);
+    if (!futarchy_markets_primitives::market_state::has_price_leaderboard(market_state)) {
+        futarchy_markets_primitives::market_state::init_price_leaderboard(market_state, ctx);
     };
 
     // Subtract from stable balance (input)
@@ -431,7 +431,7 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
     conditional_balance::sub_from_balance(balance, outcome_idx, false, amount_in);
 
     // Calculate swap through AMM (reuse market_state and market_id)
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+    let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
         market_state,
         outcome_idx,
     );
@@ -447,7 +447,7 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
 
     // Update price in leaderboard (O(log N))
     let new_price = pool.get_current_price();
-    futarchy_markets_core::market_state::update_price_in_leaderboard(
+    futarchy_markets_primitives::market_state::update_price_in_leaderboard(
         market_state,
         (outcome_idx as u64),
         new_price,

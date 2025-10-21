@@ -181,33 +181,25 @@ deploy_and_verify() {
     fi
 }
 
-# Package list in deployment order (22 packages total - futarchy_markets split into 3: primitives, core, operations)
+# Package list in deployment order (14 packages total)
 declare -a PACKAGES=(
-    # Move Framework packages (3)
-    "AccountExtensions:/Users/admin/monorepo/contracts/move-framework/packages/extensions:account_extensions"
+    # Move Framework packages (2)
     "AccountProtocol:/Users/admin/monorepo/contracts/move-framework/packages/protocol:account_protocol"
     "AccountActions:/Users/admin/monorepo/contracts/move-framework/packages/actions:account_actions"
 
-    # Walrus packages (2)
-    "WAL:/Users/admin/monorepo/contracts/walrus_wal:wal"
-    "Walrus:/Users/admin/monorepo/contracts/walrus_walrus:walrus"
-
-    # Futarchy packages (17 - split futarchy_markets into primitives, core, and operations)
+    # Futarchy packages (12)
     "futarchy_types:/Users/admin/monorepo/contracts/futarchy_types:futarchy_types"
     "futarchy_one_shot_utils:/Users/admin/monorepo/contracts/futarchy_one_shot_utils:futarchy_one_shot_utils"
     "futarchy_core:/Users/admin/monorepo/contracts/futarchy_core:futarchy_core"
     "futarchy_markets_primitives:/Users/admin/monorepo/contracts/futarchy_markets_primitives:futarchy_markets_primitives"
     "futarchy_markets_core:/Users/admin/monorepo/contracts/futarchy_markets_core:futarchy_markets_core"
     "futarchy_markets_operations:/Users/admin/monorepo/contracts/futarchy_markets_operations:futarchy_markets_operations"
-    "futarchy_vault:/Users/admin/monorepo/contracts/futarchy_vault:futarchy_vault"
-    "futarchy_multisig:/Users/admin/monorepo/contracts/futarchy_multisig:futarchy_multisig"
     "futarchy_oracle:/Users/admin/monorepo/contracts/futarchy_oracle_actions:futarchy_oracle"
-    "futarchy_stream_actions:/Users/admin/monorepo/contracts/futarchy_stream_actions:futarchy_stream_actions"
-    "futarchy_lifecycle:/Users/admin/monorepo/contracts/futarchy_lifecycle:futarchy_lifecycle"
+    "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
     "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
     "futarchy_governance_actions:/Users/admin/monorepo/contracts/futarchy_governance_actions:futarchy_governance_actions"
-    "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
-    "futarchy_dao:/Users/admin/monorepo/contracts/futarchy_dao:futarchy_dao"
+    "futarchy_actions_tracker:/Users/admin/monorepo/contracts/futarchy_actions_tracker:futarchy_actions_tracker"
+    "futarchy_governance:/Users/admin/monorepo/contracts/futarchy_governance:futarchy_governance"
 )
 
 # Main deployment

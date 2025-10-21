@@ -63,7 +63,7 @@ public fun empty_amm_and_return_to_provider<
 
     // Get winning pool from market_state and empty its liquidity (returns conditional coin amounts)
     let market_state = escrow.get_market_state_mut();
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+    let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
         market_state,
         (winning_outcome as u8),
     );
@@ -118,7 +118,7 @@ public fun empty_amm_and_return_to_dao<
     let winning_outcome = proposal.get_winning_outcome();
     // Get winning pool from market_state
     let market_state = escrow.get_market_state_mut();
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+    let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
         market_state,
         (winning_outcome as u8),
     );
@@ -280,7 +280,7 @@ public entry fun add_liquidity_entry<
 
     // Add liquidity and get new price (within pool borrow scope)
     let (lp_amount, new_price) = {
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
             market_state,
             (outcome_idx as u8),
         );
@@ -302,8 +302,8 @@ public entry fun add_liquidity_entry<
 
     // Update price leaderboard after liquidity change (if initialized)
     // Price changes when liquidity is added, so we need to update the cache
-    if (futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
-        futarchy_markets_core::market_state::update_price_in_leaderboard(
+    if (futarchy_markets_primitives::market_state::has_price_leaderboard(market_state)) {
+        futarchy_markets_primitives::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
             new_price,
@@ -356,7 +356,7 @@ public entry fun remove_liquidity_entry<
 
     // Remove liquidity and get new price (within pool borrow scope)
     let (asset_amount, stable_amount, new_price) = {
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        let pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
             market_state,
             (outcome_idx as u8),
         );
@@ -380,8 +380,8 @@ public entry fun remove_liquidity_entry<
 
     // Update price leaderboard after liquidity change (if initialized)
     // Price changes when liquidity is removed, so we need to update the cache
-    if (futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
-        futarchy_markets_core::market_state::update_price_in_leaderboard(
+    if (futarchy_markets_primitives::market_state::has_price_leaderboard(market_state)) {
+        futarchy_markets_primitives::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
             new_price,
@@ -433,7 +433,7 @@ public fun collect_protocol_fees<AssetType, StableType>(
     let winning_outcome = proposal.get_winning_outcome();
     // Get winning pool from market_state
     let market_state = escrow.get_market_state_mut();
-    let winning_pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+    let winning_pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
         market_state,
         (winning_outcome as u8),
     );
@@ -502,7 +502,7 @@ public fun get_liquidity_for_proposal<AssetType, StableType>(
     escrow: &futarchy_markets_core::coin_escrow::TokenEscrow<AssetType, StableType>,
 ): vector<u64> {
     let market_state = escrow.get_market_state();
-    let pools = futarchy_markets_core::market_state::borrow_amm_pools(market_state);
+    let pools = futarchy_markets_primitives::market_state::borrow_amm_pools(market_state);
     let mut liquidity = vector[];
     let mut i = 0;
     while (i < pools.length()) {

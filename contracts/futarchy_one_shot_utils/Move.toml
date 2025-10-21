@@ -2,9 +2,9 @@
 name = "futarchy_one_shot_utils"
 edition = "2024"
 license = "BSL"
-published-at = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
+published-at = "0x0"
 
 [dependencies]
 
 [addresses]
-futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
+futarchy_one_shot_utils = "0x7e7d952d7668c969d6f20b68ccfae73a4ea510906aafc1e78b81d0cd1edecba0"

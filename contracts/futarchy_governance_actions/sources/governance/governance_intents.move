@@ -25,10 +25,8 @@ use futarchy_core::version;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
 };
-use futarchy_markets_core::{
-    proposal::{Self, Proposal},
-    market_state::MarketState,
-};
+use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_primitives::market_state::MarketState;
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;

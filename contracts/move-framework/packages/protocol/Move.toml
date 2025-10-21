@@ -2,10 +2,10 @@
 name = "AccountProtocol"
 edition = "2024"
 license = "Apache-2.0"
-published-at = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
+published-at = "0x0"
 authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 
 [dependencies]
 
 [addresses]
-account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
+account_protocol = "0x5ac87df42c4632b974e5bcaabbb89b6e135226d1542b0ef6aeb70360faf511e8"

@@ -2,16 +2,14 @@
 
 [move]
 version = 3
-manifest_digest = "021CF9AB82B105A3966A24BECA40F4470CF6C1F47EF81A53213E07E7CF8686EC"
-deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
+manifest_digest = "94E80BA59AD4426305AA057D5FEBD6F3496B44E1C4CEB33394C0B3ACEDDA3232"
+deps_digest = "59CF4C5FBF9CA9498217B3AC2BED47AD5D49696CE64F735BE1226EDCEF529664"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-  { id = "WAL", name = "WAL" },
-  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_actions", name = "futarchy_actions" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_governance_actions", name = "futarchy_governance_actions" },
@@ -77,23 +75,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "WAL"
-source = { local = "../walrus_wal" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
-id = "Walrus"
-source = { local = "../walrus_walrus" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-  { id = "WAL", name = "WAL" },
-]
-
-[[move.package]]
 id = "futarchy_actions"
 source = { local = "../futarchy_actions" }
 
@@ -103,8 +84,6 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-  { id = "WAL", name = "WAL" },
-  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
@@ -163,6 +142,7 @@ dependencies = [
   { id = "futarchy_factory", name = "futarchy_factory" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
@@ -253,3 +233,11 @@ dependencies = [
 compiler-version = "1.57.2"
 edition = "2024.beta"
 flavor = "sui"
+
+[env]
+
+[env.devnet]
+chain-id = "01d7a1c8"
+original-published-id = "0xd823f33a3f5df33551eaa6a1506b0a5b04bd2a037429c080f75a2eee101e1a50"
+latest-published-id = "0xd823f33a3f5df33551eaa6a1506b0a5b04bd2a037429c080f75a2eee101e1a50"
+published-version = "1"

@@ -24,10 +24,8 @@ use futarchy_core::{
 };
 use futarchy_governance::proposal_lifecycle;
 use futarchy_governance_actions::governance_intents;
-use futarchy_markets_core::{
-    market_state::{Self, MarketState},
-    proposal::{Self, Proposal},
-};
+use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_primitives::market_state::{Self, MarketState};
 use std::option;
 use std::string::String;
 use sui::{clock::Clock, coin::Coin, event, object::ID, tx_context::TxContext};

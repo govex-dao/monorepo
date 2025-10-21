@@ -169,8 +169,8 @@ public fun execute_optimal_spot_arbitrage<AssetType, StableType>(
         let balance = if (option::is_some(&existing_balance_opt)) {
             option::extract(&mut existing_balance_opt)
         } else {
-            let market_id = futarchy_markets_core::market_state::market_id(market_state);
-            let outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
+            let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
+            let outcome_count = futarchy_markets_primitives::market_state::outcome_count(market_state);
             conditional_balance::new<AssetType, StableType>(market_id, (outcome_count as u8), ctx)
         };
         option::destroy_none(existing_balance_opt);
@@ -197,8 +197,8 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
 
     // Get market info from escrow
     let market_state = coin_escrow::get_market_state(escrow);
-    let outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
-    let market_id = futarchy_markets_core::market_state::market_id(market_state);
+    let outcome_count = futarchy_markets_primitives::market_state::outcome_count(market_state);
+    let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
 
     // 1. Swap spot stable → spot asset
     let asset_from_spot = unified_spot_pool::swap_stable_for_asset(
@@ -310,8 +310,8 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
 
     // Get market info from escrow
     let market_state = coin_escrow::get_market_state(escrow);
-    let outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
-    let market_id = futarchy_markets_core::market_state::market_id(market_state);
+    let outcome_count = futarchy_markets_primitives::market_state::outcome_count(market_state);
+    let market_id = futarchy_markets_primitives::market_state::market_id(market_state);
 
     // 1. Swap spot asset → spot stable
     let stable_from_spot = unified_spot_pool::swap_asset_for_stable(

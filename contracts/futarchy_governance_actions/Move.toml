@@ -8,18 +8,20 @@ AccountActions = { local = "../move-framework/packages/actions" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
+futarchy_markets_primitives = { local = "../futarchy_markets_primitives" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 # futarchy_lifecycle = { local = "../futarchy_dissolution_actions" } # Circular dependency removed
 futarchy_factory = { local = "../futarchy_factory" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
-futarchy_governance_actions = "0xb099b96ba26f0facde45dae7947e7d0144282b7a2923c2b4c4f0e942ae608865"
-futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
-futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"
-futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
-futarchy_markets_core = "0x0"
-futarchy_markets_operations = "0x0"
+futarchy_governance_actions = "0xb1054e9a9b316e105c908be2cddb7f64681a63f0ae80e9e5922bf461589c4bc7"
+futarchy_one_shot_utils = "0x7e7d952d7668c969d6f20b68ccfae73a4ea510906aafc1e78b81d0cd1edecba0"
+futarchy_types = "0xb413174c17d48ce1dc02f433dfd3bea87bf9d869d20727127abebf8a4cfd9ec5"
+futarchy_core = "0x663c46a7d94c6255ac0026f5d333ff102c47648596734b5eb303c9491f6eef2b"
+futarchy_markets_primitives = "0x402cc5fc2eba359fd417d4cda419dc943fa5c2be4f9f54edf4b15353755232dc"
+futarchy_markets_core = "0x5dbf784bd4b4c08572cbbcc760e0c29cafbb110534fb088029c3e7d1c30f6816"
+futarchy_markets_operations = "0x100a1e05969cefd523727b43c916f1e2d209e8efc2e09888d80e81335f2fbeba"
 # futarchy_lifecycle  = "0x0" # Circular dependency removed
-futarchy_factory = "0x76b65095ea99b4dd4908b51c4649bf6c294141f21979587ae6b15c993d6daf8a"
-account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
+futarchy_factory = "0xebf0495aa4283acab969829613bfa749dfcf50e93f038fc4c1d34799a19e500f"
+account_protocol = "0x5ac87df42c4632b974e5bcaabbb89b6e135226d1542b0ef6aeb70360faf511e8"

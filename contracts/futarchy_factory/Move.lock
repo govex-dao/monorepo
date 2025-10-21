@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "57E80A95FAF21AEF71ECECE7D505AB8F6A716BECCC5C89F5BBC499A3E5DC34B9"
+manifest_digest = "DFE5E6DEB81A98B09387E06534C2E0B50B21DA13C4FE70ECD6BB09C404C29C99"
 deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -76,23 +76,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "WAL"
-source = { local = "../walrus_wal" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
-id = "Walrus"
-source = { local = "../walrus_walrus" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-  { id = "WAL", name = "WAL" },
-]
-
-[[move.package]]
 id = "futarchy_actions"
 source = { local = "../futarchy_actions" }
 
@@ -102,8 +85,6 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-  { id = "WAL", name = "WAL" },
-  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
@@ -212,3 +193,11 @@ dependencies = [
 compiler-version = "1.57.2"
 edition = "2024.beta"
 flavor = "sui"
+
+[env]
+
+[env.devnet]
+chain-id = "01d7a1c8"
+original-published-id = "0xebf0495aa4283acab969829613bfa749dfcf50e93f038fc4c1d34799a19e500f"
+latest-published-id = "0xebf0495aa4283acab969829613bfa749dfcf50e93f038fc4c1d34799a19e500f"
+published-version = "1"

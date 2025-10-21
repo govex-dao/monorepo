@@ -151,8 +151,8 @@
 /// ```
 module futarchy_markets_operations::proposal_with_market_init;
 
-use futarchy_markets_core::market_init_helpers;
-use futarchy_markets_core::market_init_strategies::{
+use futarchy_markets_operations::market_init_helpers;
+use futarchy_markets_operations::market_init_strategies::{
     Self,
     ConditionalRaiseConfig,
     ConditionalBuybackConfig
