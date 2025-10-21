@@ -21,6 +21,7 @@ const EAlreadySponsored: u64 = 2;
 const ENoSponsorQuota: u64 = 3;
 const EInvalidProposalState: u64 = 4;
 const EDaoMismatch: u64 = 6;
+const ETwapDelayPassed: u64 = 7;
 
 // === Events ===
 
@@ -93,6 +94,10 @@ public entry fun sponsor_proposal<AssetType, StableType>(
     );
     assert!(has_quota, ENoSponsorQuota);
 
+    // Validation 5: Check sponsorship timing - cannot sponsor after TWAP delay if in trading period
+    // This prevents manipulation after TWAP starts recording prices
+    validate_sponsorship_timing(proposal, clock);
+
     // Get sponsored threshold from config
     let sponsored_threshold = dao_config::sponsored_threshold(sponsor_config);
 
@@ -162,6 +167,10 @@ public entry fun sponsor_proposal_to_zero<AssetType, StableType>(
     // Validation 4: Check sponsor is a team member (has any quota entry)
     assert!(proposal_quota_registry::has_quota(quota_registry, sponsor), ENoSponsorQuota);
 
+    // Validation 5: Check sponsorship timing - cannot sponsor after TWAP delay if in trading period
+    // This prevents manipulation after TWAP starts recording prices
+    validate_sponsorship_timing(proposal, clock);
+
     // Set threshold to zero
     let zero_threshold = futarchy_types::signed::from_u64(0);
 
@@ -230,6 +239,53 @@ public(package) fun refund_sponsorship_on_eviction<AssetType, StableType>(
 // This includes PREMARKET proposals (queue evictions) since sponsorship is now allowed at any time before FINALIZED
 // Queue managers should call this function when evicting proposals to ensure sponsor quota is properly refunded
 
+// === Internal Helper Functions ===
+
+/// Validates that sponsorship is being applied before the TWAP delay has passed in trading period
+/// This prevents sponsors from manipulating the threshold after price discovery has begun
+///
+/// SAFETY: Sponsorship is allowed:
+/// - Anytime in PREMARKET or REVIEW states (before trading begins)
+/// - During TRADING state, but ONLY before (trading_start + twap_start_delay)
+///
+/// After the TWAP delay period, the TWAP oracle begins recording prices, so the threshold
+/// must be locked to prevent manipulation
+fun validate_sponsorship_timing<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    clock: &Clock,
+) {
+    let state = proposal::get_state(proposal);
+
+    // STATE_PREMARKET (0) and STATE_REVIEW (1) - always allowed
+    if (state == 0 || state == 1) {
+        return
+    };
+
+    // STATE_TRADING (2) - check if TWAP delay has passed
+    if (state == 2) {
+        // Get market initialization time (when review period started)
+        let market_init_time = proposal::get_market_initialized_at(proposal);
+
+        // Get review period to calculate when trading started
+        let review_period = proposal::get_review_period_ms(proposal);
+        let trading_start = market_init_time + review_period;
+
+        // Get TWAP start delay
+        let twap_delay = proposal::get_twap_start_delay(proposal);
+
+        // Calculate when TWAP actually starts recording
+        let twap_start_time = trading_start + twap_delay;
+
+        // Current time
+        let current_time = clock.timestamp_ms();
+
+        // Cannot sponsor after TWAP has started
+        assert!(current_time < twap_start_time, ETwapDelayPassed);
+    };
+
+    // STATE_FINALIZED (3) is already blocked by earlier validation
+}
+
 // === View Functions ===
 
 /// Check if a user can sponsor a proposal
@@ -266,7 +322,22 @@ public fun can_sponsor_proposal<AssetType, StableType>(
         return (false, string::utf8(b"Proposal already finalized"))
     };
 
-    // Check 4: Has quota
+    // Check 4: Timing - cannot sponsor after TWAP delay in trading period
+    let state = proposal::get_state(proposal);
+    if (state == 2) { // STATE_TRADING
+        let market_init_time = proposal::get_market_initialized_at(proposal);
+        let review_period = proposal::get_review_period_ms(proposal);
+        let trading_start = market_init_time + review_period;
+        let twap_delay = proposal::get_twap_start_delay(proposal);
+        let twap_start_time = trading_start + twap_delay;
+        let current_time = clock.timestamp_ms();
+
+        if (current_time >= twap_start_time) {
+            return (false, string::utf8(b"TWAP delay has passed"))
+        };
+    };
+
+    // Check 5: Has quota
     let (has_quota, _remaining) = proposal_quota_registry::check_sponsor_quota_available(
         quota_registry,
         dao_id,
