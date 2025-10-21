@@ -143,8 +143,9 @@ and patara.app
 - [X] make launchpad just have max rasie amount nothing else, pro rata and max raise amount
 - [X] see if its easy to add new actions later loot at account framework and can drop disolution??
 - [X] simplify oracle actions??
-- [ ] cant subsidise after TWAP delay
-- [ ] subsidise reduce pre market time
+- [X] cant subsidise after TWAP delay
+
+
 
 
 1) dao needs to supside LPs during proposals ( use proposer fee)\
