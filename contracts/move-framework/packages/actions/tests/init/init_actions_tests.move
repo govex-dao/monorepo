@@ -5,7 +5,7 @@ use account_actions::currency;
 use account_actions::init_actions;
 use account_actions::vault;
 use account_actions::version;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use sui::clock::{Self, Clock};
@@ -54,8 +54,8 @@ fun start(): (Scenario, PackageRegistry, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -69,7 +69,7 @@ fun end(scenario: Scenario, extensions: PackageRegistry, clock: Clock) {
     ts::end(scenario);
 }
 
-fun create_unshared_account(extensions: &PackageRegistry, scenario: &mut Scenario): Account<Config> {
+fun create_unshared_account(extensions: &PackageRegistry, scenario: &mut Scenario): Account {
     let deps = deps::new_latest_extensions(
         extensions,
         vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
@@ -143,7 +143,7 @@ fun test_init_lock_treasury_cap() {
     );
 
     // Verify cap is locked
-    assert!(currency::has_cap<Config, INIT_ACTIONS_TESTS>(&account), 0);
+    assert!(currency::has_cap<INIT_ACTIONS_TESTS>(&account), 0);
 
     destroy(account);
     end(scenario, extensions, clock);
@@ -580,7 +580,7 @@ fun test_complete_dao_initialization() {
     );
 
     // Verify everything was set up
-    assert!(currency::has_cap<Config, INIT_ACTIONS_TESTS>(&account), 0);
+    assert!(currency::has_cap<INIT_ACTIONS_TESTS>(&account), 0);
     assert!(vault::has_vault(&account, b"treasury".to_string()), 1);
     assert!(vault::has_vault(&account, b"Main Vault".to_string()), 2);
 

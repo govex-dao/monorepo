@@ -6,7 +6,7 @@ module account_actions::vesting_tests;
 
 use account_actions::version;
 use account_actions::vesting;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use account_protocol::intent_interface;
@@ -37,7 +37,7 @@ public struct VestingIntent() has copy, drop;
 
 // === Helper Functions ===
 
-fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     package_registry::init_for_testing(scenario.ctx());
@@ -46,8 +46,8 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -60,7 +60,7 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -100,7 +100,7 @@ fun test_vesting_basic() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -121,7 +121,7 @@ fun test_vesting_basic() {
 
     // Execute the vesting action
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -176,7 +176,7 @@ fun test_vesting_with_cliff() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -197,7 +197,7 @@ fun test_vesting_with_cliff() {
 
     // Execute the vesting action
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -268,7 +268,7 @@ fun test_vesting_claim() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -288,7 +288,7 @@ fun test_vesting_claim() {
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -377,7 +377,7 @@ fun test_vesting_pause_resume() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -397,7 +397,7 @@ fun test_vesting_pause_resume() {
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -473,7 +473,7 @@ fun test_vesting_cancel() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -493,7 +493,7 @@ fun test_vesting_cancel() {
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         create_key,
         &clock,
         version::current(),
@@ -549,7 +549,7 @@ fun test_vesting_cancel() {
 
     // Execute cancellation at 50% through vesting period
     clock.set_for_testing(1500);
-    let (cancel_outcome, mut cancel_executable) = account.create_executable<_, Outcome, _>(
+    let (cancel_outcome, mut cancel_executable) = account.create_executable<Config, Outcome, Witness>(
         cancel_key,
         &clock,
         version::current(),
@@ -612,7 +612,7 @@ fun test_vesting_multiple_beneficiaries() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -632,7 +632,7 @@ fun test_vesting_multiple_beneficiaries() {
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -718,7 +718,7 @@ fun test_vesting_transfer_ownership() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -738,7 +738,7 @@ fun test_vesting_transfer_ownership() {
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -816,7 +816,7 @@ fun test_vesting_emergency_freeze() {
         VestingIntent(),
         scenario.ctx(),
         |intent, iw| {
-            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+            vesting::new_vesting<Outcome, SUI, VestingIntent>(
                 intent,
                 account_ref,
                 vector[RECIPIENT],
@@ -836,7 +836,7 @@ fun test_vesting_emergency_freeze() {
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),

@@ -3,7 +3,7 @@ module account_actions::transfer_tests;
 
 use account_actions::transfer as acc_transfer;
 use account_actions::version;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use account_protocol::intent_interface;
@@ -37,7 +37,7 @@ public struct TransferIntent() has copy, drop;
 
 // === Helpers ===
 
-fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     package_registry::init_for_testing(scenario.ctx());
@@ -46,8 +46,8 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -60,7 +60,7 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -99,7 +99,7 @@ fun test_transfer_basic() {
     );
 
     // Create executable
-    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+    let (outcome_result, mut executable) = account.create_executable<Config, Outcome, _>(
         key,
         &clock,
         version::current(),
@@ -158,7 +158,7 @@ fun test_transfer_to_sender() {
     );
 
     // Create executable (OWNER is the sender)
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, _>(
         key,
         &clock,
         version::current(),
@@ -218,7 +218,7 @@ fun test_multiple_transfers() {
         },
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, _>(
         key,
         &clock,
         version::current(),
@@ -285,7 +285,7 @@ fun test_transfer_different_types() {
         },
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, _>(
         key,
         &clock,
         version::current(),
@@ -364,7 +364,7 @@ fun test_delete_transfer_action() {
     );
 
     // Execute the intent to consume the execution time
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, _>(
         key,
         &clock,
         version::current(),
@@ -377,7 +377,7 @@ fun test_delete_transfer_action() {
     account.confirm_execution(executable);
 
     // Now the intent has no more execution times and can be destroyed
-    let mut expired = account.destroy_empty_intent<_, Outcome>(key, scenario.ctx());
+    let mut expired = account.destroy_empty_intent<Outcome>(key, scenario.ctx());
     acc_transfer::delete_transfer(&mut expired);
     expired.destroy_empty();
 
@@ -414,7 +414,7 @@ fun test_transfer_mixed_with_sender() {
         },
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, _>(
         key,
         &clock,
         version::current(),

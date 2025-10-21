@@ -4,7 +4,7 @@ module account_actions::access_control_intents_tests;
 use account_actions::access_control;
 use account_actions::access_control_intents;
 use account_actions::version;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use account_protocol::intents;
@@ -32,7 +32,7 @@ public struct TestCap has key, store {
 
 // === Helpers ===
 
-fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     package_registry::init_for_testing(scenario.ctx());
@@ -41,8 +41,8 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -55,7 +55,7 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -73,8 +73,8 @@ fun test_request_borrow_cap_basic() {
         id: object::new(scenario.ctx()),
         value: 42,
     };
-    let auth = account.new_auth(version::current(), Witness());
-    access_control::lock_cap(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
 
     // Create a borrow cap intent
     let key = b"test_borrow".to_string();
@@ -88,8 +88,8 @@ fun test_request_borrow_cap_basic() {
         scenario.ctx(),
     );
 
-    let auth2 = account.new_auth(version::current(), Witness());
-    access_control_intents::request_borrow_cap<_, _, TestCap>(
+    let auth2 = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control_intents::request_borrow_cap<Config, Outcome, TestCap>(
         auth2,
         &mut account,
         params,
@@ -98,7 +98,7 @@ fun test_request_borrow_cap_basic() {
     );
 
     // Execute the intent
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -147,10 +147,10 @@ fun test_request_borrow_cap_without_lock() {
         scenario.ctx(),
     );
 
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
 
     // This should abort with ENoLock
-    access_control_intents::request_borrow_cap<_, _, TestCap>(
+    access_control_intents::request_borrow_cap<Config, Outcome, TestCap>(
         auth,
         &mut account,
         params,
@@ -170,8 +170,8 @@ fun test_execute_borrow_and_return_separately() {
         id: object::new(scenario.ctx()),
         value: 100,
     };
-    let auth = account.new_auth(version::current(), Witness());
-    access_control::lock_cap(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
 
     let key = b"test_separate".to_string();
     let outcome = Outcome {};
@@ -184,8 +184,8 @@ fun test_execute_borrow_and_return_separately() {
         scenario.ctx(),
     );
 
-    let auth2 = account.new_auth(version::current(), Witness());
-    access_control_intents::request_borrow_cap<_, _, TestCap>(
+    let auth2 = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control_intents::request_borrow_cap<Config, Outcome, TestCap>(
         auth2,
         &mut account,
         params,
@@ -194,7 +194,7 @@ fun test_execute_borrow_and_return_separately() {
     );
 
     // Create executable
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -233,8 +233,8 @@ fun test_multiple_borrow_return_cycles() {
         id: object::new(scenario.ctx()),
         value: 999,
     };
-    let auth = account.new_auth(version::current(), Witness());
-    access_control::lock_cap(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
 
     // Create first intent
     let key1 = b"cycle1".to_string();
@@ -247,8 +247,8 @@ fun test_multiple_borrow_return_cycles() {
         &clock,
         scenario.ctx(),
     );
-    let auth1 = account.new_auth(version::current(), Witness());
-    access_control_intents::request_borrow_cap<_, _, TestCap>(
+    let auth1 = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control_intents::request_borrow_cap<Config, Outcome, TestCap>(
         auth1,
         &mut account,
         params1,
@@ -257,7 +257,7 @@ fun test_multiple_borrow_return_cycles() {
     );
 
     // Execute first cycle
-    let (_, mut exec1) = account.create_executable<_, Outcome, _>(
+    let (_, mut exec1) = account.create_executable<Config, Outcome, Witness>(
         key1,
         &clock,
         version::current(),
@@ -286,8 +286,8 @@ fun test_multiple_borrow_return_cycles() {
         &clock,
         scenario.ctx(),
     );
-    let auth2 = account.new_auth(version::current(), Witness());
-    access_control_intents::request_borrow_cap<_, _, TestCap>(
+    let auth2 = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control_intents::request_borrow_cap<Config, Outcome, TestCap>(
         auth2,
         &mut account,
         params2,
@@ -296,7 +296,7 @@ fun test_multiple_borrow_return_cycles() {
     );
 
     // Execute second cycle
-    let (_, mut exec2) = account.create_executable<_, Outcome, _>(
+    let (_, mut exec2) = account.create_executable<Config, Outcome, Witness>(
         key2,
         &clock,
         version::current(),

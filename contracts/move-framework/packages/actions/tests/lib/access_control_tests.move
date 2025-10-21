@@ -3,7 +3,7 @@ module account_actions::access_control_tests;
 
 use account_actions::access_control;
 use account_actions::version;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use account_protocol::intent_interface;
@@ -39,7 +39,7 @@ public struct AccessControlIntent() has copy, drop;
 
 // === Helpers ===
 
-fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     package_registry::init_for_testing(scenario.ctx());
@@ -48,8 +48,8 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -62,7 +62,7 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -82,8 +82,8 @@ fun test_lock_cap_basic() {
     };
 
     // Get auth and lock the capability
-    let auth = account.new_auth(version::current(), Witness());
-    access_control::lock_cap(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
 
     // Verify the cap is locked
     assert!(access_control::has_lock<Config, TestCap>(&account), 0);
@@ -101,8 +101,8 @@ fun test_borrow_and_return_cap() {
         id: object::new(scenario.ctx()),
         value: 100,
     };
-    let auth = account.new_auth(version::current(), Witness());
-    access_control::lock_cap(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
 
     // Create an intent with borrow and return actions
     let outcome = Outcome {};
@@ -129,7 +129,7 @@ fun test_borrow_and_return_cap() {
     );
 
     // Create executable
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -177,8 +177,8 @@ fun test_borrow_without_return_fails() {
         id: object::new(scenario.ctx()),
         value: 50,
     };
-    let auth = account.new_auth(version::current(), Witness());
-    access_control::lock_cap(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
 
     // Create an intent with ONLY borrow (no return) - this should fail
     let outcome = Outcome {};
@@ -205,7 +205,7 @@ fun test_borrow_without_return_fails() {
     );
 
     // Create executable
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -281,10 +281,10 @@ fun test_delete_borrow_action() {
         id: object::new(scenario.ctx()),
         value: 77,
     };
-    let auth = account.new_auth(version::current(), Witness());
-    access_control::lock_cap(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -308,7 +308,7 @@ fun test_delete_borrow_action() {
     account.confirm_execution(executable);
 
     // Now destroy the empty intent
-    let mut expired = account.destroy_empty_intent<_, Outcome>(key, scenario.ctx());
+    let mut expired = account.destroy_empty_intent<Outcome>(key, scenario.ctx());
     access_control::delete_borrow<TestCap>(&mut expired);
     access_control::delete_return<TestCap>(&mut expired);
     expired.destroy_empty();

@@ -3,7 +3,7 @@ module account_actions::currency_tests;
 
 use account_actions::currency;
 use account_actions::version;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use account_protocol::intent_interface;
@@ -37,7 +37,7 @@ public struct CurrencyIntent() has copy, drop;
 
 // === Helpers ===
 
-fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     package_registry::init_for_testing(scenario.ctx());
@@ -46,8 +46,8 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -60,7 +60,7 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -83,14 +83,14 @@ fun test_lock_cap_basic() {
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
 
     // Lock the cap with no max supply
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::none());
 
     // Verify the cap is locked
-    assert!(currency::has_cap<Config, SUI>(&account), 0);
+    assert!(currency::has_cap<SUI>(&account), 0);
 
     // Check rules
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(currency::can_mint(rules), 1);
     assert!(currency::can_burn(rules), 2);
     assert!(currency::total_minted(rules) == 0, 3);
@@ -106,10 +106,10 @@ fun test_lock_cap_with_max_supply() {
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
 
     // Lock the cap with max supply of 1_000_000
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::some(1_000_000));
 
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(currency::max_supply(rules) == option::some(1_000_000), 0);
 
     end(scenario, extensions, account, clock);
@@ -122,7 +122,7 @@ fun test_mint_and_burn_basic() {
 
     // Setup: Lock treasury cap
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::none());
 
     // Create intent with mint action
@@ -149,7 +149,7 @@ fun test_mint_and_burn_basic() {
     );
 
     // Execute mint
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -157,7 +157,7 @@ fun test_mint_and_burn_basic() {
         scenario.ctx(),
     );
 
-    let minted_coin = currency::do_mint<Config, Outcome, SUI, _>(
+    let minted_coin = currency::do_mint<Outcome, SUI, CurrencyIntent>(
         &mut executable,
         &mut account,
         version::current(),
@@ -170,7 +170,7 @@ fun test_mint_and_burn_basic() {
     account.confirm_execution(executable);
 
     // Verify total_minted updated
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(currency::total_minted(rules) == 100, 1);
 
     // Now test burn
@@ -196,7 +196,7 @@ fun test_mint_and_burn_basic() {
         },
     );
 
-    let (_, mut executable2) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable2) = account.create_executable<Config, Outcome, Witness>(
         key2,
         &clock,
         version::current(),
@@ -204,7 +204,7 @@ fun test_mint_and_burn_basic() {
         scenario.ctx(),
     );
 
-    currency::do_burn<Config, Outcome, SUI, _>(
+    currency::do_burn<Outcome, SUI, CurrencyIntent>(
         &mut executable2,
         &mut account,
         minted_coin,
@@ -215,7 +215,7 @@ fun test_mint_and_burn_basic() {
     account.confirm_execution(executable2);
 
     // Verify total_burned updated
-    let rules2 = currency::borrow_rules<Config, SUI>(&account);
+    let rules2 = currency::borrow_rules<SUI>(&account);
     assert!(currency::total_burned(rules2) == 100, 2);
 
     end(scenario, extensions, account, clock);
@@ -229,7 +229,7 @@ fun test_mint_exceeds_max_supply() {
 
     // Lock cap with max supply of 50
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::some(50));
 
     // Try to mint 100 (exceeds max supply)
@@ -255,7 +255,7 @@ fun test_mint_exceeds_max_supply() {
         },
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -264,7 +264,7 @@ fun test_mint_exceeds_max_supply() {
     );
 
     // This should abort with EMaxSupply
-    let coin = currency::do_mint<Config, Outcome, SUI, _>(
+    let coin = currency::do_mint<Outcome, SUI, CurrencyIntent>(
         &mut executable,
         &mut account,
         version::current(),
@@ -284,7 +284,7 @@ fun test_disable_permissions() {
 
     // Lock treasury cap
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::none());
 
     // Create intent to disable mint and burn
@@ -319,7 +319,7 @@ fun test_disable_permissions() {
         },
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
@@ -327,7 +327,7 @@ fun test_disable_permissions() {
         scenario.ctx(),
     );
 
-    currency::do_disable<Config, Outcome, SUI, _>(
+    currency::do_disable<Outcome, SUI, CurrencyIntent>(
         &mut executable,
         &mut account,
         version::current(),
@@ -337,7 +337,7 @@ fun test_disable_permissions() {
     account.confirm_execution(executable);
 
     // Verify mint and burn are disabled
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(!currency::can_mint(rules), 0);
     assert!(!currency::can_burn(rules), 1);
     assert!(currency::can_update_symbol(rules), 2); // Still enabled
@@ -353,7 +353,7 @@ fun test_mint_when_disabled() {
 
     // Lock and disable mint
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::none());
 
     let key1 = b"disable".to_string();
@@ -379,14 +379,14 @@ fun test_mint_when_disabled() {
         },
     );
 
-    let (_, mut exec1) = account.create_executable<_, Outcome, _>(
+    let (_, mut exec1) = account.create_executable<Config, Outcome, Witness>(
         key1,
         &clock,
         version::current(),
         Witness(),
         scenario.ctx(),
     );
-    currency::do_disable<Config, Outcome, SUI, _>(
+    currency::do_disable<Outcome, SUI, CurrencyIntent>(
         &mut exec1,
         &mut account,
         version::current(),
@@ -417,7 +417,7 @@ fun test_mint_when_disabled() {
         },
     );
 
-    let (_, mut exec2) = account.create_executable<_, Outcome, _>(
+    let (_, mut exec2) = account.create_executable<Config, Outcome, Witness>(
         key2,
         &clock,
         version::current(),
@@ -426,7 +426,7 @@ fun test_mint_when_disabled() {
     );
 
     // This should abort with EMintDisabled
-    let coin = currency::do_mint<Config, Outcome, SUI, _>(
+    let coin = currency::do_mint<Outcome, SUI, CurrencyIntent>(
         &mut exec2,
         &mut account,
         version::current(),
@@ -445,7 +445,7 @@ fun test_public_burn() {
 
     // Lock treasury cap with burn enabled
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::none());
 
     // Mint a coin first
@@ -472,14 +472,14 @@ fun test_public_burn() {
         },
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
         key,
         &clock,
         version::current(),
         Witness(),
         scenario.ctx(),
     );
-    let coin = currency::do_mint<Config, Outcome, SUI, _>(
+    let coin = currency::do_mint<Outcome, SUI, CurrencyIntent>(
         &mut executable,
         &mut account,
         version::current(),
@@ -489,10 +489,10 @@ fun test_public_burn() {
     account.confirm_execution(executable);
 
     // Now anyone can burn it using public_burn
-    currency::public_burn(&mut account, coin);
+    currency::public_burn<Config, SUI>(&mut account, coin);
 
     // Verify burn was recorded
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(currency::total_burned(rules) == 200, 0);
 
     end(scenario, extensions, account, clock);
@@ -509,10 +509,10 @@ fun test_lock_cap_unshared() {
     currency::do_lock_cap_unshared(&mut account, treasury_cap);
 
     // Verify the cap is locked
-    assert!(currency::has_cap<Config, SUI>(&account), 0);
+    assert!(currency::has_cap<SUI>(&account), 0);
 
     // Check default rules
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(currency::can_mint(rules), 1);
     assert!(currency::can_burn(rules), 2);
     assert!(currency::max_supply(rules).is_none(), 3);
@@ -529,10 +529,10 @@ fun test_mint_unshared() {
     currency::do_lock_cap_unshared(&mut account, treasury_cap);
 
     // Mint directly to recipient
-    currency::do_mint_unshared<Config, SUI>(&mut account, 500, RECIPIENT, scenario.ctx());
+    currency::do_mint_unshared<SUI>(&mut account, 500, RECIPIENT, scenario.ctx());
 
     // Verify total_minted
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(currency::total_minted(rules) == 500, 0);
 
     // Verify recipient received coin
@@ -554,12 +554,12 @@ fun test_mint_to_coin_unshared() {
     currency::do_lock_cap_unshared(&mut account, treasury_cap);
 
     // Mint and get coin object
-    let coin = currency::do_mint_to_coin_unshared<Config, SUI>(&mut account, 750, scenario.ctx());
+    let coin = currency::do_mint_to_coin_unshared<SUI>(&mut account, 750, scenario.ctx());
 
     assert!(coin.value() == 750, 0);
 
     // Verify total_minted
-    let rules = currency::borrow_rules<Config, SUI>(&account);
+    let rules = currency::borrow_rules<SUI>(&account);
     assert!(currency::total_minted(rules) == 750, 1);
 
     destroy(coin);
@@ -573,7 +573,7 @@ fun test_burn_wrong_value() {
 
     // Setup
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::none());
 
     // Mint a coin
@@ -598,14 +598,14 @@ fun test_burn_wrong_value() {
             currency::new_mint<_, SUI, _>(intent, 100, iw);
         },
     );
-    let (_, mut exec1) = account.create_executable<_, Outcome, _>(
+    let (_, mut exec1) = account.create_executable<Config, Outcome, Witness>(
         key1,
         &clock,
         version::current(),
         Witness(),
         scenario.ctx(),
     );
-    let coin = currency::do_mint<Config, Outcome, SUI, _>(
+    let coin = currency::do_mint<Outcome, SUI, CurrencyIntent>(
         &mut exec1,
         &mut account,
         version::current(),
@@ -635,7 +635,7 @@ fun test_burn_wrong_value() {
             currency::new_burn<_, SUI, _>(intent, 50, iw);
         },
     );
-    let (_, mut exec2) = account.create_executable<_, Outcome, _>(
+    let (_, mut exec2) = account.create_executable<Config, Outcome, Witness>(
         key2,
         &clock,
         version::current(),
@@ -644,7 +644,7 @@ fun test_burn_wrong_value() {
     );
 
     // This should abort with EWrongValue
-    currency::do_burn<Config, Outcome, SUI, _>(
+    currency::do_burn<Outcome, SUI, CurrencyIntent>(
         &mut exec2,
         &mut account,
         coin,
@@ -662,7 +662,7 @@ fun test_delete_actions() {
 
     // Create intents with all action types
     let treasury_cap = create_test_treasury_cap<SUI>(scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     currency::lock_cap(auth, &mut account, treasury_cap, option::none());
 
     let outcome = Outcome {};
@@ -733,14 +733,14 @@ fun test_delete_actions() {
 
     // Execute each to consume execution time
     // Execute mint first before disable
-    let (_, mut e2) = account.create_executable<_, Outcome, _>(
+    let (_, mut e2) = account.create_executable<Config, Outcome, Witness>(
         key2,
         &clock,
         version::current(),
         Witness(),
         scenario.ctx(),
     );
-    let c = currency::do_mint<Config, Outcome, SUI, _>(
+    let c = currency::do_mint<Outcome, SUI, CurrencyIntent>(
         &mut e2,
         &mut account,
         version::current(),
@@ -749,14 +749,14 @@ fun test_delete_actions() {
     );
     account.confirm_execution(e2);
 
-    let (_, mut e3) = account.create_executable<_, Outcome, _>(
+    let (_, mut e3) = account.create_executable<Config, Outcome, Witness>(
         key3,
         &clock,
         version::current(),
         Witness(),
         scenario.ctx(),
     );
-    currency::do_burn<Config, Outcome, SUI, _>(
+    currency::do_burn<Outcome, SUI, CurrencyIntent>(
         &mut e3,
         &mut account,
         c,
@@ -765,14 +765,14 @@ fun test_delete_actions() {
     );
     account.confirm_execution(e3);
 
-    let (_, mut e1) = account.create_executable<_, Outcome, _>(
+    let (_, mut e1) = account.create_executable<Config, Outcome, Witness>(
         key1,
         &clock,
         version::current(),
         Witness(),
         scenario.ctx(),
     );
-    currency::do_disable<Config, Outcome, SUI, _>(
+    currency::do_disable<Outcome, SUI, CurrencyIntent>(
         &mut e1,
         &mut account,
         version::current(),
@@ -781,15 +781,15 @@ fun test_delete_actions() {
     account.confirm_execution(e1);
 
     // Now delete all expired intents
-    let mut exp1 = account.destroy_empty_intent<_, Outcome>(key1, scenario.ctx());
+    let mut exp1 = account.destroy_empty_intent<Outcome>(key1, scenario.ctx());
     currency::delete_disable<SUI>(&mut exp1);
     exp1.destroy_empty();
 
-    let mut exp2 = account.destroy_empty_intent<_, Outcome>(key2, scenario.ctx());
+    let mut exp2 = account.destroy_empty_intent<Outcome>(key2, scenario.ctx());
     currency::delete_mint<SUI>(&mut exp2);
     exp2.destroy_empty();
 
-    let mut exp3 = account.destroy_empty_intent<_, Outcome>(key3, scenario.ctx());
+    let mut exp3 = account.destroy_empty_intent<Outcome>(key3, scenario.ctx());
     currency::delete_burn<SUI>(&mut exp3);
     exp3.destroy_empty();
 

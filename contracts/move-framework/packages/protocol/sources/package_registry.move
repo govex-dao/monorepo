@@ -530,13 +530,14 @@ public fun new_admin_cap_for_testing(ctx: &mut TxContext): PackageAdminCap {
 #[test_only]
 public fun add_for_testing(
     registry: &mut PackageRegistry,
+    cap: &PackageAdminCap,
     name: String,
     addr: address,
     version: u64,
 ) {
     add_package(
         registry,
-        &PackageAdminCap { id: object::new_uid_from_hash(name.as_bytes()) },
+        cap,
         name,
         addr,
         version,
@@ -547,10 +548,10 @@ public fun add_for_testing(
 }
 
 #[test_only]
-public fun remove_for_testing(registry: &mut PackageRegistry, name: String) {
+public fun remove_for_testing(registry: &mut PackageRegistry, cap: &PackageAdminCap, name: String) {
     remove_package(
         registry,
-        &PackageAdminCap { id: object::new_uid_from_hash(name.as_bytes()) },
+        cap,
         name,
     );
 }
@@ -558,13 +559,14 @@ public fun remove_for_testing(registry: &mut PackageRegistry, name: String) {
 #[test_only]
 public fun update_for_testing(
     registry: &mut PackageRegistry,
+    cap: &PackageAdminCap,
     name: String,
     addr: address,
     version: u64,
 ) {
     update_package_version(
         registry,
-        &PackageAdminCap { id: object::new_uid_from_hash(name.as_bytes()) },
+        cap,
         name,
         addr,
         version,

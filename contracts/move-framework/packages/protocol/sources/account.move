@@ -986,7 +986,7 @@ fun test_borrow_managed_data_doesnt_exist() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_data<_, TestKey, TestData>(&account, key, version::current());
+    borrow_managed_data<TestKey, TestData>(&account, key, version::current());
     destroy(account);
 }
 
@@ -998,7 +998,7 @@ fun test_borrow_managed_data_mut_doesnt_exist() {
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_data_mut<_, TestKey, TestData>(&mut account, key, version::current());
+    borrow_managed_data_mut<TestKey, TestData>(&mut account, key, version::current());
     destroy(account);
 }
 
@@ -1010,7 +1010,7 @@ fun test_remove_managed_data_doesnt_exist() {
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    remove_managed_data<_, TestKey, TestData>(&mut account, key, version::current());
+    remove_managed_data<TestKey, TestData>(&mut account, key, version::current());
     destroy(account);
 }
 
@@ -1029,15 +1029,16 @@ fun test_managed_asset_flow() {
     assert!(has_managed_asset(&account, key), 0);
 
     // Test borrow
-    let borrowed_asset = borrow_managed_asset<_, TestKey, TestAsset>(
+    let borrowed_asset = borrow_managed_asset<TestKey, TestAsset>(
         &account,
         key,
         version::current(),
     );
-    assert_eq(object::id(borrowed_asset), asset_id);
+    let borrowed_asset_id = object::id(borrowed_asset);
+    assert_eq(borrowed_asset_id, asset_id);
 
     // Test remove
-    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(
+    let removed_asset = remove_managed_asset<TestKey, TestAsset>(
         &mut account,
         key,
         version::current(),
@@ -1095,7 +1096,7 @@ fun test_borrow_managed_asset_doesnt_exist() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_asset<_, TestKey, TestAsset>(&account, key, version::current());
+    borrow_managed_asset<TestKey, TestAsset>(&account, key, version::current());
     destroy(account);
 }
 
@@ -1107,7 +1108,7 @@ fun test_borrow_managed_asset_mut_doesnt_exist() {
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_asset_mut<_, TestKey, TestAsset>(&mut account, key, version::current());
+    borrow_managed_asset_mut<TestKey, TestAsset>(&mut account, key, version::current());
     destroy(account);
 }
 
@@ -1119,7 +1120,7 @@ fun test_remove_managed_asset_doesnt_exist() {
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(
+    let removed_asset = remove_managed_asset<TestKey, TestAsset>(
         &mut account,
         key,
         version::current(),
@@ -1134,7 +1135,7 @@ fun test_new_auth() {
     let deps = deps::new_for_testing();
 
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    let auth = new_auth(&account, version::current(), TestWitness());
+    let auth = new_auth<TestConfig, TestWitness>(&account, version::current(), TestWitness());
 
     assert_eq(auth.account_addr, account.addr());
     destroy(account);
@@ -1161,7 +1162,7 @@ fun test_config_access() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
 
     // Should not abort - just testing access
-    config(&account);
+    config<TestConfig>(&account);
     destroy(account);
 }
 
@@ -1173,7 +1174,7 @@ fun test_assert_is_config_module_correct_witness() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
 
     // Should not abort
-    assert_is_config_module(&account, TestWitness());
+    assert_is_config_module<TestConfig, TestWitness>(&account, TestWitness());
     destroy(account);
 }
 

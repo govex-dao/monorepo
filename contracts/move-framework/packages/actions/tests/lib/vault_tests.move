@@ -3,7 +3,7 @@ module account_actions::vault_tests;
 
 use account_actions::vault;
 use account_actions::version;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use sui::clock::{Self, Clock};
@@ -25,7 +25,7 @@ public struct Config has copy, drop, store {}
 
 // === Helpers ===
 
-fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     package_registry::init_for_testing(scenario.ctx());
@@ -34,8 +34,8 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -48,7 +48,7 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -63,15 +63,15 @@ fun test_open_close_vault() {
     let vault_name = b"test_vault".to_string();
 
     // Open a vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
 
     // Verify vault exists
     assert!(vault::has_vault(&account, vault_name));
 
     // Close the vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::close(auth, &mut account, vault_name);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::close<Config>(auth, &mut account, vault_name);
 
     // Verify vault no longer exists
     assert!(!vault::has_vault(&account, vault_name));
@@ -85,13 +85,13 @@ fun test_deposit_and_withdraw() {
     let vault_name = b"test_vault".to_string();
 
     // Open vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
 
     // Deposit coins
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     let coin = coin::mint_for_testing<SUI>(1000, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin);
 
     // Check vault has the coins
     let vault_ref = vault::borrow_vault(&account, vault_name);
@@ -109,17 +109,17 @@ fun test_create_and_withdraw_from_stream() {
     let beneficiary = @0xBEEF;
 
     // Setup vault with funds
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     let coin = coin::mint_for_testing<SUI>(1000, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin);
 
     // Create stream
     let start_time = clock.timestamp_ms();
     let end_time = start_time + 100_000;
-    let auth = account.new_auth(version::current(), Witness());
-    let stream_id = vault::create_stream<_, SUI>(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let stream_id = vault::create_stream<Config, SUI>(
         auth,
         &mut account,
         vault_name,
@@ -142,12 +142,12 @@ fun test_create_and_withdraw_from_stream() {
     clock.increment_for_testing(50_000);
 
     // Calculate claimable
-    let claimable = vault::calculate_claimable(&account, vault_name, stream_id, &clock);
+    let claimable = vault::calculate_claimable<Config>(&account, vault_name, stream_id, &clock);
     assert!(claimable == 500);
 
     // Withdraw from stream (must be beneficiary)
     scenario.next_tx(beneficiary);
-    let withdrawn_coin = vault::withdraw_from_stream<_, SUI>(
+    let withdrawn_coin = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         vault_name,
         stream_id,
@@ -169,17 +169,17 @@ fun test_withdraw_before_start() {
     let beneficiary = @0xBEEF;
 
     // Setup vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     let coin = coin::mint_for_testing<SUI>(1000, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin);
 
     // Create stream that starts in the future
     let start_time = clock.timestamp_ms() + 10_000;
     let end_time = start_time + 100_000;
-    let auth = account.new_auth(version::current(), Witness());
-    let stream_id = vault::create_stream<_, SUI>(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let stream_id = vault::create_stream<Config, SUI>(
         auth,
         &mut account,
         vault_name,
@@ -197,7 +197,7 @@ fun test_withdraw_before_start() {
 
     // Try to withdraw before start - should fail
     scenario.next_tx(beneficiary);
-    let coin = vault::withdraw_from_stream<_, SUI>(
+    let coin = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         vault_name,
         stream_id,
@@ -218,18 +218,18 @@ fun test_withdraw_before_cliff() {
     let beneficiary = @0xBEEF;
 
     // Setup vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     let coin = coin::mint_for_testing<SUI>(1000, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin);
 
     // Create stream with cliff
     let start_time = clock.timestamp_ms();
     let end_time = start_time + 100_000;
     let cliff_time = start_time + 50_000;
-    let auth = account.new_auth(version::current(), Witness());
-    let stream_id = vault::create_stream<_, SUI>(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let stream_id = vault::create_stream<Config, SUI>(
         auth,
         &mut account,
         vault_name,
@@ -250,7 +250,7 @@ fun test_withdraw_before_cliff() {
 
     // Try to withdraw before cliff - should fail
     scenario.next_tx(beneficiary);
-    let coin = vault::withdraw_from_stream<_, SUI>(
+    let coin = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         vault_name,
         stream_id,
@@ -270,17 +270,17 @@ fun test_cancel_stream() {
     let beneficiary = @0xBEEF;
 
     // Setup vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     let coin = coin::mint_for_testing<SUI>(1000, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin);
 
     // Create stream
     let start_time = clock.timestamp_ms();
     let end_time = start_time + 100_000;
-    let auth = account.new_auth(version::current(), Witness());
-    let stream_id = vault::create_stream<_, SUI>(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let stream_id = vault::create_stream<Config, SUI>(
         auth,
         &mut account,
         vault_name,
@@ -300,8 +300,8 @@ fun test_cancel_stream() {
     clock.increment_for_testing(30_000);
 
     // Cancel stream
-    let auth = account.new_auth(version::current(), Witness());
-    let (refund_coin, refund_amount) = vault::cancel_stream<_, SUI>(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let (refund_coin, refund_amount) = vault::cancel_stream<Config, SUI>(
         auth,
         &mut account,
         vault_name,
@@ -329,17 +329,17 @@ fun test_withdrawal_limit() {
     let beneficiary = @0xBEEF;
 
     // Setup vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     let coin = coin::mint_for_testing<SUI>(1000, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin);
 
     // Create stream with low max_per_withdrawal
     let start_time = clock.timestamp_ms();
     let end_time = start_time + 100_000;
-    let auth = account.new_auth(version::current(), Witness());
-    let stream_id = vault::create_stream<_, SUI>(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let stream_id = vault::create_stream<Config, SUI>(
         auth,
         &mut account,
         vault_name,
@@ -360,7 +360,7 @@ fun test_withdrawal_limit() {
 
     // Try to withdraw more than limit - should fail
     scenario.next_tx(beneficiary);
-    let coin = vault::withdraw_from_stream<_, SUI>(
+    let coin = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         vault_name,
         stream_id,
@@ -381,17 +381,17 @@ fun test_min_interval() {
     let beneficiary = @0xBEEF;
 
     // Setup vault
-    let auth = account.new_auth(version::current(), Witness());
-    vault::open(auth, &mut account, vault_name, scenario.ctx());
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     let coin = coin::mint_for_testing<SUI>(1000, scenario.ctx());
-    vault::deposit(auth, &mut account, vault_name, coin);
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin);
 
     // Create stream with min interval
     let start_time = clock.timestamp_ms();
     let end_time = start_time + 100_000;
-    let auth = account.new_auth(version::current(), Witness());
-    let stream_id = vault::create_stream<_, SUI>(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let stream_id = vault::create_stream<Config, SUI>(
         auth,
         &mut account,
         vault_name,
@@ -412,7 +412,7 @@ fun test_min_interval() {
 
     // First withdrawal
     scenario.next_tx(beneficiary);
-    let coin1 = vault::withdraw_from_stream<_, SUI>(
+    let coin1 = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         vault_name,
         stream_id,
@@ -423,7 +423,7 @@ fun test_min_interval() {
     destroy(coin1);
 
     // Try to withdraw again immediately - should fail
-    let coin2 = vault::withdraw_from_stream<_, SUI>(
+    let coin2 = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         vault_name,
         stream_id,

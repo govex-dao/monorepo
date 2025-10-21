@@ -499,7 +499,7 @@ public entry fun crank_recombine_and_transition<AssetType, StableType>(
 
 #[test_only]
 public fun get_liquidity_for_proposal<AssetType, StableType>(
-    escrow: &futarchy_markets_core::coin_escrow::TokenEscrow<AssetType, StableType>,
+    escrow: &futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
 ): vector<u64> {
     let market_state = escrow.get_market_state();
     let pools = futarchy_markets_primitives::market_state::borrow_amm_pools(market_state);

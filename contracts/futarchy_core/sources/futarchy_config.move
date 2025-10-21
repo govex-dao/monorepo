@@ -936,6 +936,7 @@ public fun new_with_package_registry(
         vector[
             b"AccountProtocol".to_string(),
             b"FutarchyCore".to_string(),              // Config and version witness
+            b"AccountActions".to_string(),            // Framework actions (currency, vault, etc.)
             b"FutarchyActions".to_string(),           // Config, liquidity, quota actions
             b"FutarchyGovernanceActions".to_string(), // Admin + account extensibility
             b"FutarchyOracleActions".to_string(),     // Oracle management actions

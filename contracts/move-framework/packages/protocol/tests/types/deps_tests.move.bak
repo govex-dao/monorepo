@@ -43,7 +43,6 @@ fun test_deps_new_and_getters() {
     deps.check(witness);
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -80,7 +79,6 @@ fun test_deps_new_latest_extensions() {
     deps.check(witness);
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -109,7 +107,6 @@ fun test_deps_add_unverified_allowed() {
     assert!(deps.unverified_allowed());
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -133,7 +130,6 @@ fun test_error_deps_not_same_length() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -157,7 +153,6 @@ fun test_error_deps_not_same_length_bis() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -181,7 +176,6 @@ fun test_error_deps_missing_account_protocol() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -205,7 +199,6 @@ fun test_error_deps_missing_account_protocol_first_element() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -234,7 +227,6 @@ fun test_error_deps_add_not_extension_unverified_not_allowed() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -262,7 +254,6 @@ fun test_error_deps_add_name_already_exists() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -290,7 +281,6 @@ fun test_error_deps_add_addr_already_exists() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -316,7 +306,6 @@ fun test_error_assert_is_dep() {
     deps.check(witness);
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -341,7 +330,6 @@ fun test_error_name_not_found() {
     deps.get_by_name(b"Other".to_string());
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -366,7 +354,6 @@ fun test_error_addr_not_found() {
     deps.get_by_addr(@0xA);
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -387,7 +374,6 @@ fun test_error_new_latest_misses_account_protocol() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -408,7 +394,6 @@ fun test_error_new_latest_adds_account_protocol_twice() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -433,7 +418,6 @@ fun test_error_new_inner_not_same_length() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -458,7 +442,6 @@ fun test_error_new_inner_not_same_length_bis() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -483,7 +466,6 @@ fun test_error_new_inner_missing_account_protocol() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -508,7 +490,6 @@ fun test_error_new_inner_missing_account_protocol_first_element() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -533,7 +514,6 @@ fun test_error_new_inner_missing_account_config() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -572,7 +552,6 @@ fun test_error_new_inner_add_not_extension_unverified_not_allowed() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -601,7 +580,6 @@ fun test_error_new_inner_add_name_already_exists() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -630,7 +608,6 @@ fun test_error_new_inner_add_addr_already_exists() {
     );
 
     destroy(cap);
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -673,7 +650,6 @@ fun test_deps_scalability_many_deps() {
     let dep = deps.get_by_name(b"ScallopLending".to_string());
     assert!(dep.addr() == @0x3);
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -707,7 +683,6 @@ fun test_deps_duplicate_detection_vecset() {
     assert!(deps.contains_name(b"Package3".to_string()));
     assert!(deps.contains_addr(@0x12));
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -736,7 +711,6 @@ fun test_deps_duplicate_name_detection() {
         vector[1, 1, 1, 1],
     );
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -765,7 +739,6 @@ fun test_deps_duplicate_addr_detection() {
         vector[1, 1, 1, 1],
     );
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -802,7 +775,6 @@ fun test_deps_get_by_index() {
     assert!(dep2.addr() == @0x99);
     assert!(dep2.version() == 2);
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -833,7 +805,6 @@ fun test_deps_new_latest_with_vecset() {
     let protocol = deps.get_by_name(b"AccountProtocol".to_string());
     assert!(protocol.addr() == @account_protocol);
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -877,7 +848,6 @@ fun test_deps_new_inner_many_deps() {
     assert!(deps2.length() == 7);
     assert!(deps2.unverified_allowed() == true); // Should inherit from deps1
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -915,7 +885,6 @@ fun test_deps_new_inner_duplicate_in_middle() {
         vector[1, 1, 1, 1, 1],
     );
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -943,7 +912,6 @@ fun test_deps_minimal_required() {
     assert!(deps.contains_name(b"AccountProtocol".to_string()));
     assert!(deps.contains_name(b"AccountConfig".to_string()));
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -976,7 +944,6 @@ fun test_deps_toggle_unverified() {
     deps.toggle_unverified_allowed_for_testing();
     assert!(!deps.unverified_allowed());
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }
@@ -1021,7 +988,6 @@ fun test_deps_version_upgrade() {
     let dep = deps_v2.get_by_name(b"CustomPackage".to_string());
     assert!(dep.version() == 2);
 
-    destroy(pkg_cap);
     destroy(extensions);
     ts::end(scenario);
 }

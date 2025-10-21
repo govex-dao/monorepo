@@ -1,7 +1,7 @@
 #[test_only]
 module futarchy_markets_operations::market_init_helpers_tests;
 
-use futarchy_markets_core::market_init_strategies;
+// use futarchy_markets_core::market_init_strategies; // Module doesn't exist
 use futarchy_markets_operations::market_init_helpers;
 
 // === Batch 1: Conditional Raise Config Tests ===

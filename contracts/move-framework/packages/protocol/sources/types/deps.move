@@ -299,9 +299,9 @@ public fun toggle_unverified_allowed_for_testing(deps: &mut Deps) {
 /// and version::current() from that package needs to be validated
 /// Includes @account_protocol, account_actions, and the custom config address as valid dependencies
 public fun new_for_testing_with_config(config_name: String, config_addr: address): Deps {
-    // Hard-coded address for account_actions package
-    // This is the published address of the AccountActions package
-    let account_actions_addr = @0x6cfb759426af38215d70d49467ca5b9829a23bd8aad53aeb408a777e6db33784;
+    // Use the named address for account_actions from Move.toml
+    // This ensures the address matches what's used in tests
+    let account_actions_addr = @account_actions;
 
     Deps {
         inner: vector[

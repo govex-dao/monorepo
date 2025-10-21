@@ -3,7 +3,7 @@ module account_actions::package_upgrade_digest_tests;
 
 use account_actions::package_upgrade as pkg_upgrade;
 use account_actions::version;
-use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use sui::clock::{Self, Clock};
@@ -26,15 +26,15 @@ public struct PACKAGE_UPGRADE_DIGEST_TESTS has drop {}
 
 // === Helpers ===
 
-fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut scenario = ts::begin(OWNER);
     package_registry::init_for_testing(scenario.ctx());
     scenario.next_tx(OWNER);
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
 
-    extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -47,7 +47,7 @@ fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
@@ -71,12 +71,12 @@ fun test_propose_and_approve_digest() {
 
     // Lock upgrade cap
     let upgrade_cap = create_test_upgrade_cap(&mut scenario);
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, SIX_MONTHS_MS);
 
     // Propose upgrade digest
     let execution_time = clock.timestamp_ms() + 7 * 86400000; // 7 days
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::propose_upgrade_digest(
         auth,
         &mut account,
@@ -91,8 +91,8 @@ fun test_propose_and_approve_digest() {
     assert!(!pkg_upgrade::is_upgrade_approved(&account, package_name, digest));
 
     // Approve proposal (simulating governance vote passed)
-    let auth = account.new_auth(version::current(), Witness());
-    pkg_upgrade::approve_upgrade_proposal(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    pkg_upgrade::approve_upgrade_proposal<Config>(
         auth,
         &mut account,
         package_name,
@@ -125,12 +125,12 @@ fun test_cannot_propose_without_timelock() {
 
     // Lock upgrade cap with 1000ms delay
     let upgrade_cap = create_test_upgrade_cap(&mut scenario);
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, SIX_MONTHS_MS);
 
     // Try to propose with execution time too soon (less than 1000ms)
     let execution_time = clock.timestamp_ms() + 500; // Only 500ms - should fail
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::propose_upgrade_digest(
         auth,
         &mut account,
@@ -152,12 +152,12 @@ fun test_cannot_execute_unapproved_proposal() {
 
     // Lock upgrade cap
     let upgrade_cap = create_test_upgrade_cap(&mut scenario);
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, SIX_MONTHS_MS);
 
     // Propose but don't approve
     let execution_time = clock.timestamp_ms() + 7 * 86400000;
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::propose_upgrade_digest(
         auth,
         &mut account,
@@ -171,7 +171,7 @@ fun test_cannot_execute_unapproved_proposal() {
     clock.set_for_testing(execution_time);
 
     // Try to execute without approval - should fail
-    let _ticket = pkg_upgrade::execute_approved_upgrade_dao_only(
+    let _ticket = pkg_upgrade::execute_approved_upgrade_dao_only<Config>(
         &mut account,
         package_name,
         digest,
@@ -186,7 +186,7 @@ fun test_cannot_execute_unapproved_proposal() {
 fun test_execute_approved_upgrade_dao_only() {
     let (mut scenario, extensions, mut account, mut clock) = start();
     let package_name = b"test_package".to_string();
-    let digest = vector::empty<u8>();
+    let mut digest = vector::empty<u8>();
     // Create 32-byte digest
     let mut i = 0;
     while (i < 32) {
@@ -196,12 +196,12 @@ fun test_execute_approved_upgrade_dao_only() {
 
     // Lock upgrade cap
     let upgrade_cap = create_test_upgrade_cap(&mut scenario);
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, SIX_MONTHS_MS);
 
     // Propose and approve
     let execution_time = clock.timestamp_ms() + 7 * 86400000;
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::propose_upgrade_digest(
         auth,
         &mut account,
@@ -211,8 +211,8 @@ fun test_execute_approved_upgrade_dao_only() {
         &clock,
     );
 
-    let auth = account.new_auth(version::current(), Witness());
-    pkg_upgrade::approve_upgrade_proposal(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    pkg_upgrade::approve_upgrade_proposal<Config>(
         auth,
         &mut account,
         package_name,
@@ -224,7 +224,7 @@ fun test_execute_approved_upgrade_dao_only() {
     clock.set_for_testing(execution_time);
 
     // Execute - creates UpgradeTicket
-    let ticket = pkg_upgrade::execute_approved_upgrade_dao_only(
+    let ticket = pkg_upgrade::execute_approved_upgrade_dao_only<Config>(
         &mut account,
         package_name,
         digest,
@@ -237,7 +237,7 @@ fun test_execute_approved_upgrade_dao_only() {
     let receipt = package::test_upgrade(ticket);
 
     // Complete upgrade
-    pkg_upgrade::complete_approved_upgrade_dao_only(
+    pkg_upgrade::complete_approved_upgrade_dao_only<Config>(
         &mut account,
         package_name,
         digest,
@@ -255,7 +255,7 @@ fun test_execute_approved_upgrade_dao_only() {
 fun test_execute_with_commit_cap() {
     let (mut scenario, extensions, mut account, mut clock) = start();
     let package_name = b"test_package".to_string();
-    let digest = vector::empty<u8>();
+    let mut digest = vector::empty<u8>();
     let mut i = 0;
     while (i < 32) {
         digest.push_back((i as u8));
@@ -264,16 +264,16 @@ fun test_execute_with_commit_cap() {
 
     // Lock upgrade cap
     let upgrade_cap = create_test_upgrade_cap(&mut scenario);
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, SIX_MONTHS_MS);
 
     // Lock commit cap in account (nonce=0)
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::lock_commit_cap(auth, &mut account, package_name, scenario.ctx());
 
     // Propose and approve
     let execution_time = clock.timestamp_ms() + 7 * 86400000;
-    let auth = account.new_auth(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::propose_upgrade_digest(
         auth,
         &mut account,
@@ -283,8 +283,8 @@ fun test_execute_with_commit_cap() {
         &clock,
     );
 
-    let auth = account.new_auth(version::current(), Witness());
-    pkg_upgrade::approve_upgrade_proposal(
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    pkg_upgrade::approve_upgrade_proposal<Config>(
         auth,
         &mut account,
         package_name,
@@ -296,10 +296,10 @@ fun test_execute_with_commit_cap() {
     clock.set_for_testing(execution_time);
 
     // Borrow commit cap
-    let commit_cap = pkg_upgrade::borrow_commit_cap(&mut account, package_name, version::current());
+    let commit_cap = pkg_upgrade::borrow_commit_cap<Config>(&mut account, package_name, version::current());
 
     // Execute with cap
-    let ticket = pkg_upgrade::execute_approved_upgrade_with_cap(
+    let ticket = pkg_upgrade::execute_approved_upgrade_with_cap<Config>(
         &mut account,
         package_name,
         digest,
@@ -311,7 +311,7 @@ fun test_execute_with_commit_cap() {
     let receipt = package::test_upgrade(ticket);
 
     // Complete with cap
-    pkg_upgrade::complete_approved_upgrade_with_cap(
+    pkg_upgrade::complete_approved_upgrade_with_cap<Config>(
         &mut account,
         package_name,
         digest,
@@ -321,7 +321,7 @@ fun test_execute_with_commit_cap() {
     );
 
     // Return cap
-    pkg_upgrade::return_commit_cap(&mut account, commit_cap, version::current());
+    pkg_upgrade::return_commit_cap<Config>(&mut account, commit_cap, version::current());
 
     // Verify proposal cleaned up
     assert!(!pkg_upgrade::has_upgrade_proposal(&account, package_name, digest));

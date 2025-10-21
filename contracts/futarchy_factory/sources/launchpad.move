@@ -450,7 +450,8 @@ public entry fun contribute<RaiseToken, StableCoin>(
         let mut i = 0;
         while (i < cap_count) {
             let cap = *vector::borrow(&raise.allowed_caps, i);
-            if (cap <= old_cap) {
+            // If old max cap was at or below this cap level, subtract old contribution
+            if (old_cap <= cap) {
                 let sum = vector::borrow_mut(&mut raise.cap_sums, i);
                 *sum = *sum - old_amount;
             };
@@ -463,7 +464,8 @@ public entry fun contribute<RaiseToken, StableCoin>(
     let mut i = 0;
     while (i < cap_count) {
         let cap = *vector::borrow(&raise.allowed_caps, i);
-        if (cap <= max_total_cap) {
+        // If contributor's max cap is at or below this cap level, they can participate
+        if (max_total_cap <= cap) {
             let sum = vector::borrow_mut(&mut raise.cap_sums, i);
             *sum = *sum + new_total;
         };
@@ -725,6 +727,8 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
 
     let mut i = 0;
     let mut successful_claims = 0u64;
+    // Accumulate crank rewards to send as one coin at the end
+    let mut total_crank_reward = coin::zero<sui::sui::SUI>(ctx);
 
     while (i < batch_size) {
         let contributor = *vector::borrow(&contributors, i);
@@ -743,13 +747,13 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
             let refund = coin::from_balance(raise.stable_coin_vault.split(contrib.amount), ctx);
             sui_transfer::public_transfer(refund, contributor);
 
-            // Pay cranker
+            // Accumulate cranker fee
             if (raise.crank_fee_vault.value() >= constants::launchpad_crank_fee_per_contribution()) {
                 let crank_reward = coin::from_balance(
                     raise.crank_fee_vault.split(constants::launchpad_crank_fee_per_contribution()),
                     ctx
                 );
-                sui_transfer::public_transfer(crank_reward, ctx.sender());
+                total_crank_reward.join(crank_reward);
                 successful_claims = successful_claims + 1;
             };
 
@@ -779,13 +783,13 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
         let tokens = coin::from_balance(raise.raise_token_vault.split(tokens_to_claim), ctx);
         sui_transfer::public_transfer(tokens, contributor);
 
-        // Pay cranker
+        // Accumulate cranker fee
         if (raise.crank_fee_vault.value() >= constants::launchpad_crank_fee_per_contribution()) {
             let crank_reward = coin::from_balance(
                 raise.crank_fee_vault.split(constants::launchpad_crank_fee_per_contribution()),
                 ctx
             );
-            sui_transfer::public_transfer(crank_reward, ctx.sender());
+            total_crank_reward.join(crank_reward);
             successful_claims = successful_claims + 1;
         };
 
@@ -809,6 +813,13 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
         };
 
         i = i + 1;
+    };
+
+    // Send accumulated crank rewards to cranker
+    if (total_crank_reward.value() > 0) {
+        sui_transfer::public_transfer(total_crank_reward, ctx.sender());
+    } else {
+        total_crank_reward.destroy_zero();
     };
 
     // Emit batch completion event
@@ -1228,4 +1239,84 @@ public fun set_admin_trust_score<RT, SC>(
 ) {
     raise.admin_trust_score = option::some(trust_score);
     raise.admin_review_text = option::some(review_text);
+}
+
+// === Test Functions ===
+
+#[test_only]
+/// Test version of complete_raise that doesn't share objects (which fails in test environment)
+/// Instead, it transfers them to the sender for testing
+public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + store>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    creator_cap: &CreatorCap,
+    fee_manager: &mut fee::FeeManager,
+    payment: Coin<sui::sui::SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
+    assert!(raise.settlement_done, EInvalidStateForAction);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    assert!(raise.settlement_done, EInvalidStateForAction);
+    assert!(raise.dao_id.is_some(), EDaoNotPreCreated);
+
+    fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
+
+    let final_total = raise.final_raise_amount;
+    assert!(final_total >= raise.min_raise_amount, EMinRaiseNotMet);
+    assert!(final_total > 0, EMinRaiseNotMet);
+
+    // Extract DAO components
+    let mut account: Account = df::remove(&mut raise.id, DaoAccountKey {});
+    let mut queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
+    let mut spot_pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
+
+    // Deposit treasury cap
+    let treasury_cap = raise.treasury_cap.extract();
+    account_init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, treasury_cap);
+
+    // Deposit metadata if exists
+    if (df::exists_(&raise.id, CoinMetadataKey {})) {
+        let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
+        account_init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
+            &mut account,
+            DaoMetadataKey {},
+            metadata,
+            ctx,
+        );
+    };
+
+    // Set launchpad initial price
+    assert!(raise.tokens_for_sale_amount > 0, EInvalidStateForAction);
+    assert!(raise.final_raise_amount > 0, EInvalidStateForAction);
+
+    let raise_price = math::mul_div_mixed(
+        (raise.final_raise_amount as u128),
+        constants::price_multiplier_scale(),
+        (raise.tokens_for_sale_amount as u128),
+    );
+
+    futarchy_config::set_launchpad_initial_price(
+        futarchy_config::internal_config_mut(&mut account, version::current()),
+        raise_price,
+    );
+
+    // Deposit raised funds to DAO treasury
+    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
+    account_init_actions::init_vault_deposit_default<FutarchyConfig, StableCoin>(&mut account, raised_funds, ctx);
+
+    raise.state = STATE_SUCCESSFUL;
+
+    // In test environment, transfer objects to sender instead of sharing
+    // This avoids the test framework limitation with share_object
+    sui_transfer::public_transfer(account, ctx.sender());
+    sui_transfer::public_transfer(queue, ctx.sender());
+    sui_transfer::public_transfer(spot_pool, ctx.sender());
+
+    event::emit(RaiseSuccessful {
+        raise_id: object::id(raise),
+        total_raised: raise.final_raise_amount,
+    });
 }
