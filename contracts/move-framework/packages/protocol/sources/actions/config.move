@@ -89,6 +89,39 @@ public struct ManageWhitelistAction has drop, store {
     remove_types: vector<String>,
 }
 
+// === Public Constructors for Actions ===
+
+/// Create a new ConfigDepsAction
+/// Allows external modules to construct this action for their own intents
+public fun new_config_deps_action(deps: vector<Dep>): ConfigDepsAction {
+    ConfigDepsAction { deps }
+}
+
+/// Create a new ToggleUnverifiedAllowedAction
+/// Allows external modules to construct this action for their own intents
+public fun new_toggle_unverified_action(): ToggleUnverifiedAllowedAction {
+    ToggleUnverifiedAllowedAction {}
+}
+
+/// Create a new ConfigureDepositsAction
+/// Allows external modules to construct this action for their own intents
+public fun new_configure_deposits_action(
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+): ConfigureDepositsAction {
+    ConfigureDepositsAction { enable, new_max, reset_counter }
+}
+
+/// Create a new ManageWhitelistAction
+/// Allows external modules to construct this action for their own intents
+public fun new_manage_whitelist_action(
+    add_types: vector<String>,
+    remove_types: vector<String>,
+): ManageWhitelistAction {
+    ManageWhitelistAction { add_types, remove_types }
+}
+
 // === Helper Functions for BCS Deserialization ===
 
 /// Helper to deserialize deps data as three vectors

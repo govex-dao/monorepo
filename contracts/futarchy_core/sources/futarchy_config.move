@@ -929,9 +929,17 @@ public fun new_with_extensions(
     ctx: &mut TxContext,
 ): Account {
     // Create dependencies using Extensions for validation
+    // All common futarchy action packages included by default
+    // FutarchyGovernanceActions enables adding more packages via governance
     let deps = deps::new_latest_extensions(
         extensions,
-        vector[b"AccountProtocol".to_string(), b"FutarchyCore".to_string()],
+        vector[
+            b"AccountProtocol".to_string(),
+            b"FutarchyCore".to_string(),              // Config and version witness
+            b"FutarchyActions".to_string(),           // Config, liquidity, quota actions
+            b"FutarchyGovernanceActions".to_string(), // Admin + account extensibility
+            b"FutarchyOracleActions".to_string(),     // Oracle management actions
+        ],
     );
 
     // Create account with FutarchyConfig using the config witness

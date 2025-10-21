@@ -17,6 +17,7 @@ use account_actions::package_upgrade_decoder;
 use account_actions::transfer_decoder;
 use account_actions::vault_decoder;
 use account_actions::vesting_decoder;
+use account_protocol::config_decoder;
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 use sui::event;
 use sui::object::{Self, ID, UID};
@@ -91,6 +92,9 @@ public fun get_registry_id(info: &RegistryInfo): ID {
 
 /// Register all decoders from all action modules
 public fun register_all_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
+    // Register account_protocol config action decoders
+    config_decoder::register_decoders(registry, ctx);
+
     // Register vault action decoders
     vault_decoder::register_decoders(registry, ctx);
 

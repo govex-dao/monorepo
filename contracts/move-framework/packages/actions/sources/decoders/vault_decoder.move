@@ -1,8 +1,10 @@
 // Copyright (c) Govex DAO LLC
 // SPDX-License-Identifier: BUSL-1.1
 
-/// Decoder for vault actions - tightly coupled with vault action definitions
-/// This module knows exactly how to decode SpendAction and DepositAction
+/// Decoder registry for vault actions
+///
+/// Lightweight decoder structs for UX validation.
+/// BCS decoding happens off-chain in indexers.
 module account_actions::vault_decoder;
 
 use account_actions::vault::{
@@ -12,24 +14,19 @@ use account_actions::vault::{
     ToggleStreamFreezeAction,
     CancelStreamAction
 };
-use account_protocol::bcs_validation;
-use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use std::string::String;
+use account_protocol::schema::{Self as schema, ActionDecoderRegistry};
 use std::type_name;
-use sui::bcs;
 use sui::dynamic_object_field;
 use sui::object::{Self, UID};
 
-// === Imports ===
-
 // === Decoder Objects ===
 
-/// Decoder that knows how to decode SpendAction<CoinType>
+/// Decoder for SpendAction<CoinType>
 public struct SpendActionDecoder has key, store {
     id: UID,
 }
 
-/// Decoder that knows how to decode DepositAction<CoinType>
+/// Decoder for DepositAction<CoinType>
 public struct DepositActionDecoder has key, store {
     id: UID,
 }
@@ -54,186 +51,9 @@ public struct CancelStreamActionDecoder has key, store {
 /// Placeholder type for registering generic decoders
 public struct CoinPlaceholder has drop, store {}
 
-// === Decoder Functions ===
-
-/// Decode a SpendAction from BCS bytes to human-readable fields
-public fun decode_spend_action<CoinType>(
-    _decoder: &SpendActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    // Deserialize the fields directly - DO NOT reconstruct the Action struct
-    let mut bcs_data = bcs::new(action_data);
-    let name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let amount = bcs::peel_u64(&mut bcs_data);
-
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    let mut fields = vector::empty();
-
-    // Extract and convert each field
-    fields.push_back(
-        schema::new_field(
-            b"name".to_string(),
-            name,
-            b"String".to_string(),
-        ),
-    );
-
-    fields.push_back(
-        schema::new_field(
-            b"amount".to_string(),
-            amount.to_string(),
-            b"u64".to_string(),
-        ),
-    );
-
-    fields
-}
-
-/// Decode a DepositAction from BCS bytes to human-readable fields
-public fun decode_deposit_action<CoinType>(
-    _decoder: &DepositActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    // Deserialize the fields directly - DO NOT reconstruct the Action struct
-    let mut bcs_data = bcs::new(action_data);
-    let name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let amount = bcs::peel_u64(&mut bcs_data);
-
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    let mut fields = vector::empty();
-
-    fields.push_back(
-        schema::new_field(
-            b"name".to_string(),
-            name,
-            b"String".to_string(),
-        ),
-    );
-
-    fields.push_back(
-        schema::new_field(
-            b"amount".to_string(),
-            amount.to_string(),
-            b"u64".to_string(),
-        ),
-    );
-
-    fields
-}
-
-/// Decode a ToggleStreamPauseAction
-public fun decode_toggle_stream_pause_action(
-    _decoder: &ToggleStreamPauseActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-    let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let stream_id_address = bcs::peel_address(&mut bcs_data);
-    let stream_id = object::id_from_address(stream_id_address);
-    let pause_duration_ms = bcs::peel_u64(&mut bcs_data);
-
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"vault_name".to_string(),
-            vault_name,
-            b"String".to_string(),
-        ),
-        schema::new_field(
-            b"stream_id".to_string(),
-            stream_id.id_to_address().to_string(),
-            b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"pause_duration_ms".to_string(),
-            pause_duration_ms.to_string(),
-            b"u64".to_string(),
-        ),
-        schema::new_field(
-            b"action".to_string(),
-            if (pause_duration_ms == 0) { b"unpause" } else { b"pause" }.to_string(),
-            b"string".to_string(),
-        ),
-    ]
-}
-
-/// Decode a ToggleStreamFreezeAction
-public fun decode_toggle_stream_freeze_action(
-    _decoder: &ToggleStreamFreezeActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-    let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let stream_id_address = bcs::peel_address(&mut bcs_data);
-    let stream_id = object::id_from_address(stream_id_address);
-    let freeze = bcs::peel_bool(&mut bcs_data);
-
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"vault_name".to_string(),
-            vault_name,
-            b"String".to_string(),
-        ),
-        schema::new_field(
-            b"stream_id".to_string(),
-            stream_id.id_to_address().to_string(),
-            b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"freeze".to_string(),
-            if (freeze) { b"true" } else { b"false" }.to_string(),
-            b"bool".to_string(),
-        ),
-        schema::new_field(
-            b"action".to_string(),
-            if (freeze) { b"emergency_freeze" } else { b"unfreeze" }.to_string(),
-            b"string".to_string(),
-        ),
-    ]
-}
-
-/// Decode a CancelStreamAction
-public fun decode_cancel_stream_action(
-    _decoder: &CancelStreamActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-    let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let stream_id_address = bcs::peel_address(&mut bcs_data);
-    let stream_id = object::id_from_address(stream_id_address);
-
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"vault_name".to_string(),
-            vault_name,
-            b"String".to_string(),
-        ),
-        schema::new_field(
-            b"stream_id".to_string(),
-            stream_id.id_to_address().to_string(),
-            b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"action".to_string(),
-            b"cancel_stream".to_string(),
-            b"string".to_string(),
-        ),
-    ]
-}
-
 // === Registration Functions ===
 
-/// Register all vault decoders in the registry
-/// Called once during protocol initialization
+/// Register all vault decoders
 public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_spend_decoder(registry, ctx);
     register_deposit_decoder(registry, ctx);
@@ -242,16 +62,13 @@ public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxC
     register_cancel_stream_decoder(registry, ctx);
 }
 
-/// Register the SpendAction decoder
 fun register_spend_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SpendActionDecoder {
         id: object::new(ctx),
     };
 
-    // Use placeholder for generic registration
     let type_key = type_name::with_defining_ids<SpendAction<CoinPlaceholder>>();
 
-    // Attach decoder as dynamic object field
     dynamic_object_field::add(
         schema::registry_id_mut(registry),
         type_key,
@@ -259,7 +76,6 @@ fun register_spend_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxCon
     );
 }
 
-/// Register the DepositAction decoder
 fun register_deposit_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = DepositActionDecoder {
         id: object::new(ctx),
@@ -274,7 +90,6 @@ fun register_deposit_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxC
     );
 }
 
-/// Register the ToggleStreamPauseAction decoder
 fun register_toggle_stream_pause_decoder(
     registry: &mut ActionDecoderRegistry,
     ctx: &mut TxContext,
@@ -292,7 +107,6 @@ fun register_toggle_stream_pause_decoder(
     );
 }
 
-/// Register the ToggleStreamFreezeAction decoder
 fun register_toggle_stream_freeze_decoder(
     registry: &mut ActionDecoderRegistry,
     ctx: &mut TxContext,
@@ -310,7 +124,6 @@ fun register_toggle_stream_freeze_decoder(
     );
 }
 
-/// Register the CancelStreamAction decoder
 fun register_cancel_stream_decoder(
     registry: &mut ActionDecoderRegistry,
     ctx: &mut TxContext,

@@ -1,19 +1,17 @@
 // Copyright (c) Govex DAO LLC
 // SPDX-License-Identifier: BUSL-1.1
 
-/// Decoder for access control actions - tightly coupled with access control action definitions
+/// Decoder registry for access control actions
+///
+/// Lightweight decoder structs for UX validation.
+/// BCS decoding happens off-chain in indexers.
 module account_actions::access_control_decoder;
 
 use account_actions::access_control::{BorrowAction, ReturnAction};
-use account_protocol::bcs_validation;
-use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use std::string::String;
+use account_protocol::schema::{Self as schema, ActionDecoderRegistry};
 use std::type_name;
-use sui::bcs;
 use sui::dynamic_object_field;
 use sui::object::{Self, UID};
-
-// === Imports ===
 
 // === Decoder Objects ===
 
@@ -31,44 +29,6 @@ public struct ReturnActionDecoder has key, store {
 
 /// Placeholder type for registering generic decoders
 public struct CapPlaceholder has drop, store {}
-
-// === Decoder Functions ===
-
-/// Decode a BorrowAction
-public fun decode_borrow_action<Cap>(
-    _decoder: &BorrowActionDecoder,
-    _action_data: vector<u8>,
-): vector<HumanReadableField> {
-    // BorrowAction is an empty struct with no fields to decode
-    // We acknowledge the action_data exists but don't deserialize it
-
-    // Return action type information
-    vector[
-        schema::new_field(
-            b"action_type".to_string(),
-            b"BorrowAction".to_string(),
-            b"String".to_string(),
-        ),
-    ]
-}
-
-/// Decode a ReturnAction
-public fun decode_return_action<Cap>(
-    _decoder: &ReturnActionDecoder,
-    _action_data: vector<u8>,
-): vector<HumanReadableField> {
-    // ReturnAction is an empty struct with no fields to decode
-    // We acknowledge the action_data exists but don't deserialize it
-
-    // Return action type information
-    vector[
-        schema::new_field(
-            b"action_type".to_string(),
-            b"ReturnAction".to_string(),
-            b"String".to_string(),
-        ),
-    ]
-}
 
 // === Registration Functions ===
 
