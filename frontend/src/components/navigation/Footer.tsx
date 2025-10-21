@@ -1,7 +1,7 @@
 import { Box, Container, Flex, Link, Text } from "@radix-ui/themes";
 import { NavLink } from "react-router-dom";
 import { HeaderWithGlowIcon } from "../HeaderWithGlowIcon.tsx";
-import { GitHubLogoIcon, DiscordLogoIcon } from "@radix-ui/react-icons";
+import { GitHubLogoIcon, DiscordLogoIcon, ReaderIcon } from "@radix-ui/react-icons";
 import { SuiSymbol } from "../icons/SuiSymbol.tsx";
 
 export function Footer() {
@@ -50,6 +50,14 @@ export function Footer() {
               <Text weight="bold" size="3" className="text-blue-400 mb-1">
                 Resources
               </Text>
+              <Link
+                href="https://docs.govex.ai/"
+                target="_blank"
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+              >
+                <ReaderIcon className="inline mr-1" /> Documentation
+              </Link>
               <Link
                 href="https://docs.sui.io/"
                 target="_blank"
@@ -144,6 +152,13 @@ export function MinimalFooter() {
             <div className="hidden sm:block h-4 w-[1px] bg-gray-500/50"></div>
 
             <Flex gap="3" justify="center">
+              <Link
+                href="https://docs.govex.ai/"
+                target="_blank"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <ReaderIcon width={14} height={14} />
+              </Link>
               <Link
                 href="https://docs.sui.io/"
                 target="_blank"
