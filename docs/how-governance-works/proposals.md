@@ -6,9 +6,12 @@ description: Proposals
 
 #### Creating Proposals
 
-efwfwef
+Create
 
 #### Trading Proposals
 
-We don't vote we trade.\
-\
+
+
+<figure><img src="../.gitbook/assets/image (2).png" alt=""><figcaption></figcaption></figure>
+
+<figure><img src="../.gitbook/assets/image.png" alt=""><figcaption></figcaption></figure>
