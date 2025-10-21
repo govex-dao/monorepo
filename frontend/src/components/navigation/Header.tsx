@@ -1,27 +1,36 @@
 import { ConnectButton, useWallets } from "@mysten/dapp-kit";
-import { HamburgerMenuIcon } from "@radix-ui/react-icons";
+import { HamburgerMenuIcon, GearIcon } from "@radix-ui/react-icons";
 import { Box, Container, Flex, IconButton, Separator } from "@radix-ui/themes";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { HeaderWithGlowIcon } from "../HeaderWithGlowIcon.tsx";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { CONSTANTS } from "@/constants.ts";
-import MintTestnetCoins from "../learn/MintTestnetCoins.tsx";
+import MintTestnetCoins from "../create/MintTestnetCoins.tsx";
 
 const menu = [
   { title: "Trade", link: "/" },
   { title: "Create", link: "/create" },
-  { title: "Learn", link: "/learn" },
 ];
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const location = useLocation();
   const wallets = useWallets();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+
+  const isCreatePage = location.pathname === "/create";
 
   const handleClick = useCallback(() => {
     setIsOpen(!isOpen);
   }, [isOpen]);
+
+  const handleSettingsClick = useCallback(() => {
+    setIsSettingsOpen(!isSettingsOpen);
+  }, [isSettingsOpen]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -34,15 +43,23 @@ export function Header() {
       ) {
         setIsOpen(false);
       }
+      if (
+        settingsDropdownRef.current &&
+        settingsButtonRef.current &&
+        !settingsDropdownRef.current.contains(event.target as Node) &&
+        !settingsButtonRef.current.contains(event.target as Node)
+      ) {
+        setIsSettingsOpen(false);
+      }
     };
 
-    if (isOpen) {
+    if (isOpen || isSettingsOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
-  }, [isOpen]);
+  }, [isOpen, isSettingsOpen]);
 
   return (
     <Box className="w-screen bg-gradient-to-b from-gray-950/30 to-black/30 border-b border-gray-800">
@@ -83,12 +100,53 @@ export function Header() {
           </Box>
 
           <Flex gap="4" align="center" justify="end" className="flex-1">
-            {/* Desktop Mint and Connect */}
-            <Box className="hidden lg:block">
-              {CONSTANTS.network === "testnet" && wallets.length > 0 && (
+            {/* Desktop Mint - Only on Create page when on testnet */}
+            {isCreatePage && CONSTANTS.network === "testnet" && wallets.length > 0 && (
+              <Box className="hidden lg:block">
                 <MintTestnetCoins />
+              </Box>
+            )}
+
+            {/* Settings/Gear Icon - Desktop */}
+            <Box className="hidden lg:block relative">
+              <IconButton
+                ref={settingsButtonRef}
+                className="bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+                variant="ghost"
+                onClick={handleSettingsClick}
+              >
+                <GearIcon
+                  width="18"
+                  height="18"
+                  className="text-gray-300"
+                />
+              </IconButton>
+
+              {/* Settings Dropdown */}
+              {isSettingsOpen && (
+                <Flex
+                  ref={settingsDropdownRef}
+                  gap="2"
+                  py="2"
+                  px="2"
+                  direction="column"
+                  className="absolute right-0 top-full mt-2 w-48 bg-gray-800 rounded-lg shadow-xl py-2 z-50 border border-gray-700"
+                >
+                  <a
+                    href="https://docs.govex.ai/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-4 py-2 -mx-2 hover:bg-gray-700 transition-colors text-gray-200 rounded"
+                    onClick={() => setIsSettingsOpen(false)}
+                  >
+                    <Flex align="center" gap="2">
+                      Documentation
+                    </Flex>
+                  </a>
+                </Flex>
               )}
             </Box>
+
             <div className="hidden lg:block">
               <ConnectButton
                 connectText="Connect Wallet"
@@ -147,8 +205,27 @@ export function Header() {
                     className="opacity-70 my-2"
                   />
 
-                  {/* Mint in mobile menu */}
-                  {CONSTANTS.network === "testnet" && <MintTestnetCoins />}
+                  {/* Documentation link in mobile menu */}
+                  <a
+                    href="https://docs.govex.ai/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-4 py-2 -mx-2 hover:bg-gray-700 transition-colors text-gray-200"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Flex align="center" gap="2">
+                      Documentation
+                    </Flex>
+                  </a>
+
+                  <Separator
+                    size="4"
+                    color="gray"
+                    className="opacity-70 my-2"
+                  />
+
+                  {/* Mint in mobile menu - Only on Create page */}
+                  {isCreatePage && CONSTANTS.network === "testnet" && <MintTestnetCoins />}
 
                   <ConnectButton
                     connectText="Connect Wallet"
