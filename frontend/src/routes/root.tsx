@@ -12,13 +12,10 @@ export function Root() {
 
   // Determine title based on route
   let title = "Govex - Futarchy on Sui";
-  
+
   switch (location.pathname) {
     case "/create":
       title = "Create - Govex";
-      break;
-    case "/learn":
-      title = "Learn - Govex";
       break;
   }
 

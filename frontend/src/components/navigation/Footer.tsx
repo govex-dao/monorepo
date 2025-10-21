@@ -44,13 +44,6 @@ export function Footer() {
               >
                 <NavLink to="/create">Create</NavLink>
               </Link>
-              <Link
-                asChild
-                size="2"
-                className="text-gray-300 hover:text-white transition-colors"
-              >
-                <NavLink to="/learn">Learn</NavLink>
-              </Link>
             </Flex>
 
             <Flex direction="column" gap="3">
@@ -145,14 +138,6 @@ export function MinimalFooter() {
                 className="text-gray-500 hover:text-white transition-colors"
               >
                 <NavLink to="/create">Create</NavLink>
-              </Link>
-              <span className="text-gray-500 flex items-center">•</span>
-              <Link
-                asChild
-                size="1"
-                className="text-gray-500 hover:text-white transition-colors"
-              >
-                <NavLink to="/learn">Learn</NavLink>
               </Link>
             </Flex>
 

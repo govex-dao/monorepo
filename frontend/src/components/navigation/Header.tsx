@@ -5,7 +5,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { HeaderWithGlowIcon } from "../HeaderWithGlowIcon.tsx";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { CONSTANTS } from "@/constants.ts";
-import MintTestnetCoins from "../learn/MintTestnetCoins.tsx";
+import MintTestnetCoins from "../create/MintTestnetCoins.tsx";
 
 const menu = [
   { title: "Trade", link: "/" },
