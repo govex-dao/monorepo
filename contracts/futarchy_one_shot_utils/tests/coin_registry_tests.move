@@ -632,3 +632,74 @@ fun test_reject_coin_with_all_metadata() {
     clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
+
+// === Coverage Tests for Uncovered Lines ===
+
+#[test]
+#[expected_failure(abort_code = 4)] // EFeeExceedsMaximum  
+fun test_deposit_fee_exceeds_maximum() {
+    let mut scenario = ts::begin(@0x1);
+    
+    // Initialize test coins
+    futarchy_one_shot_utils::test_coin_b::init_for_testing(ts::ctx(&mut scenario));
+    ts::next_tx(&mut scenario, @0x1);
+    
+    let treasury_cap = ts::take_from_sender<TreasuryCap<TEST_COIN_B>>(&scenario);
+    let metadata = ts::take_from_sender<CoinMetadata<TEST_COIN_B>>(&scenario);
+    
+    let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+    let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
+
+    // Try to deposit with fee > MAX_FEE (10 SUI = 10_000_000_000 MIST)
+    // This should hit line 111: assert!(fee <= MAX_FEE, EFeeExceedsMaximum);
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        10_000_000_001, // Just over 10 SUI
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    sui::test_utils::destroy(registry);
+    clock::destroy_for_testing(clock);
+    ts::end(scenario);
+}
+
+#[test]
+fun test_deposit_coin_set_entry() {
+    let mut scenario = ts::begin(@0x1);
+    
+    // Initialize test coins
+    futarchy_one_shot_utils::test_coin_b::init_for_testing(ts::ctx(&mut scenario));
+    
+    // Create and share registry
+    let registry = coin_registry::create_registry(ts::ctx(&mut scenario));
+    coin_registry::share_registry(registry);
+
+    ts::next_tx(&mut scenario, @0x1);
+    
+    let treasury_cap = ts::take_from_sender<TreasuryCap<TEST_COIN_B>>(&scenario);
+    let metadata = ts::take_from_sender<CoinMetadata<TEST_COIN_B>>(&scenario);
+    let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+    // Get shared registry
+    let mut registry = ts::take_shared<coin_registry::CoinRegistry>(&scenario);
+
+    // Test the entry function (lines 142-150)
+    coin_registry::deposit_coin_set_entry(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000, // 0.001 SUI
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    // Verify deposit succeeded
+    assert!(coin_registry::total_sets(&registry) == 1, 0);
+
+    ts::return_shared(registry);
+    clock::destroy_for_testing(clock);
+    ts::end(scenario);
+}

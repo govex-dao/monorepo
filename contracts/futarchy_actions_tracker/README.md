@@ -107,3 +107,9 @@ for pkg in */; do [ -f "$pkg/Move.toml" ] && (cd "$pkg" && output=$(sui move bui
 ~/sui-tracing/target/release/sui move coverage summary
 ~/sui-tracing/target/release/sui move coverage source --module math 
  ```
+
+ script for getting un convered lines
+
+ contracts/futarchy_one_shot_utils/extract_uncovered.sh
+
+ more info here https://medium.com/the-sui-stack/code-in-move-7-unit-testing-on-sui-c22f0c2134a0

@@ -56,3 +56,19 @@ fun test_threshold_strategy_all_cases() {
 
 // Note: Cannot test unknown strategy type from outside the module
 // as Strategy struct is not public for instantiation
+
+// === Coverage Tests for Uncovered Lines ===
+
+#[test]
+fun test_threshold_invalid_parameters() {
+    // Test threshold where n < m (invalid config, should always return false)
+    // This ensures we cover the full condition: satisfied_count >= s.m && s.n >= s.m
+    // Lines 47-50
+    let invalid_threshold = strategy::threshold(3, 2); // Want 3 approvals but only have 2 conditions
+    
+    // Even if both are true (satisfied_count = 2), n < m means this should fail
+    assert!(strategy::can_execute(true, true, invalid_threshold) == false, 0);
+    assert!(strategy::can_execute(true, false, invalid_threshold) == false, 1);
+    assert!(strategy::can_execute(false, true, invalid_threshold) == false, 2);
+    assert!(strategy::can_execute(false, false, invalid_threshold) == false, 3);
+}
