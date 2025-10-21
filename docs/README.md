@@ -4,6 +4,12 @@ description: A governance platform for high-quality founders and their communiti
 
 # Welcome to Govex
 
+## Decision Markets
+
+The Govex platform allows communities to make decisions based on what will be best for their token price. We use Uniswap style V2 AMMs and conditional coins.\
+\
+
+
 ## Use Markets to Make Decision
 
 * **Markets have been repeatedly proven to be at least as accurate as experts, if not better.** Use futarchy to get the best decisions for your company.

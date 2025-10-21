@@ -6,7 +6,7 @@
 
 ## How Governance Works
 
-* [DAO](how-governance-works/dao.md)
+* [DAOs](how-governance-works/daos.md)
 * [Proposals](how-governance-works/proposals.md)
 * [Trading](how-governance-works/trading.md)
 

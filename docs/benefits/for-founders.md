@@ -1,5 +1,5 @@
 ---
-description: The only DAO management platform on Sui.
+description: The DAO management platform on Sui.
 ---
 
 # For Founders
