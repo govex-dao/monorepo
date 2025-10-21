@@ -1,14 +1,12 @@
 # Table of contents
 
-* [Welcome to Govex](README.md)
-
 ## The basics
 
-* [Welcome to Govex](the-basics/welcome-to-govex.md)
+* [Welcome to Govex](README.md)
 
 ## How Governance Works
 
-* [DAOs](how-governance-works/daos.md)
+* [DAO](how-governance-works/dao.md)
 * [Proposals](how-governance-works/proposals.md)
 * [Trading](how-governance-works/trading.md)
 
