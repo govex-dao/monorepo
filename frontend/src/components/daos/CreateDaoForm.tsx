@@ -8,8 +8,8 @@ import toast from "react-hot-toast";
 import CoinTypeInput from "./CoinTypeInput";
 import TimeInput from "../TimeInput";
 
-const DEFAULT_ASSET_TYPE = CONSTANTS.assetType;
-const DEFAULT_STABLE_TYPE = CONSTANTS.stableType;
+const DEFAULT_ASSET_TYPE = "0x0f5a49f57d89b812eface201194381d5c81b462f39b90b220a024750737ea5d4::govex::GOVEX";
+const DEFAULT_STABLE_TYPE = "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
 const BASIS_POINTS_BIGINT = BigInt("1000000000000");
 
 interface FormData {
