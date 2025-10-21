@@ -4,8 +4,6 @@ description: A governance platform for high-quality founders and their communiti
 
 # Welcome to Govex
 
-## We
-
 ## Use Markets to Make Decision
 
 * **Markets have been repeatedly proven to be at least as accurate as experts, if not better.** Use futarchy to get the best decisions for your company.
