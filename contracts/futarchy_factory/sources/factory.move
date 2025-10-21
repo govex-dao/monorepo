@@ -6,7 +6,7 @@
 module futarchy_factory::factory;
 
 use account_actions::{currency, vault};
-use account_extensions::extensions::Extensions;
+use account_protocol::package_registry::PackageRegistry;
 use account_protocol::account::{Self, Account};
 use futarchy_core::dao_config::{
     Self,
@@ -158,7 +158,7 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
 ///   - some(false): Disable challenge period (instant execution for MODE_COUNCIL_ONLY actions)
 public fun create_dao<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     affiliate_id: UTF8String, // Partner identifier (UUID from subclient, empty string if none)
@@ -183,7 +183,7 @@ public fun create_dao<AssetType: drop, StableType: drop>(
 ) {
     create_dao_internal_with_extensions<AssetType, StableType>(
         factory,
-        extensions,
+        registry,
         fee_manager,
         payment,
         affiliate_id,
@@ -213,7 +213,7 @@ public fun create_dao<AssetType: drop, StableType: drop>(
 /// Create a DAO and atomically execute a batch of init intents before sharing.
 public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     affiliate_id: UTF8String,
@@ -240,7 +240,7 @@ public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
 ) {
     create_dao_internal_with_extensions<AssetType, StableType>(
         factory,
-        extensions,
+        registry,
         fee_manager,
         payment,
         affiliate_id,
@@ -275,7 +275,7 @@ public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
 #[allow(lint(share_owned))]
 public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     affiliate_id: UTF8String,
@@ -424,8 +424,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
             );
     };
 
-    // Create the account with Extensions registry validation for security
-    let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
+    // Create the account with PackageRegistry validation for security
+    let mut account = futarchy_config::new_with_package_registry(registry, config, ctx);
 
     // Get queue parameters from governance config
     let account_config = account::config<FutarchyConfig>(&account);
@@ -840,7 +840,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
 ///   - some(enabled): Apply custom setting atomically during creation
 public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store>(
     factory: &mut Factory,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     optimistic_intent_challenge_enabled: Option<bool>,
@@ -911,7 +911,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     };
 
     // Create account with config
-    let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
+    let mut account = futarchy_config::new_with_package_registry(registry, config, ctx);
 
     // Create unified spot pool with aggregator support enabled
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(

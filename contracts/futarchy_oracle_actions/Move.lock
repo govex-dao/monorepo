@@ -2,11 +2,10 @@
 
 [move]
 version = 3
-manifest_digest = "61BD6EEC08AFFB10FF02CD9E78B21CCF3A5A4D3184801343F07EC517272A7CC2"
-deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
+manifest_digest = "D6637BEA8E24F0CA57ADB3A5C0985619027DC1C66850CFCAC7F9451A3D58414E"
+deps_digest = "D7FB1F2E1A893B9A0E80A392473710373DE5791D3AC8F6D898803754B2ADAE6B"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -32,22 +31,10 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "AccountExtensions"
-source = { local = "../move-framework/packages/extensions" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
 id = "AccountProtocol"
 source = { local = "../move-framework/packages/protocol" }
 
 dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -90,7 +77,6 @@ id = "futarchy_core"
 source = { local = "../futarchy_core" }
 
 dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },

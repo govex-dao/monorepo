@@ -64,6 +64,7 @@ const EEmptyPool: u64 = 4;
 const EInsufficientVaultBalance: u64 = 5;
 const EWrongToken: u64 = 6;
 const EBypassNotAllowed: u64 = 7;
+const EUnsupportedActionVersion: u64 = 8;
 
 // === Constants ===
 const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
@@ -151,6 +152,10 @@ public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW:
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<CreatePool>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Safe BCS deserialization
@@ -200,6 +205,10 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<UpdatePoolParams>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Safe BCS deserialization - simplified without placeholders
@@ -240,6 +249,10 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<SetPoolStatus>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -328,6 +341,10 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<AddLiquidity>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -439,6 +456,10 @@ public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: stor
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<WithdrawLpToken>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Safe BCS deserialization
@@ -497,6 +518,10 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<RemoveLiquidity>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -600,6 +625,10 @@ public fun do_swap<AssetType: drop, StableType: drop, Outcome: store, IW: copy +
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<Swap>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Safe BCS deserialization
@@ -645,6 +674,10 @@ public fun do_collect_fees<AssetType: drop, StableType: drop, Outcome: store, IW
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<CollectFees>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Safe BCS deserialization
@@ -676,6 +709,10 @@ public fun do_withdraw_fees<AssetType: drop, StableType: drop, Outcome: store, I
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
     action_validation::assert_action_type<WithdrawFees>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 

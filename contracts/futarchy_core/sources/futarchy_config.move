@@ -6,7 +6,7 @@
 /// All dynamic state and object references are stored as dynamic fields on the Account
 module futarchy_core::futarchy_config;
 
-use account_extensions::extensions::Extensions;
+use account_protocol::package_registry::PackageRegistry;
 use account_protocol::account::{Self, Account};
 use account_protocol::deps::{Self, Deps};
 use account_protocol::version_witness::VersionWitness;
@@ -922,17 +922,17 @@ public fun set_proposals_enabled(state: &mut DaoState, enabled: bool) {
 
 // === Account Creation Functions ===
 
-/// Creates a new account with Extensions validation for use with the Futarchy config
-public fun new_with_extensions(
-    extensions: &Extensions,
+/// Creates a new account with PackageRegistry validation for use with the Futarchy config
+public fun new_with_package_registry(
+    registry: &PackageRegistry,
     config: FutarchyConfig,
     ctx: &mut TxContext,
 ): Account {
-    // Create dependencies using Extensions for validation
+    // Create dependencies using PackageRegistry for validation
     // All common futarchy action packages included by default
     // FutarchyGovernanceActions enables adding more packages via governance
     let deps = deps::new_latest_extensions(
-        extensions,
+        registry,
         vector[
             b"AccountProtocol".to_string(),
             b"FutarchyCore".to_string(),              // Config and version witness
@@ -952,10 +952,10 @@ public fun new_with_extensions(
     )
 }
 
-/// Test version that creates account without Extensions validation
+/// Test version that creates account without PackageRegistry validation
 #[test_only]
 public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Account {
-    // Create dependencies for testing without Extensions
+    // Create dependencies for testing without PackageRegistry
     // Must include futarchy_core because version::current() creates a VersionWitness
     // with the @futarchy_core package address
     let deps = deps::new_for_testing_with_config(

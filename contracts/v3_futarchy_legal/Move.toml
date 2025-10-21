@@ -4,7 +4,6 @@ edition = "2024.beta"
 published-at  = "0x0"
 
 [dependencies]
-AccountExtensions = { local = "../move-framework/packages/extensions" }
 AccountActions = { local = "../move-framework/packages/actions" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_types = { local = "../futarchy_types" }
@@ -23,5 +22,4 @@ futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
 # REMOVED: futarchy_lifecycle address - no longer used
 account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
-account_extensions = "0xa9ca20a7a38f897b021b35147070b3997e236c8b6791d6f115e264f3bb67ccd4"
 walrus = "0x66d71f5ebd9975e2715c3a71b3a1dd1c5b55f82a200ee859622efd92e11ccedb"

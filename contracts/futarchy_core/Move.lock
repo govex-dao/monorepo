@@ -2,10 +2,9 @@
 
 [move]
 version = 3
-manifest_digest = "94476CAF537CE7428AA8E537481273414AF56972253E0CAB6C07948AD18B281D"
-deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
+manifest_digest = "29DBC6EFA67E81D1198DABE0DE2BF524FD88E3F38A09F24BA1D5A35C318EAC4B"
+deps_digest = "CAFAD8A7CF51067FB4358215BECB86BD100DD64E57C2AC8A7AE7D74B688F5965"
 dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -16,22 +15,10 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "AccountExtensions"
-source = { local = "../move-framework/packages/extensions" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
 id = "AccountProtocol"
 source = { local = "../move-framework/packages/protocol" }
 
 dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },

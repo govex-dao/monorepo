@@ -2,20 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "CD17ED6524502A7F7E5FC656CE8A487FF0B9CF55AAFF5F2A9AA7720607C033F9"
-deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
-dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
-id = "AccountExtensions"
-source = { local = "../extensions" }
-
+manifest_digest = "5AD752108A47DC17C9CAB1C51F03D664D0B3D17FD0212DBAC3BB0D847464AE6C"
+deps_digest = "F9B494B64F0615AED0E98FC12A85B85ECD2BC5185C22D30E7F67786BB52E507C"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },

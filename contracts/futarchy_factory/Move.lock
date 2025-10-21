@@ -2,11 +2,10 @@
 
 [move]
 version = 3
-manifest_digest = "FE821B513DD1624C21171C5E7753E2F232F7C77BCA760CE89010571399176356"
-deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
+manifest_digest = "57E80A95FAF21AEF71ECECE7D505AB8F6A716BECCC5C89F5BBC499A3E5DC34B9"
+deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -35,22 +34,10 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "AccountExtensions"
-source = { local = "../move-framework/packages/extensions" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
 id = "AccountProtocol"
 source = { local = "../move-framework/packages/protocol" }
 
 dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -111,7 +98,6 @@ source = { local = "../futarchy_actions" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -131,7 +117,6 @@ id = "futarchy_core"
 source = { local = "../futarchy_core" }
 
 dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -203,7 +188,6 @@ source = { local = "../futarchy_oracle_actions" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },

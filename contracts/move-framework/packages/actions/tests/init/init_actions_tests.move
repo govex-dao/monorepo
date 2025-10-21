@@ -5,7 +5,7 @@ use account_actions::currency;
 use account_actions::init_actions;
 use account_actions::vault;
 use account_actions::version;
-use account_extensions::extensions::{Self, Extensions, AdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use sui::clock::{Self, Clock};
@@ -45,14 +45,14 @@ public struct TestCap has key, store {
 
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Clock) {
+fun start(): (Scenario, PackageRegistry, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
-    extensions::init_for_testing(scenario.ctx());
+    package_registry::init_for_testing(scenario.ctx());
     // retrieve objects
     scenario.next_tx(OWNER);
-    let mut extensions = scenario.take_shared<Extensions>();
-    let cap = scenario.take_from_sender<AdminCap>();
+    let mut extensions = scenario.take_shared<PackageRegistry>();
+    let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
@@ -63,13 +63,13 @@ fun start(): (Scenario, Extensions, Clock) {
     (scenario, extensions, clock)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, clock: Clock) {
     destroy(extensions);
     destroy(clock);
     ts::end(scenario);
 }
 
-fun create_unshared_account(extensions: &Extensions, scenario: &mut Scenario): Account<Config> {
+fun create_unshared_account(extensions: &PackageRegistry, scenario: &mut Scenario): Account<Config> {
     let deps = deps::new_latest_extensions(
         extensions,
         vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],

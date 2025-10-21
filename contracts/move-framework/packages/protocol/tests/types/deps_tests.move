@@ -1,7 +1,7 @@
 #[test_only]
 module account_protocol::deps_tests;
 
-use account_extensions::extensions::{Self, Extensions};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry};
 use account_protocol::deps::{Self, Deps};
 use account_protocol::version_witness;
 use std::string::String;
@@ -15,7 +15,7 @@ use fun std::string::utf8 as vector.utf8;
 #[test]
 fun test_deps_new_and_getters() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -51,7 +51,7 @@ fun test_deps_new_and_getters() {
 #[test]
 fun test_deps_new_latest_extensions() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -88,7 +88,7 @@ fun test_deps_new_latest_extensions() {
 #[test]
 fun test_deps_add_unverified_allowed() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -117,7 +117,7 @@ fun test_deps_add_unverified_allowed() {
 #[test, expected_failure(abort_code = deps::EDepsNotSameLength)]
 fun test_error_deps_not_same_length() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -141,7 +141,7 @@ fun test_error_deps_not_same_length() {
 #[test, expected_failure(abort_code = deps::EDepsNotSameLength)]
 fun test_error_deps_not_same_length_bis() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -165,7 +165,7 @@ fun test_error_deps_not_same_length_bis() {
 #[test, expected_failure(abort_code = deps::EAccountProtocolMissing)]
 fun test_error_deps_missing_account_protocol() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -189,7 +189,7 @@ fun test_error_deps_missing_account_protocol() {
 #[test, expected_failure(abort_code = deps::EAccountProtocolMissing)]
 fun test_error_deps_missing_account_protocol_first_element() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -218,7 +218,7 @@ fun test_error_deps_missing_account_protocol_first_element() {
 #[test, expected_failure(abort_code = deps::ENotExtension)]
 fun test_error_deps_add_not_extension_unverified_not_allowed() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -242,7 +242,7 @@ fun test_error_deps_add_not_extension_unverified_not_allowed() {
 #[test, expected_failure(abort_code = deps::EDepAlreadyExists)]
 fun test_error_deps_add_name_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -270,7 +270,7 @@ fun test_error_deps_add_name_already_exists() {
 #[test, expected_failure(abort_code = deps::EDepAlreadyExists)]
 fun test_error_deps_add_addr_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -298,7 +298,7 @@ fun test_error_deps_add_addr_already_exists() {
 #[test, expected_failure(abort_code = deps::ENotDep)]
 fun test_error_assert_is_dep() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -324,7 +324,7 @@ fun test_error_assert_is_dep() {
 #[test, expected_failure(abort_code = deps::EDepNotFound)]
 fun test_error_name_not_found() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -349,7 +349,7 @@ fun test_error_name_not_found() {
 #[test, expected_failure(abort_code = deps::EDepNotFound)]
 fun test_error_addr_not_found() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -374,7 +374,7 @@ fun test_error_addr_not_found() {
 #[test, expected_failure(abort_code = deps::EAccountProtocolMissing)]
 fun test_error_new_latest_misses_account_protocol() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -395,7 +395,7 @@ fun test_error_new_latest_misses_account_protocol() {
 #[test, expected_failure(abort_code = deps::EDepAlreadyExists)]
 fun test_error_new_latest_adds_account_protocol_twice() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -416,7 +416,7 @@ fun test_error_new_latest_adds_account_protocol_twice() {
 #[test, expected_failure(abort_code = deps::EDepsNotSameLength)]
 fun test_error_new_inner_not_same_length() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -441,7 +441,7 @@ fun test_error_new_inner_not_same_length() {
 #[test, expected_failure(abort_code = deps::EDepsNotSameLength)]
 fun test_error_new_inner_not_same_length_bis() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -466,7 +466,7 @@ fun test_error_new_inner_not_same_length_bis() {
 #[test, expected_failure(abort_code = deps::EAccountProtocolMissing)]
 fun test_error_new_inner_missing_account_protocol() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -491,7 +491,7 @@ fun test_error_new_inner_missing_account_protocol() {
 #[test, expected_failure(abort_code = deps::EAccountProtocolMissing)]
 fun test_error_new_inner_missing_account_protocol_first_element() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -516,7 +516,7 @@ fun test_error_new_inner_missing_account_protocol_first_element() {
 #[test, expected_failure(abort_code = deps::EAccountConfigMissing)]
 fun test_error_new_inner_missing_account_config() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -549,7 +549,7 @@ fun test_error_new_inner_missing_account_config() {
 #[test, expected_failure(abort_code = deps::ENotExtension)]
 fun test_error_new_inner_add_not_extension_unverified_not_allowed() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -580,7 +580,7 @@ fun test_error_new_inner_add_not_extension_unverified_not_allowed() {
 #[test, expected_failure(abort_code = deps::EDepAlreadyExists)]
 fun test_error_new_inner_add_name_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -609,7 +609,7 @@ fun test_error_new_inner_add_name_already_exists() {
 #[test, expected_failure(abort_code = deps::EDepAlreadyExists)]
 fun test_error_new_inner_add_addr_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -638,7 +638,7 @@ fun test_error_new_inner_add_addr_already_exists() {
 /// Test that we can handle many dependencies efficiently (10+ deps scenario)
 fun test_deps_scalability_many_deps() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -682,7 +682,7 @@ fun test_deps_scalability_many_deps() {
 /// Test duplicate detection works correctly with VecSet optimization
 fun test_deps_duplicate_detection_vecset() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -716,7 +716,7 @@ fun test_deps_duplicate_detection_vecset() {
 /// Test that duplicate names are caught by VecSet
 fun test_deps_duplicate_name_detection() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -745,7 +745,7 @@ fun test_deps_duplicate_name_detection() {
 /// Test that duplicate addresses are caught by VecSet
 fun test_deps_duplicate_addr_detection() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -774,7 +774,7 @@ fun test_deps_duplicate_addr_detection() {
 /// Test get_by_idx works correctly with multiple deps
 fun test_deps_get_by_index() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -811,7 +811,7 @@ fun test_deps_get_by_index() {
 /// Test new_latest_extensions with VecSet optimization
 fun test_deps_new_latest_with_vecset() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -842,7 +842,7 @@ fun test_deps_new_latest_with_vecset() {
 /// Test new_inner with many deps (stress test)
 fun test_deps_new_inner_many_deps() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -886,7 +886,7 @@ fun test_deps_new_inner_many_deps() {
 /// Test new_inner catches duplicates with VecSet
 fun test_deps_new_inner_duplicate_in_middle() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -924,7 +924,7 @@ fun test_deps_new_inner_duplicate_in_middle() {
 /// Test edge case: minimal deps (just required 2)
 fun test_deps_minimal_required() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -952,7 +952,7 @@ fun test_deps_minimal_required() {
 /// Test toggle_unverified_allowed functionality
 fun test_deps_toggle_unverified() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,
@@ -985,7 +985,7 @@ fun test_deps_toggle_unverified() {
 #[test]
 fun test_deps_version_upgrade() {
     let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
+    let extensions = package_registry::new_for_testing_with_addrs(
         @account_protocol,
         @0x1,
         @0x2,

@@ -28,7 +28,7 @@
 
 module account_protocol::account;
 
-use account_extensions::extensions;
+use account_protocol::package_registry;
 use account_protocol::deps::{Self, Deps};
 use account_protocol::executable::{Self, Executable};
 use account_protocol::intents::{Self, Intents, Intent, Expired, Params};

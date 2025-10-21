@@ -13,22 +13,10 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "AccountExtensions"
-source = { local = "../extensions" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
 id = "AccountProtocol"
 source = { local = "../protocol" }
 
 dependencies = [
-  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },

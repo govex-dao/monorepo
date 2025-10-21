@@ -808,6 +808,10 @@ public fun do_toggle_stream_pause<Config: store, Outcome: store, CoinType, IW: d
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<ToggleStreamPause>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize
@@ -856,6 +860,10 @@ public fun do_toggle_stream_freeze<Config: store, Outcome: store, CoinType, IW: 
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<ToggleStreamFreeze>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize
@@ -902,6 +910,10 @@ public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: d
 
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<CancelStream>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 

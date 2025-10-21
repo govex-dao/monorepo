@@ -35,6 +35,7 @@ use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 const EWrongObject: u64 = 0;
 const EWrongAmount: u64 = 1;
 const EWrongCoinType: u64 = 2;
+const EUnsupportedActionVersion: u64 = 3;
 
 // === Action Type Markers ===
 
@@ -118,6 +119,10 @@ public fun do_withdraw_object<Outcome: store, T: key + store, IW: drop>(
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<OwnedWithdrawObject>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize
@@ -192,6 +197,10 @@ public fun do_withdraw_coin<Outcome: store, CoinType, IW: drop>(
 
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<OwnedWithdrawCoin>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 

@@ -3,7 +3,7 @@ module account_actions::package_upgrade_digest_tests;
 
 use account_actions::package_upgrade as pkg_upgrade;
 use account_actions::version;
-use account_extensions::extensions::{Self, Extensions, AdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use sui::clock::{Self, Clock};
@@ -26,12 +26,12 @@ public struct PACKAGE_UPGRADE_DIGEST_TESTS has drop {}
 
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut scenario = ts::begin(OWNER);
-    extensions::init_for_testing(scenario.ctx());
+    package_registry::init_for_testing(scenario.ctx());
     scenario.next_tx(OWNER);
-    let mut extensions = scenario.take_shared<Extensions>();
-    let cap = scenario.take_from_sender<AdminCap>();
+    let mut extensions = scenario.take_shared<PackageRegistry>();
+    let cap = scenario.take_from_sender<PackageAdminCap>();
 
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
@@ -47,7 +47,7 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);

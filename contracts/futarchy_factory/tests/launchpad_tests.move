@@ -4,7 +4,7 @@
 #[test_only]
 module futarchy_factory::launchpad_tests;
 
-use account_extensions::extensions::{Self, Extensions};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry};
 use futarchy_factory::factory;
 use futarchy_factory::launchpad;
 use futarchy_markets_core::fee;
@@ -46,7 +46,7 @@ fun setup_test(sender: address): Scenario {
     // Create extensions
     ts::next_tx(&mut scenario, sender);
     {
-        extensions::init_for_testing(ts::ctx(&mut scenario));
+        package_registry::init_for_testing(ts::ctx(&mut scenario));
     };
 
     // Add TEST_STABLE_REGULAR as allowed stable type

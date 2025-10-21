@@ -42,6 +42,8 @@ use account_actions::version;
 
 /// BorrowAction requires a matching ReturnAction in the same intent to ensure capability is returned
 const ENoReturn: u64 = 0;
+/// Error when action version is not supported
+const EUnsupportedActionVersion: u64 = 1;
 
 // === Action Type Markers ===
 
@@ -146,6 +148,10 @@ public fun do_borrow<Config: store, Outcome: store, Cap: key + store, IW: drop>(
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<AccessControlBorrow>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let _action_data = intents::action_spec_data(spec);
 
     // BorrowAction is an empty struct with no fields to deserialize
@@ -221,6 +227,10 @@ public fun do_return<Config: store, Outcome: store, Cap: key + store, IW: drop>(
 
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<AccessControlReturn>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let _action_data = intents::action_spec_data(spec);
 

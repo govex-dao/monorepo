@@ -17,7 +17,7 @@
 /// - Toggle unverified package allowance
 module futarchy_governance_actions::account_config_intents;
 
-use account_extensions::extensions::Extensions;
+use account_protocol::package_registry::PackageRegistry;
 use account_protocol::{
     account::Account,
     config,
@@ -72,7 +72,7 @@ public fun request_update_deps(
     account: &mut Account,
     params: Params,
     outcome: FutarchyOutcome,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
     names: vector<String>,
     addresses: vector<address>,
     versions: vector<u64>,
@@ -82,7 +82,7 @@ public fun request_update_deps(
     params.assert_single_execution();
 
     // Validate and create deps (same validation as account_protocol::config)
-    let mut deps = deps::new_inner(extensions, account.deps(), names, addresses, versions);
+    let mut deps = deps::new_inner(registry, account.deps(), names, addresses, versions);
     let deps_inner = *deps.inner_mut();
 
     // Build intent using the intent_interface macro
@@ -174,14 +174,14 @@ public fun request_toggle_unverified(
 public fun execute_update_deps(
     executable: &mut Executable<FutarchyOutcome>,
     account: &mut Account,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
 ) {
     // Delegate to account_protocol::config executor
     // This reuses all the validation and execution logic
     config::execute_config_deps<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome>(
         executable,
         account,
-        extensions,
+        registry,
     );
 }
 

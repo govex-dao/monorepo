@@ -3,7 +3,7 @@ module account_actions::currency_tests;
 
 use account_actions::currency;
 use account_actions::version;
-use account_extensions::extensions::{Self, Extensions, AdminCap};
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry, PackagePackageAdminCap};
 use account_protocol::account::{Self, Account};
 use account_protocol::deps;
 use account_protocol::intent_interface;
@@ -37,14 +37,14 @@ public struct CurrencyIntent() has copy, drop;
 
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Account<Config>, Clock) {
+fun start(): (Scenario, PackageRegistry, Account<Config>, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
-    extensions::init_for_testing(scenario.ctx());
+    package_registry::init_for_testing(scenario.ctx());
     // retrieve objects
     scenario.next_tx(OWNER);
-    let mut extensions = scenario.take_shared<Extensions>();
-    let cap = scenario.take_from_sender<AdminCap>();
+    let mut extensions = scenario.take_shared<PackageRegistry>();
+    let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
@@ -60,7 +60,7 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     (scenario, extensions, account, clock)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: PackageRegistry, account: Account<Config>, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);

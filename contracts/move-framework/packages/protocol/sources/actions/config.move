@@ -32,7 +32,7 @@ use account_protocol::{
     version,
     intent_interface,
 };
-use account_extensions::extensions::Extensions;
+use account_protocol::package_registry::PackageRegistry;
 
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
@@ -40,6 +40,11 @@ use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 use fun intent_interface::build_intent as Account.build_intent;
 use fun intent_interface::process_intent as Account.process_intent;
+
+// === Error Constants ===
+
+/// Error when action version is not supported
+const EUnsupportedActionVersion: u64 = 1;
 
 // === Action Type Markers ===
 
@@ -205,7 +210,7 @@ public fun edit_metadata<Config: store>(
 public fun update_extensions_to_latest<Config: store>(
     auth: Auth,
     account: &mut Account,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
 ) {
     account.verify(auth);
 
@@ -216,8 +221,8 @@ public fun update_extensions_to_latest<Config: store>(
 
     while (i < account.deps().length()) {
         let dep = account.deps().get_by_idx(i);
-        if (extensions.is_extension(dep.name(), dep.addr(), dep.version())) {
-            let (addr, version) = extensions.get_latest_for_name(dep.name());
+        if (registry.is_valid_package(dep.name(), dep.addr(), dep.version())) {
+            let (addr, version) = registry.get_latest_version(dep.name());
             new_names.push_back(dep.name());
             new_addrs.push_back(addr);
             new_versions.push_back(version);
@@ -231,16 +236,16 @@ public fun update_extensions_to_latest<Config: store>(
     };
 
     *account::deps_mut(account, version::current()) = 
-        deps::new_inner(extensions, account.deps(), new_names, new_addrs, new_versions);
+        deps::new_inner(registry, account.deps(), new_names, new_addrs, new_versions);
 }
 
 /// Creates an intent to update the dependencies of the account
 public fun request_config_deps<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account, 
+    account: &mut Account,
     params: Params,
     outcome: Outcome,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
     names: vector<String>,
     addresses: vector<address>,
     versions: vector<u64>,
@@ -248,8 +253,8 @@ public fun request_config_deps<Config: store, Outcome: store>(
 ) {
     account.verify(auth);
     params.assert_single_execution();
-    
-    let mut deps = deps::new_inner(extensions, account.deps(), names, addresses, versions);
+
+    let mut deps = deps::new_inner(registry, account.deps(), names, addresses, versions);
     let deps_inner = *deps.inner_mut();
 
     account.build_intent!(
@@ -283,7 +288,7 @@ public fun request_config_deps<Config: store, Outcome: store>(
 public fun execute_config_deps<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
 ) {
     account.process_intent!(
         executable,
@@ -293,6 +298,11 @@ public fun execute_config_deps<Config: store, Outcome: store>(
             // Get BCS bytes from ActionSpec
             let specs = executable.intent().action_specs();
             let spec = specs.borrow(executable.action_idx());
+
+            // Check version before deserialization
+            let spec_version = account_protocol::intents::action_spec_version(spec);
+            assert!(spec_version == 1, EUnsupportedActionVersion);
+
             let action_data = account_protocol::intents::action_spec_data(spec);
 
             // Create BCS reader and deserialize
@@ -304,7 +314,7 @@ public fun execute_config_deps<Config: store, Outcome: store>(
 
             // Apply the action - reconstruct deps using the public constructor
             *account::deps_mut(account, version::current()) =
-                deps::new_inner(extensions, account.deps(), names, addrs, versions);
+                deps::new_inner(registry, account.deps(), names, addrs, versions);
             account_protocol::executable::increment_action_idx(executable);
         }
     );
@@ -365,13 +375,19 @@ public fun request_toggle_unverified_allowed<Config: store, Outcome: store>(
 /// Executes an intent toggling the unverified_allowed flag of the account
 public fun execute_toggle_unverified_allowed<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account, 
+    account: &mut Account,
 ) {
     account.process_intent!(
-        executable, 
+        executable,
         version::current(),
         ToggleUnverifiedAllowedIntent(),
         |executable, _iw| {
+            // Check version before execution
+            let specs = executable.intent().action_specs();
+            let spec = specs.borrow(executable.action_idx());
+            let spec_version = account_protocol::intents::action_spec_version(spec);
+            assert!(spec_version == 1, EUnsupportedActionVersion);
+
             // ToggleUnverifiedAllowedAction is an empty struct, no deserialization needed
             // Just increment the action index
             account::deps_mut(account, version::current()).toggle_unverified_allowed();
@@ -439,6 +455,11 @@ public fun execute_configure_deposits<Config: store, Outcome: store>(
             // Get BCS bytes from ActionSpec
             let specs = executable.intent().action_specs();
             let spec = specs.borrow(executable.action_idx());
+
+            // Check version before deserialization
+            let spec_version = account_protocol::intents::action_spec_version(spec);
+            assert!(spec_version == 1, EUnsupportedActionVersion);
+
             let action_data = account_protocol::intents::action_spec_data(spec);
 
             // Create BCS reader and deserialize
@@ -522,6 +543,11 @@ public fun execute_manage_whitelist<Config: store, Outcome: store>(
             // Get BCS bytes from ActionSpec
             let specs = executable.intent().action_specs();
             let spec = specs.borrow(executable.action_idx());
+
+            // Check version before deserialization
+            let spec_version = account_protocol::intents::action_spec_version(spec);
+            assert!(spec_version == 1, EUnsupportedActionVersion);
+
             let action_data = account_protocol::intents::action_spec_data(spec);
 
             // Create BCS reader and deserialize

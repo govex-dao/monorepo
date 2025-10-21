@@ -9,7 +9,6 @@ use account_protocol::account::Account;
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
-use account_protocol::schema::{Self, ActionDecoderRegistry};
 use futarchy_actions::config_actions;
 use futarchy_core::dao_config;
 use futarchy_core::futarchy_config::FutarchyConfig;
@@ -43,18 +42,11 @@ public fun witness(): ConfigIntent {
 /// Create intent to enable/disable proposals
 public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
     account: &mut Account,
-    registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
     enabled: bool,
     ctx: &mut TxContext,
 ) {
-    // Enforce decoder exists for this action type
-    schema::assert_decoder_exists(
-        registry,
-        type_name::with_defining_ids<config_actions::SetProposalsEnabledAction>(),
-    );
-
     // Use standard DAO settings for intent params (expiry, etc.)
     account.build_intent!(
         params,
@@ -78,17 +70,11 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
 /// Create intent to update DAO name
 public fun create_update_name_intent<Outcome: store + drop + copy>(
     account: &mut Account,
-    registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
     new_name: String,
     ctx: &mut TxContext,
 ) {
-    // Enforce decoder exists for this action type
-    schema::assert_decoder_exists(
-        registry,
-        type_name::with_defining_ids<config_actions::UpdateNameAction>(),
-    );
 
     account.build_intent!(
         params,
@@ -369,18 +355,12 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
 /// Create intent to update conditional metadata configuration
 public fun create_update_conditional_metadata_intent<Outcome: store + drop + copy>(
     account: &mut Account,
-    registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
     use_outcome_index: Option<bool>,
     conditional_metadata: Option<Option<dao_config::ConditionalMetadata>>,
     ctx: &mut TxContext,
 ) {
-    // Enforce decoder exists for this action type
-    schema::assert_decoder_exists(
-        registry,
-        type_name::with_defining_ids<config_actions::ConditionalMetadataUpdateAction>(),
-    );
 
     account.build_intent!(
         params,
@@ -407,7 +387,6 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
 /// Create intent to update sponsorship configuration
 public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>(
     account: &mut Account,
-    registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
     enabled: Option<bool>,
@@ -416,11 +395,6 @@ public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>
     default_sponsor_quota_amount: Option<u64>,
     ctx: &mut TxContext,
 ) {
-    // Enforce decoder exists for this action type
-    schema::assert_decoder_exists(
-        registry,
-        type_name::with_defining_ids<config_actions::SponsorshipConfigUpdateAction>(),
-    );
 
     account.build_intent!(
         params,
@@ -449,7 +423,6 @@ public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>
 /// Create intent to update early resolve configuration
 public fun create_update_early_resolve_config_intent<Outcome: store + drop + copy>(
     account: &mut Account,
-    registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
     min_proposal_duration_ms: u64,
@@ -462,11 +435,6 @@ public fun create_update_early_resolve_config_intent<Outcome: store + drop + cop
     keeper_reward_bps: u64,
     ctx: &mut TxContext,
 ) {
-    // Enforce decoder exists for this action type
-    schema::assert_decoder_exists(
-        registry,
-        type_name::with_defining_ids<config_actions::EarlyResolveConfigUpdateAction>(),
-    );
 
     account.build_intent!(
         params,

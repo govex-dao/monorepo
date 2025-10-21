@@ -65,6 +65,7 @@ const EInvalidInput: u64 = 16;
 const ETimeCalculationOverflow: u64 = 17;  // Keep for pause duration validation
 const EEmergencyFrozen: u64 = 18;
 const EVestingExpired: u64 = 19;
+const EUnsupportedActionVersion: u64 = 20;
 
 // === Action Type Markers ===
 
@@ -332,6 +333,9 @@ public fun do_vesting<Config: store, Outcome: store, CoinType, IW: drop>(
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<VestingCreate>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -1044,6 +1048,10 @@ public fun do_toggle_vesting_pause<Config: store, Outcome: store, CoinType, IW: 
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<ToggleVestingPause>(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize
@@ -1081,6 +1089,10 @@ public fun do_toggle_vesting_freeze<Config: store, Outcome: store, CoinType, IW:
 
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<ToggleVestingFreeze>(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let action_data = intents::action_spec_data(spec);
 

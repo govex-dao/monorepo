@@ -1398,7 +1398,7 @@ public fun finalize_proposal<AssetType, StableType>(
     // For a simple YES/NO proposal, compare the YES TWAP to the threshold
     let winning_outcome = if (twap_prices.length() >= 2) {
         let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
-        let threshold = get_twap_threshold(proposal);
+        let threshold = get_effective_twap_threshold(proposal);
         let yes_signed = signed::from_u128(yes_twap);
 
         // If YES TWAP exceeds threshold, YES wins

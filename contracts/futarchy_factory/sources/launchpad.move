@@ -4,7 +4,7 @@
 module futarchy_factory::launchpad;
 
 use account_actions::init_actions as account_init_actions;
-use account_extensions::extensions::Extensions;
+use account_protocol::package_registry::PackageRegistry;
 use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::priority_queue::ProposalQueue;
@@ -235,7 +235,7 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     factory: &mut factory::Factory,
-    extensions: &Extensions,
+    registry: &PackageRegistry,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<sui::sui::SUI>,
     clock: &Clock,
@@ -247,7 +247,7 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
 
     let (account, queue, spot_pool) = factory::create_dao_unshared<RaiseToken, StableCoin>(
         factory,
-        extensions,
+        registry,
         fee_manager,
         payment,
         option::none(),
