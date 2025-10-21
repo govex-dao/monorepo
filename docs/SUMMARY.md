@@ -13,4 +13,3 @@
 ## Benefits
 
 * [For Founders](benefits/for-founders.md)
-* [For Investors](benefits/for-investors.md)

@@ -6,7 +6,7 @@ description: The only DAO management platform on Sui.
 
 #### The Process
 
-After TGE when you have your coin, visit [https://www.govex.ai/create](https://www.govex.ai/create) to create a DAO. Pick the following setting for your DAO:
+After TGE when you have your coin, visit [https://www.govex.ai/create](https://www.govex.ai/create) to create a DAO. Set the following parameters for your DAO:
 
 
 
