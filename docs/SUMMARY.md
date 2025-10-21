@@ -6,9 +6,8 @@
 
 ## How Governance Works
 
-* [DAOs](how-governance-works/daos.md)
 * [Proposals](how-governance-works/proposals.md)
 
-## Benefits
+## Get started
 
-* [For Founders](benefits/for-founders.md)
+* [For Founders](get-started/for-founders.md)
