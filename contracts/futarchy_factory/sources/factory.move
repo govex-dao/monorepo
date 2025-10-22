@@ -23,6 +23,7 @@ use futarchy_core::version;
 use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_factory::init_actions;
+use futarchy_one_shot_utils::constants;
 use futarchy_types::init_action_specs::InitActionSpecs;
 use futarchy_types::signed::{Self as signed, SignedU128};
 use std::ascii::String as AsciiString;
@@ -76,6 +77,10 @@ public struct Factory has key, store {
     permanently_disabled: bool,
     owner_cap_id: ID,
     allowed_stable_types: VecSet<TypeName>,
+    // Launchpad fee configuration (in MIST - 1 SUI = 1_000_000_000 MIST)
+    launchpad_bid_fee: u64,              // Fee users pay per contribution (default: 0.1 SUI)
+    launchpad_cranker_reward: u64,       // Reward crankers get per claim (default: 0.05 SUI)
+    launchpad_settlement_reward: u64,    // Reward per cap processed in settlement (default: 0.05 SUI)
 }
 
 /// Admin capability for factory operations
@@ -118,6 +123,17 @@ public struct FactoryPermanentlyDisabled has copy, drop {
     timestamp: u64,
 }
 
+public struct LaunchpadFeesUpdated has copy, drop {
+    admin: address,
+    old_bid_fee: u64,
+    new_bid_fee: u64,
+    old_cranker_reward: u64,
+    new_cranker_reward: u64,
+    old_settlement_reward: u64,
+    new_settlement_reward: u64,
+    timestamp: u64,
+}
+
 // === Internal Helper Functions ===
 // Note: Action registry removed - using statically-typed pattern like move-framework
 
@@ -139,6 +155,10 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
         permanently_disabled: false,
         owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty(),
+        // Initialize with default launchpad fees
+        launchpad_bid_fee: constants::launchpad_bid_fee_per_contribution(),
+        launchpad_cranker_reward: constants::launchpad_cranker_reward_per_claim(),
+        launchpad_settlement_reward: constants::launchpad_reward_per_cap_processed(),
     };
 
     let validator_cap = ValidatorAdminCap {
@@ -352,9 +372,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         max_outcomes,
         20, // max_actions_per_outcome (protocol limit)
         1000000, // proposal_fee_per_outcome (1 token per outcome)
-        100_000_000, // required_bond_amount
-        100, // fee_escalation_basis_points
-        true, // proposal_creation_enabled
+        100_000_000, // queue_entry_bond
+        100, // queue_fullness_multiplier_bps
         true, // accept_new_proposals
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
@@ -386,13 +405,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         dao_config::default_sponsorship_config(),
     );
 
-    // Create slash distribution with default values
-    let slash_distribution = futarchy_config::new_slash_distribution(
-        2000, // slasher_reward_bps (20%)
-        3000, // dao_treasury_bps (30%)
-        2000, // protocol_bps (20%)
-        3000, // burn_bps (30%)
-    );
+    // REMOVED: SlashDistribution creation - legacy code, not used
 
     // --- Phase 1: Create all objects in memory (no sharing) ---
 
@@ -403,16 +416,16 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // This provides TWAP oracle, registry, and full aggregator features
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         amm_total_fee_bps, // Factory uses same fee for both conditional and spot
+        option::none(), // No launch fee schedule by default (can be added via init specs)
         8000, // oracle_conditional_threshold_bps (80% threshold from trading params)
         clock,
         ctx,
     );
     let spot_pool_id = object::id(&spot_pool);
 
-    // Create the futarchy configuration with safe default
+    // Create the futarchy configuration
     let mut config = futarchy_config::new<AssetType, StableType>(
         dao_config,
-        slash_distribution,
     );
 
     // Apply builder pattern if custom challenge setting provided
@@ -626,9 +639,8 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         max_outcomes,
         20, // max_actions_per_outcome (protocol limit)
         1000000, // proposal_fee_per_outcome (1 token per outcome)
-        100_000_000, // required_bond_amount
-        100, // fee_escalation_basis_points
-        true, // proposal_creation_enabled
+        100_000_000, // queue_entry_bond
+        100, // queue_fullness_multiplier_bps
         true, // accept_new_proposals
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
@@ -661,12 +673,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     );
 
     // Create slash distribution with default values
-    let slash_distribution = futarchy_config::new_slash_distribution(
-        2000, // slasher_reward_bps (20%)
-        3000, // dao_treasury_bps (30%)
-        2000, // protocol_bps (20%)
-        3000, // burn_bps (30%)
-    );
+    // REMOVED: SlashDistribution creation - legacy code, not used
 
     // --- Phase 1: Create all objects in memory (no sharing) ---
 
@@ -676,6 +683,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     // Create the unified spot pool with aggregator support enabled
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         amm_total_fee_bps, // Factory uses same fee for both conditional and spot
+        option::none(), // No launch fee schedule by default (can be added via init specs)
         8000, // oracle_conditional_threshold_bps (80% threshold)
         clock,
         ctx,
@@ -685,7 +693,6 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     // Create the futarchy configuration (uses safe default: challenge enabled = true)
     let config = futarchy_config::new<AssetType, StableType>(
         dao_config,
-        slash_distribution,
     );
 
     // Create the account using test function
@@ -887,18 +894,11 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         dao_config::default_sponsorship_config(),
     );
 
-    // Create slash distribution with default values
-    let slash_distribution = futarchy_config::new_slash_distribution(
-        2000, // slasher_reward_bps (20%)
-        3000, // dao_treasury_bps (30%)
-        2000, // protocol_bps (20%)
-        3000, // burn_bps (30%)
-    );
+    // REMOVED: SlashDistribution creation - legacy code, not used
 
     // Create the futarchy config with safe default
     let mut config = futarchy_config::new<AssetType, StableType>(
         dao_config,
-        slash_distribution,
     );
 
     // Apply builder pattern if custom challenge setting provided
@@ -916,6 +916,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     // Create unified spot pool with aggregator support enabled
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         30, // 0.3% default fee (init actions can configure via governance)
+        option::none(), // No launch fee schedule by default (can be added via init specs)
         8000, // oracle_conditional_threshold_bps (80% threshold)
         clock,
         ctx,
@@ -1055,6 +1056,39 @@ public entry fun remove_allowed_stable_type<StableType>(
     }
 }
 
+/// Update launchpad fee configuration
+/// All fees are in MIST (1 SUI = 1_000_000_000 MIST)
+public entry fun update_launchpad_fees(
+    factory: &mut Factory,
+    owner_cap: &FactoryOwnerCap,
+    new_bid_fee: u64,
+    new_cranker_reward: u64,
+    new_settlement_reward: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(owner_cap) == factory.owner_cap_id, EBadWitness);
+
+    let old_bid_fee = factory.launchpad_bid_fee;
+    let old_cranker_reward = factory.launchpad_cranker_reward;
+    let old_settlement_reward = factory.launchpad_settlement_reward;
+
+    factory.launchpad_bid_fee = new_bid_fee;
+    factory.launchpad_cranker_reward = new_cranker_reward;
+    factory.launchpad_settlement_reward = new_settlement_reward;
+
+    event::emit(LaunchpadFeesUpdated {
+        admin: ctx.sender(),
+        old_bid_fee,
+        new_bid_fee,
+        old_cranker_reward,
+        new_cranker_reward,
+        old_settlement_reward,
+        new_settlement_reward,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
 /// Burn the factory owner cap
 public entry fun burn_factory_owner_cap(factory: &Factory, cap: FactoryOwnerCap) {
     // It is good practice to check ownership one last time before burning,
@@ -1087,6 +1121,21 @@ public fun is_stable_type_allowed<StableType>(factory: &Factory): bool {
     factory.allowed_stable_types.contains(&type_name_val)
 }
 
+/// Get launchpad bid fee (what users pay per contribution)
+public fun launchpad_bid_fee(factory: &Factory): u64 {
+    factory.launchpad_bid_fee
+}
+
+/// Get launchpad cranker reward (what crankers earn per claim)
+public fun launchpad_cranker_reward(factory: &Factory): u64 {
+    factory.launchpad_cranker_reward
+}
+
+/// Get launchpad settlement reward (reward per cap processed during settlement)
+public fun launchpad_settlement_reward(factory: &Factory): u64 {
+    factory.launchpad_settlement_reward
+}
+
 /// Get the permanently disabled error code (for external modules)
 public fun permanently_disabled_error(): u64 {
     EPermanentlyDisabled
@@ -1115,6 +1164,9 @@ public fun create_factory(ctx: &mut TxContext) {
         permanently_disabled: false,
         owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty(),
+        launchpad_bid_fee: constants::launchpad_bid_fee_per_contribution(),
+        launchpad_cranker_reward: constants::launchpad_cranker_reward_per_claim(),
+        launchpad_settlement_reward: constants::launchpad_reward_per_cap_processed(),
     };
 
     let validator_cap = ValidatorAdminCap {

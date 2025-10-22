@@ -2,9 +2,10 @@
 
 [move]
 version = 3
-manifest_digest = "12F088E05E140A459A4DCE913324C192D82E9B4FDCC47C70C7BE9E88FD983C2B"
-deps_digest = "CAFAD8A7CF51067FB4358215BECB86BD100DD64E57C2AC8A7AE7D74B688F5965"
+manifest_digest = "B69497C916620599E684502C2A7820915EF403D25D180EE6A3BACAF7E7DC785D"
+deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
 dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -12,6 +13,18 @@ dependencies = [
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
+]
+
+[[move.package]]
+id = "AccountActions"
+source = { local = "../move-framework/packages/actions" }
+
+dependencies = [
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [[move.package]]

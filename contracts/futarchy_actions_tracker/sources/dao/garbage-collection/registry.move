@@ -321,32 +321,3 @@ public fun delete_metadata_table_update<Config>(expired: &mut Expired) {
 public fun delete_queue_params_update<Config>(expired: &mut Expired) {
     config_actions::delete_queue_params_update<Config>(expired);
 }
-
-// === Additional DAO File Actions ===
-// REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
-// public fun delete_set_document_insert_allowed(expired: &mut Expired) {
-//     dao_file_actions::delete_set_document_insert_allowed(expired);
-// }
-//
-// public fun delete_set_document_remove_allowed(expired: &mut Expired) {
-//     dao_file_actions::delete_set_document_remove_allowed(expired);
-// }
-
-// === Additional Dissolution Actions ===
-// REMOVED: Moved to v3_dissolution package
-// public fun delete_calculate_pro_rata_shares(expired: &mut Expired) {
-//     dissolution_actions::delete_calculate_pro_rata_shares(expired);
-// }
-//
-// public fun delete_cancel_all_streams(expired: &mut Expired) {
-//     dissolution_actions::delete_cancel_all_streams(expired);
-// }
-//
-// public fun delete_distribute_assets<CoinType>(expired: &mut Expired) {
-//     dissolution_actions::delete_distribute_assets<CoinType>(expired);
-// }
-//
-// public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Expired) {
-//     dissolution_actions::delete_withdraw_amm_liquidity<AssetType, StableType>(expired);
-// }
-

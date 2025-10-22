@@ -202,8 +202,10 @@ public struct DepositAction<phantom CoinType> has store, drop {
 public struct SpendAction<phantom CoinType> has store, drop {
     // vault name
     name: String,
-    // amount to withdraw
+    // amount to withdraw (ignored if spend_all is true)
     amount: u64,
+    // if true, withdraw entire balance and ignore amount field
+    spend_all: bool,
 }
 
 /// Action to approve a coin type for permissionless deposits
@@ -288,6 +290,44 @@ public fun deposit_approved<Config: store, CoinType: drop>(
     } else {
         vault.bag.add(type_key, coin.into_balance());
     }
+}
+
+/// Permissionless withdrawal for dissolved DAOs
+/// Anyone can withdraw proportionally if they provide valid dissolution proof
+/// This enables proportional redemption without transferring assets out of Account
+///
+/// Safety checks are performed by the dissolution module before calling this
+/// This function focuses on the withdrawal mechanics only
+///
+/// IMPORTANT: DO NOT call this directly - use futarchy_actions::dissolution::redeem
+public fun withdraw_for_dissolution<Config: store, CoinType: drop>(
+    account: &mut Account,
+    dao_address: address,
+    vault_name: String,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    // Verify caller provided correct DAO address
+    assert!(dao_address == account.addr(), EWrongCoinType); // Reusing error, should add specific one
+
+    // Standard vault withdrawal logic (no Auth check for dissolution)
+    let vault: &mut Vault =
+        account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+
+    let type_key = type_name::with_defining_ids<CoinType>();
+    assert!(vault.coin_type_exists<CoinType>(), EWrongCoinType);
+
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_key);
+    assert!(balance_mut.value() >= amount, EInsufficientBalance);
+
+    let coin = coin::take(balance_mut, amount, ctx);
+
+    // Clean up empty balance
+    if (balance_mut.value() == 0) {
+        vault.bag.remove<_, Balance<CoinType>>(type_key).destroy_zero();
+    };
+
+    coin
 }
 
 /// Approve a coin type for permissionless deposits (requires Auth)
@@ -494,7 +534,7 @@ public fun destroy_deposit_action<CoinType>(action: DepositAction<CoinType>) {
 
 /// Destroy a SpendAction after serialization
 public fun destroy_spend_action<CoinType>(action: SpendAction<CoinType>) {
-    let SpendAction { name: _, amount: _ } = action;
+    let SpendAction { name: _, amount: _, spend_all: _ } = action;
 }
 
 /// Destroy an ApproveCoinTypeAction after serialization
@@ -594,16 +634,19 @@ public fun delete_deposit<CoinType>(expired: &mut Expired) {
 }
 
 /// Creates a SpendAction and adds it to an intent with descriptor.
+/// If spend_all is true, amount is ignored and entire vault balance is withdrawn.
 public fun new_spend<Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
     name: String,
     amount: u64,
+    spend_all: bool,
     intent_witness: IW,
 ) {
     // Create action struct
     let action = SpendAction<CoinType> {
         name,
         amount,
+        spend_all,
     };
 
     // Serialize the entire struct directly
@@ -777,6 +820,7 @@ public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: d
 }
 
 /// Processes a SpendAction and takes a coin from the vault.
+/// If spend_all is true, withdraws entire balance regardless of amount field.
 public fun do_spend<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
@@ -803,13 +847,22 @@ public fun do_spend<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     let mut reader = bcs::new(*action_data);
     let name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
     let amount = bcs::peel_u64(&mut reader);
+    let spend_all = bcs::peel_bool(&mut reader);
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
     let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
     let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
-    let coin = coin::take(balance_mut, amount, ctx);
+
+    // Determine actual amount to withdraw
+    let withdraw_amount = if (spend_all) {
+        balance_mut.value()  // Spend entire balance
+    } else {
+        amount  // Spend specified amount
+    };
+
+    let coin = coin::take(balance_mut, withdraw_amount, ctx);
 
     if (balance_mut.value() == 0)
         vault.bag.remove<_, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).destroy_zero();

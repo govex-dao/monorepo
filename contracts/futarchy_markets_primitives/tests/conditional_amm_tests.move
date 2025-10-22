@@ -526,8 +526,8 @@ fun test_swap_asset_to_stable() {
     assert!(stable < 1000000, 1); // Stable reserve decreased
     assert!(amount_out > 0, 2);
 
-    // Verify protocol fees accumulated
-    assert!(conditional_amm::get_protocol_fees(&pool) > 0, 3);
+    // Verify protocol fees accumulated (asset_to_stable swap generates asset fees)
+    assert!(conditional_amm::get_protocol_fees_asset(&pool) > 0, 3);
 
     conditional_amm::destroy_for_testing(pool);
     end(scenario, clock);
@@ -869,7 +869,7 @@ fun test_swap_increases_protocol_fees() {
 
     assert!(conditional_amm::get_protocol_fees(&pool) == 0, 0);
 
-    // Swap should generate protocol fees
+    // First swap (asset_to_stable) should generate asset protocol fees
     let _out = conditional_amm::swap_asset_to_stable(
         &mut pool,
         market_id,
@@ -879,10 +879,10 @@ fun test_swap_increases_protocol_fees() {
         ts::ctx(&mut scenario),
     );
 
-    let protocol_fees = conditional_amm::get_protocol_fees(&pool);
-    assert!(protocol_fees > 0, 1);
+    let asset_fees_after_first = conditional_amm::get_protocol_fees_asset(&pool);
+    assert!(asset_fees_after_first > 0, 1);
 
-    // Second swap should increase fees further
+    // Second swap (stable_to_asset) should generate stable protocol fees
     let _out2 = conditional_amm::swap_stable_to_asset(
         &mut pool,
         market_id,
@@ -892,7 +892,8 @@ fun test_swap_increases_protocol_fees() {
         ts::ctx(&mut scenario),
     );
 
-    assert!(conditional_amm::get_protocol_fees(&pool) > protocol_fees, 2);
+    let stable_fees_after_second = conditional_amm::get_protocol_fees_stable(&pool);
+    assert!(stable_fees_after_second > 0, 2);
 
     conditional_amm::destroy_for_testing(pool);
     end(scenario, clock);
@@ -2278,8 +2279,8 @@ fun test_fee_accumulation_over_many_swaps() {
         i = i + 1;
     };
 
-    // Protocol fees should have accumulated significantly
-    let fees = conditional_amm::get_protocol_fees(&pool);
+    // Protocol fees should have accumulated significantly (asset_to_stable generates asset fees)
+    let fees = conditional_amm::get_protocol_fees_asset(&pool);
     assert!(fees > 0, 1);
 
     conditional_amm::destroy_for_testing(pool);

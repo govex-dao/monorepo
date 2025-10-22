@@ -5,8 +5,9 @@
 /// Provides O(log n) insertion and extraction for scalable gas costs
 module futarchy_core::priority_queue;
 
+use account_actions::vault;
 use account_protocol::account::{Self, Account};
-use futarchy_core::futarchy_config::{Self, FutarchyConfig, SlashDistribution};
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use std::option::{Self, Option};
@@ -76,12 +77,14 @@ const EFeeExceedsMaximum: u64 = 8;
 const EProposalNotTimedOut: u64 = 10;
 const EBondNotExtracted: u64 = 12;
 const ECrankBountyNotExtracted: u64 = 13;
+const EPriorityFeeTooLow: u64 = 14; // Priority fee must be >= 2x bond
 
 // === Constants ===
 
 const MAX_QUEUE_SIZE: u64 = 100;
 const EVICTION_GRACE_PERIOD_MS: u64 = 300000; // 5 minutes
 const MAX_TIME_AT_TOP_OF_QUEUE_MS: u64 = 86400000; // 24 hours
+const PROPOSAL_TIMEOUT_MS: u64 = 2592000000; // 30 days in milliseconds
 const COMPARE_GREATER: u8 = 1;
 const COMPARE_EQUAL: u8 = 0;
 const COMPARE_LESS: u8 = 2;
@@ -465,14 +468,33 @@ public fun compare_priority_scores(a: &PriorityScore, b: &PriorityScore): u8 {
 }
 
 /// Insert a proposal into the queue - O(log n) complexity!
-public fun insert<StableCoin>(
+public fun insert<StableCoin: drop>(
     queue: &mut ProposalQueue<StableCoin>,
     mut proposal: QueuedProposal<StableCoin>,
+    fee_manager: &mut ProposalFeeManager<StableCoin>,
+    account: &mut Account,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Option<EvictionInfo> {
     // Validate fee is reasonable
     assert!(proposal.fee <= MAX_REASONABLE_FEE, EFeeExceedsMaximum);
+
+    // CRITICAL: Bond is REQUIRED for all proposals (constant from governance config)
+    // This prevents bond-farming exploits and ensures fair queue economics
+    //
+    // With constant bonds + priority fee to DAO on cancel:
+    // - Everyone posts same bond amount (e.g., $1000 from config)
+    // - To evict: attacker_priority_fee > victim_priority_fee
+    // - On evict: victim gets 100% priority fee, bond split 50% DAO / 50% evictor
+    // - On cancel: priority fee goes 100% to DAO (NOT refunded), bond split 50/50
+    //
+    // Attack is unprofitable:
+    // - Bob evicts Alice: gains 50% of Alice's bond ($500)
+    // - Bob cancels: loses priority fee ($51) + 50% of his bond ($500)
+    // - Net: $500 - $500 - $51 = -$51 LOSS ✅
+    assert!(proposal.bond.is_some(), EInvalidBond);
+    let bond_value = proposal.bond.borrow().value();
+    assert!(bond_value > 0, EInvalidBond);
 
     // Generate proposal ID if needed
     if (proposal.proposal_id == @0x0.to_id()) {
@@ -573,14 +595,45 @@ public fun insert<StableCoin>(
             });
         };
 
-        // Handle bond properly - return to evicted proposer if it exists
+        // Priority fee: 100% to DAO (NOT refunded)
+        let priority_fee_to_dao =
+            proposal_fee_manager::split_priority_fee_on_evict(
+                fee_manager,
+                proposal_id,
+                ctx,
+            );
+
+        // Deposit priority fee to DAO treasury
+        vault::deposit_approved<FutarchyConfig, StableCoin>(
+            account,
+            b"treasury".to_string(),
+            priority_fee_to_dao,
+        );
+
+        // Bond on eviction: 50% DAO, 50% evictor (prevents bond-farming exploits)
         if (option::is_some(&bond)) {
-            // Return the bond to the proposer who got evicted
-            transfer::public_transfer(option::extract(&mut bond), evicted_proposer_addr);
+            let mut bond_coin = option::extract(&mut bond);
+            let bond_amount = coin::value(&bond_coin);
+
+            let (dao_share, evictor_share) = proposal_fee_manager::calculate_bond_split_on_evict(bond_amount);
+
+            // Split the bond
+            let evictor_bond = coin::split(&mut bond_coin, evictor_share, ctx);
+            let dao_bond = bond_coin; // Remainder goes to DAO
+
+            // Transfer evictor's share
+            transfer::public_transfer(evictor_bond, proposal.proposer);
+
+            // Deposit DAO's share to treasury vault
+            vault::deposit_approved<FutarchyConfig, StableCoin>(
+                account,
+                b"treasury".to_string(),
+                dao_bond,
+            );
         };
         option::destroy_none(bond);
 
-        // Handle crank bounty - return to evicted proposer if it exists
+        // Handle crank bounty - return to evicted proposer
         if (option::is_some(&crank_bounty)) {
             transfer::public_transfer(option::extract(&mut crank_bounty), evicted_proposer_addr);
         };
@@ -878,38 +931,82 @@ public fun try_activate_next<StableCoin>(
     extract_max(auth, queue)
 }
 
-/// Calculate minimum required fee based on queue occupancy
+/// Calculate minimum required fee with EXPONENTIAL scaling based on queue occupancy
 ///
-/// The fee scaling regime works as follows:
-/// - Below 50% occupancy: Base fee (1 unit)
-/// - 50-75% occupancy: 2x base fee
-/// - 75-90% occupancy: 5x base fee
-/// - 90-100% occupancy: 10x base fee
-/// - Above 100%: Clamped to 10x
+/// Uses configurable `queue_fullness_multiplier_bps` from DAO config for exponential growth.
+///
+/// Fee scaling:
+/// - 0-20% occupancy: Base fee (flat zone, plenty of room)
+/// - 20-80% occupancy: Linear ramp from 1x to 10x base
+/// - 80-100% occupancy: EXPONENTIAL growth using multiplier
+///
+/// Example with 50% multiplier (5000 bps):
+/// - 0%:   1.0x base
+/// - 20%:  1.0x base (flat zone ends)
+/// - 50%:  5.5x base (linear ramp)
+/// - 80%:  10x base  (exponential starts)
+/// - 90%:  15x base  (10x * 1.5^1)
+/// - 100%: 22.5x base (10x * 1.5^2)
 ///
 /// Note: Occupancy is calculated relative to max_proposer_funded (the queue capacity).
+/// DEPRECATED: This version doesn't use config. Use calculate_min_fee_with_config instead.
 public fun calculate_min_fee<StableCoin>(queue: &ProposalQueue<StableCoin>): u64 {
-    let queue_size = queue.size;
+    // Use default multiplier for backwards compatibility
+    let default_multiplier_bps = 5000; // 50%
+    calculate_min_fee_internal(queue.size, queue.max_proposer_funded, default_multiplier_bps)
+}
 
-    // Calculate occupancy ratio, clamped to 100% maximum
-    // max_proposer_funded is guaranteed to be > 0 by constructor validation
-    let raw_ratio = (queue_size * 100) / queue.max_proposer_funded;
-    // Clamp to 100%
-    let occupancy_ratio = if (raw_ratio > 100) { 100 } else { raw_ratio };
+/// Calculate minimum required fee with configurable exponential multiplier
+public fun calculate_min_fee_with_multiplier<StableCoin>(
+    queue: &ProposalQueue<StableCoin>,
+    multiplier_bps: u64,
+): u64 {
+    calculate_min_fee_internal(queue.size, queue.max_proposer_funded, multiplier_bps)
+}
 
-    // Base minimum fee
-    let min_fee_base = 1_000_000; // 1 unit with 6 decimals
+/// Internal implementation of exponential fee calculation
+fun calculate_min_fee_internal(
+    queue_size: u64,
+    max_proposer_funded: u64,
+    multiplier_bps: u64,
+): u64 {
+    let base_fee = 1_000_000; // 1 token with 6 decimals
 
-    // Escalate fee based on clamped queue occupancy
-    if (occupancy_ratio >= 90) {
-        min_fee_base * 10 // 10x when queue is 90%+ full
-    } else if (occupancy_ratio >= 75) {
-        min_fee_base * 5 // 5x when queue is 75-90% full
-    } else if (occupancy_ratio >= 50) {
-        min_fee_base * 2 // 2x when queue is 50-75% full
-    } else {
-        min_fee_base // 1x when queue is below 50% full
-    }
+    // Calculate occupancy percentage (0-100)
+    let raw_occupancy = (queue_size * 100) / max_proposer_funded;
+    let occupancy_pct = if (raw_occupancy > 100) { 100 } else { raw_occupancy };
+
+    // FLAT ZONE: 0-20% occupancy
+    if (occupancy_pct < 20) {
+        return base_fee
+    };
+
+    // LINEAR RAMP: 20-80% occupancy (from 1x to 10x)
+    if (occupancy_pct < 80) {
+        // Linear interpolation: fee = base * (1 + 9 * (occupancy - 20) / 60)
+        // At 20%: 1x, at 50%: 5.5x, at 80%: 10x
+        let progress = occupancy_pct - 20; // 0 to 60
+        let multiplier = 10 + (90 * progress) / 60; // 10 to 100 (in tenths)
+        return (base_fee * multiplier) / 10
+    };
+
+    // EXPONENTIAL ZONE: 80-100% occupancy
+    // Start at 10x base and apply exponential multiplier
+    // exponent = (occupancy - 80) / 10  → gives 0, 1, 2 for 80%, 90%, 100%
+    let exponent = (occupancy_pct - 80) / 10;
+    let base_multiplier = 10000 + multiplier_bps; // e.g., 10000 + 5000 = 15000 (1.5x)
+
+    // Start with 10x base fee
+    let mut fee = base_fee * 10;
+
+    // Apply exponential multiplier: fee *= (1 + multiplier)^exponent
+    let mut i = 0;
+    while (i < exponent) {
+        fee = (fee * base_multiplier) / 10000;
+        i = i + 1;
+    };
+
+    fee
 }
 
 /// Get proposals by a specific proposer
@@ -961,36 +1058,9 @@ public fun would_accept_proposal<StableCoin>(
     false
 }
 
-/// Slash and distribute fee according to DAO configuration
-public fun slash_and_distribute_fee<StableCoin>(
-    _queue: &ProposalQueue<StableCoin>,
-    fee_manager: &mut ProposalFeeManager,
-    proposal_id: ID,
-    slasher: address,
-    account: &Account,
-    ctx: &mut TxContext,
-): (Coin<SUI>, Coin<SUI>) {
-    let config = account::config(account);
-    let slash_config = futarchy_config::slash_distribution(config);
-
-    // Use the fee manager to slash and distribute
-    let (slasher_reward, dao_coin) = proposal_fee_manager::slash_proposal_fee_with_distribution(
-        fee_manager,
-        proposal_id,
-        slash_config,
-        ctx,
-    );
-
-    // Transfer slasher reward directly to the slasher
-    if (coin::value(&slasher_reward) > 0) {
-        transfer::public_transfer(slasher_reward, slasher);
-    } else {
-        coin::destroy_zero(slasher_reward);
-    };
-
-    // Return DAO treasury coin for the caller to handle
-    (coin::zero(ctx), dao_coin)
-}
+// REMOVED: slash_and_distribute_fee - replaced by new split logic using constants
+// Old system: Used SlashDistribution config for custom splits
+// New system: 90% refund to proposer, 10% to protocol (from constants)
 
 /// Mark a proposal as active after extraction from queue
 /// Sets is_proposal_live to true
@@ -1077,12 +1147,14 @@ public fun update_max_proposer_funded<StableCoin>(
 }
 
 
-/// Cancel a proposal and refund the fee - secured to prevent theft
-/// Now this is an entry function that transfers funds directly to the proposer
+/// Cancel a proposal with new fee split logic:
+/// - Bond: 50% refund to proposer, 50% to DAO treasury
+/// - Priority Fee: 100% refund to proposer
 /// Added validation to ensure proposal is still in queue (not activated)
-public entry fun cancel_proposal<StableCoin>(
+public entry fun cancel_proposal<StableCoin: drop>(
     queue: &mut ProposalQueue<StableCoin>,
-    fee_manager: &mut ProposalFeeManager,
+    fee_manager: &mut ProposalFeeManager<StableCoin>,
+    account: &mut Account,
     proposal_id: ID,
     ctx: &mut TxContext,
 ) {
@@ -1132,19 +1204,147 @@ public entry fun cancel_proposal<StableCoin>(
         used_quota: _,
     } = removed;
 
-    // Get the fee refunded as a Coin
-    let refunded_fee = proposal_fee_manager::refund_proposal_fee(
+    // Priority fee: 100% to DAO (NOT refunded - prevents evict-and-cancel exploits)
+    let priority_fee_to_dao = proposal_fee_manager::split_priority_fee_on_cancel(
         fee_manager,
         proposal_id,
         ctx,
     );
+    vault::deposit_approved<FutarchyConfig, StableCoin>(
+        account,
+        b"treasury".to_string(),
+        priority_fee_to_dao,
+    );
 
-    // Critical fix: Transfer the refunded fee directly to the proposer
-    transfer::public_transfer(refunded_fee, proposer_addr);
-
-    // Critical fix: Transfer the bond directly to the proposer if it exists
+    // Split bond: 50% proposer, 50% DAO treasury
     if (option::is_some(&bond)) {
-        transfer::public_transfer(option::extract(&mut bond), proposer_addr);
+        let mut bond_coin = option::extract(&mut bond);
+        let bond_amount = coin::value(&bond_coin);
+
+        let (proposer_share, dao_share) = proposal_fee_manager::calculate_bond_split_on_cancel(bond_amount);
+
+        // Split the bond
+        let proposer_bond = coin::split(&mut bond_coin, proposer_share, ctx);
+        let dao_bond = bond_coin; // Remainder goes to DAO
+
+        // Transfer proposer's share
+        transfer::public_transfer(proposer_bond, proposer_addr);
+
+        // Deposit DAO's share to treasury vault (permissionless deposit for approved coin types)
+        vault::deposit_approved<FutarchyConfig, StableCoin>(
+            account,
+            b"treasury".to_string(),
+            dao_bond,
+        );
+    };
+    option::destroy_none(bond);
+
+    // Refund crank bounty to proposer if it exists
+    if (option::is_some(&crank_bounty)) {
+        transfer::public_transfer(option::extract(&mut crank_bounty), proposer_addr);
+    };
+    option::destroy_none(crank_bounty);
+}
+
+/// Timeout a proposal that has been in queue too long
+/// Permissionless - anyone can call this to clean up expired proposals
+///
+/// Refund logic:
+/// - Priority Fee: 100% to DAO (NOT refunded - prevents exploits)
+/// - Bond: 50% to timeout_caller (cleanup reward), 50% to DAO
+/// - Crank Bounty: 100% refund to proposer
+///
+/// Incentive structure:
+/// - Cancel early: Lose priority fee + 50% bond, but get 50% bond back NOW
+/// - Wait for timeout: Lose priority fee + 50% bond (timeout caller gets it)
+/// - Timeout cleanup: Profitable for bots (get 50% of bond as reward)
+public entry fun timeout_proposal<StableCoin: drop>(
+    queue: &mut ProposalQueue<StableCoin>,
+    fee_manager: &mut ProposalFeeManager<StableCoin>,
+    account: &mut Account,
+    proposal_id: ID,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let mut i = 0;
+    let mut found = false;
+    let mut queue_entry_time = 0u64;
+
+    // Find the proposal in the queue
+    while (i < queue.size) {
+        let proposal = vector::borrow(&queue.heap, i);
+        if (proposal.proposal_id == proposal_id) {
+            queue_entry_time = proposal.queue_entry_time;
+            found = true;
+            break
+        };
+        i = i + 1;
+    };
+
+    assert!(found, EProposalNotFound);
+
+    // Check that proposal has been in queue long enough to timeout
+    let current_time = clock::timestamp_ms(clock);
+    let time_in_queue = current_time - queue_entry_time;
+    assert!(time_in_queue >= PROPOSAL_TIMEOUT_MS, EProposalNotTimedOut);
+
+    // Now we know the proposal is in queue and has timed out, safe to remove
+    let proposal = vector::borrow(&queue.heap, i);
+    let proposer_addr = proposal.proposer;
+
+    let removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, i, &mut queue.size);
+    let QueuedProposal {
+        proposal_id,
+        mut bond,
+        dao_id: _,
+        proposer: _,
+        fee: _,
+        timestamp: _,
+        priority_score: _,
+        intent_spec: _,
+        uses_dao_liquidity: _,
+        data: _,
+        queue_entry_time: _,
+        policy_mode: _,
+        required_council_id: _,
+        council_approval_proof: _,
+        time_reached_top_of_queue: _,
+        mut crank_bounty,
+        used_quota: _,
+    } = removed;
+
+    // Priority fee: 100% to DAO (NOT refunded)
+    let priority_fee_to_dao = proposal_fee_manager::split_priority_fee_on_timeout(
+        fee_manager,
+        proposal_id,
+        ctx,
+    );
+    vault::deposit_approved<FutarchyConfig, StableCoin>(
+        account,
+        b"treasury".to_string(),
+        priority_fee_to_dao,
+    );
+
+    // Bond: 50% timeout_caller (cleanup reward), 50% DAO
+    if (option::is_some(&bond)) {
+        let mut bond_coin = option::extract(&mut bond);
+        let bond_amount = coin::value(&bond_coin);
+
+        let (dao_share, caller_share) = proposal_fee_manager::calculate_bond_split_on_timeout(bond_amount);
+
+        // Split the bond
+        let caller_bond = coin::split(&mut bond_coin, caller_share, ctx);
+        let dao_bond = bond_coin; // Remainder goes to DAO
+
+        // Transfer caller's cleanup reward
+        transfer::public_transfer(caller_bond, ctx.sender());
+
+        // Deposit DAO's share to treasury vault
+        vault::deposit_approved<FutarchyConfig, StableCoin>(
+            account,
+            b"treasury".to_string(),
+            dao_bond,
+        );
     };
     option::destroy_none(bond);
 

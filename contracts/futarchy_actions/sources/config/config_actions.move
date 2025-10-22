@@ -51,8 +51,7 @@ public struct TwapConfigUpdate has drop {}
 public struct GovernanceUpdate has drop {}
 /// Update metadata table
 public struct MetadataTableUpdate has drop {}
-/// Update slash distribution
-public struct SlashDistributionUpdate has drop {}
+// REMOVED: SlashDistributionUpdate - legacy code, not used
 /// Update queue parameters
 public struct QueueParamsUpdate has drop {}
 /// Update early resolve configuration
@@ -71,7 +70,7 @@ const EInvalidParameter: u64 = 2;
 const EEmptyString: u64 = 3;
 const EMismatchedKeyValueLength: u64 = 4;
 const EInvalidConfigType: u64 = 5;
-const EInvalidSlashDistribution: u64 = 6;
+// REMOVED: EInvalidSlashDistribution - legacy code, not used
 const EWrongAction: u64 = 7;
 const EUnsupportedActionVersion: u64 = 8;
 const ENotActive: u64 = 9; // DAO must be in ACTIVE state for this operation
@@ -137,15 +136,7 @@ public struct GovernanceSettingsChanged has copy, drop {
     timestamp: u64,
 }
 
-/// Emitted when slash distribution is updated
-public struct SlashDistributionChanged has copy, drop {
-    account_id: ID,
-    slasher_reward_bps: u16,
-    dao_treasury_bps: u16,
-    protocol_bps: u16,
-    burn_bps: u16,
-    timestamp: u64,
-}
+// REMOVED: SlashDistributionChanged event - legacy code, not used
 
 /// Emitted when storage config is updated
 /// REMOVED: StorageConfigChanged event - Walrus functionality moved to v3_futarchy_legal
@@ -192,6 +183,7 @@ public struct SetProposalsEnabledAction has store, drop, copy {
 /// This must go through the normal futarchy governance process
 public struct TerminateDaoAction has store, drop, copy {
     reason: String,  // Why DAO is being terminated (for transparency/audit trail)
+    dissolution_unlock_delay_ms: u64,  // Time to wait before redemption opens (allows auctions/settlements)
 }
 
 /// Action to update the DAO name
@@ -228,7 +220,6 @@ public struct TwapConfigUpdateAction has store, drop, copy {
 
 /// Governance settings update action
 public struct GovernanceUpdateAction has store, drop, copy {
-    proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
     max_actions_per_outcome: Option<u64>,
     required_bond_amount: Option<u64>,
@@ -245,13 +236,7 @@ public struct MetadataTableUpdateAction has store, drop, copy {
     keys_to_remove: vector<String>,
 }
 
-/// Slash distribution update action
-public struct SlashDistributionUpdateAction has store, drop, copy {
-    slasher_reward_bps: u16,
-    dao_treasury_bps: u16,
-    protocol_bps: u16,
-    burn_bps: u16,
-}
+// REMOVED: SlashDistributionUpdateAction - legacy code, not used
 
 /// Queue parameters update action
 public struct QueueParamsUpdateAction has store, drop, copy {
@@ -412,6 +397,7 @@ public fun do_terminate_dao<Outcome: store, IW: drop>(
     let mut reader = bcs::new(*action_data);
     let reason_bytes = reader.peel_vec_u8();
     let reason = string::utf8(reason_bytes);
+    let dissolution_unlock_delay_ms = reader.peel_u64();
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -427,7 +413,11 @@ public fun do_terminate_dao<Outcome: store, IW: drop>(
     );
 
     // CRITICAL: This is irreversible - set to TERMINATED
+    let terminated_at = clock.timestamp_ms();
     futarchy_config::set_operational_state(dao_state, futarchy_config::state_terminated());
+
+    // Store dissolution parameters for later capability creation
+    futarchy_config::set_dissolution_params(dao_state, terminated_at, dissolution_unlock_delay_ms);
 
     // Note: Proposal creation is disabled via state_terminated() above
     // The GovernanceConfig setters are package-private so we can't call them here
@@ -785,7 +775,6 @@ public fun do_update_governance<Outcome: store, IW: drop>(
 
     // Safe deserialization with BCS reader
     let mut reader = bcs::new(*action_data);
-    let proposal_creation_enabled = reader.peel_option_bool();
     let max_outcomes = reader.peel_option_u64();
     let max_actions_per_outcome = reader.peel_option_u64();
     let required_bond_amount = reader.peel_option_u64();
@@ -799,7 +788,6 @@ public fun do_update_governance<Outcome: store, IW: drop>(
 
     // Create action struct for validation
     let action = GovernanceUpdateAction {
-        proposal_creation_enabled,
         max_outcomes,
         max_actions_per_outcome,
         required_bond_amount,
@@ -816,20 +804,17 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Apply updates if provided
-    if (action.proposal_creation_enabled.is_some()) {
-        // State modification would need Account access
-        // For now, skip this field
-        let _ = action.proposal_creation_enabled;
-    };
     if (action.max_outcomes.is_some()) {
         futarchy_config::set_max_outcomes(config, *action.max_outcomes.borrow());
     };
     if (action.max_actions_per_outcome.is_some()) {
         futarchy_config::set_max_actions_per_outcome(config, *action.max_actions_per_outcome.borrow());
     };
-    if (action.required_bond_amount.is_some()) {
-        futarchy_config::set_required_bond_amount(config, *action.required_bond_amount.borrow());
-    };
+    // Note: set_required_bond_amount doesn't exist yet in futarchy_config
+    // if (action.required_bond_amount.is_some()) {
+    //     futarchy_config::set_required_bond_amount(config, *action.required_bond_amount.borrow());
+    // };
+    let _ = action.required_bond_amount;
     if (action.max_intents_per_outcome.is_some()) {
         futarchy_config::set_max_intents_per_outcome(config, *action.max_intents_per_outcome.borrow());
     };
@@ -987,9 +972,11 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
 
     // Apply updates if provided
-    if (action.fee_escalation_basis_points.is_some()) {
-        futarchy_config::set_fee_escalation_basis_points(config, *action.fee_escalation_basis_points.borrow());
-    };
+    // Note: set_fee_escalation_basis_points doesn't exist yet in futarchy_config
+    // if (action.fee_escalation_basis_points.is_some()) {
+    //     futarchy_config::set_fee_escalation_basis_points(config, *action.fee_escalation_basis_points.borrow());
+    // };
+    let _ = action.fee_escalation_basis_points;
     // Note: max_proposer_funded and max_queue_size may not have setters in futarchy_config yet
 
     // Emit event
@@ -1003,76 +990,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
 }
 
 /// Execute a slash distribution update action
-public fun do_update_slash_distribution<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account,
-    version: VersionWitness,
-    intent_witness: IW,
-    clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Get action spec
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-
-    // CRITICAL - Type check BEFORE deserialization
-    action_validation::assert_action_type<SlashDistributionUpdate>(spec);
-
-    // Get action data
-    let action_data = protocol_intents::action_spec_data(spec);
-
-    // Check version before deserialization
-    let spec_version = protocol_intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    // Safe deserialization with BCS reader
-    let mut reader = bcs::new(*action_data);
-    let slasher_reward_bps = reader.peel_u16();
-    let dao_treasury_bps = reader.peel_u16();
-    let protocol_bps = reader.peel_u16();
-    let burn_bps = reader.peel_u16();
-
-    // Validate all bytes consumed
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Create action struct for validation
-    let action = SlashDistributionUpdateAction {
-        slasher_reward_bps,
-        dao_treasury_bps,
-        protocol_bps,
-        burn_bps,
-    };
-
-    // Validate that they sum to 10000 (100%)
-    let total = (action.slasher_reward_bps as u64) + (action.dao_treasury_bps as u64) +
-                (action.protocol_bps as u64) + (action.burn_bps as u64);
-    assert!(total == 10000, EInvalidSlashDistribution);
-
-    // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
-
-    // Update the slash distribution
-    futarchy_config::update_slash_distribution(
-        config,
-        action.slasher_reward_bps,
-        action.dao_treasury_bps,
-        action.protocol_bps,
-        action.burn_bps
-    );
-
-    // Emit event
-    event::emit(SlashDistributionChanged {
-        account_id: object::id(account),
-        slasher_reward_bps: action.slasher_reward_bps,
-        dao_treasury_bps: action.dao_treasury_bps,
-        protocol_bps: action.protocol_bps,
-        burn_bps: action.burn_bps,
-        timestamp: clock.timestamp_ms(),
-    });
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
+// REMOVED: do_update_slash_distribution - legacy code, not used
 
 /// Execute a storage config update action
 /// REMOVED: Function deprecated - Walrus functionality moved to v3_futarchy_legal
@@ -1401,7 +1319,6 @@ public fun destroy_twap_config_update(action: TwapConfigUpdateAction) {
 /// Destroy a GovernanceUpdateAction
 public fun destroy_governance_update(action: GovernanceUpdateAction) {
     let GovernanceUpdateAction {
-        proposal_creation_enabled: _,
         max_outcomes: _,
         max_actions_per_outcome: _,
         required_bond_amount: _,
@@ -1421,15 +1338,7 @@ public fun destroy_metadata_table_update(action: MetadataTableUpdateAction) {
     } = action;
 }
 
-/// Destroy a SlashDistributionUpdateAction
-public fun destroy_slash_distribution_update(action: SlashDistributionUpdateAction) {
-    let SlashDistributionUpdateAction {
-        slasher_reward_bps: _,
-        dao_treasury_bps: _,
-        protocol_bps: _,
-        burn_bps: _,
-    } = action;
-}
+// REMOVED: destroy_slash_distribution_update - legacy code, not used
 
 /// Destroy a QueueParamsUpdateAction
 public fun destroy_queue_params_update(action: QueueParamsUpdateAction) {
@@ -1578,17 +1487,7 @@ public fun delete_metadata_table_update<Config>(expired: &mut Expired) {
     let _ = reader.into_remainder_bytes();
 }
 
-/// Delete a slash distribution update action from an expired intent
-public fun delete_slash_distribution_update<Config>(expired: &mut Expired) {
-    let action_spec = intents::remove_action_spec(expired);
-    let action_data = intents::action_spec_action_data(action_spec);
-    let mut reader = bcs::new(action_data);
-    reader.peel_u16();
-    reader.peel_u16();
-    reader.peel_u16();
-    reader.peel_u16();
-    let _ = reader.into_remainder_bytes();
-}
+// REMOVED: delete_slash_distribution_update - legacy code, not used
 
 /// Delete a queue params update action from an expired intent
 public fun delete_queue_params_update<Config>(expired: &mut Expired) {
@@ -1654,25 +1553,7 @@ public fun new_update_name_action(new_name: String): UpdateNameAction {
     UpdateNameAction { new_name }
 }
 
-/// Create a slash distribution update action
-public fun new_slash_distribution_update_action(
-    slasher_reward_bps: u16,
-    dao_treasury_bps: u16,
-    protocol_bps: u16,
-    burn_bps: u16,
-): SlashDistributionUpdateAction {
-    // Validate that they sum to 10000 (100%)
-    let total = (slasher_reward_bps as u64) + (dao_treasury_bps as u64) + 
-                (protocol_bps as u64) + (burn_bps as u64);
-    assert!(total == 10000, EInvalidSlashDistribution);
-    
-    SlashDistributionUpdateAction {
-        slasher_reward_bps,
-        dao_treasury_bps,
-        protocol_bps,
-        burn_bps,
-    }
-}
+// REMOVED: new_slash_distribution_update_action - legacy code, not used
 
 /// Create a trading params update action
 public fun new_trading_params_update_action(
@@ -1727,7 +1608,6 @@ public fun new_twap_config_update_action(
 
 /// Create a governance update action
 public fun new_governance_update_action(
-    proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
     max_actions_per_outcome: Option<u64>,
     required_bond_amount: Option<u64>,
@@ -1737,7 +1617,6 @@ public fun new_governance_update_action(
     optimistic_challenge_period_ms: Option<u64>,
 ): GovernanceUpdateAction {
     let action = GovernanceUpdateAction {
-        proposal_creation_enabled,
         max_outcomes,
         max_actions_per_outcome,
         required_bond_amount,
@@ -1948,7 +1827,6 @@ public fun new_twap_config_update<Outcome, IW: drop>(
 /// Add a GovernanceUpdate action to an intent
 public fun new_governance_update<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
-    proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
     max_actions_per_outcome: Option<u64>,
     required_bond_amount: Option<u64>,
@@ -1959,7 +1837,6 @@ public fun new_governance_update<Outcome, IW: drop>(
     intent_witness: IW,
 ) {
     let action = GovernanceUpdateAction {
-        proposal_creation_enabled,
         max_outcomes,
         max_actions_per_outcome,
         required_bond_amount,
@@ -2001,34 +1878,7 @@ public fun new_metadata_table_update<Outcome, IW: drop>(
     destroy_metadata_table_update(action);
 }
 
-/// Add a SlashDistributionUpdate action to an intent
-public fun new_slash_distribution_update<Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    slasher_reward_bps: u16,
-    dao_treasury_bps: u16,
-    protocol_bps: u16,
-    burn_bps: u16,
-    intent_witness: IW,
-) {
-    // Validate that they sum to 10000 (100%)
-    let total = (slasher_reward_bps as u64) + (dao_treasury_bps as u64) +
-                (protocol_bps as u64) + (burn_bps as u64);
-    assert!(total == 10000, EInvalidSlashDistribution);
-
-    let action = SlashDistributionUpdateAction {
-        slasher_reward_bps,
-        dao_treasury_bps,
-        protocol_bps,
-        burn_bps,
-    };
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
-        type_name::get<SlashDistributionUpdate>().into_string().to_string(),
-        action_data,
-        intent_witness
-    );
-    destroy_slash_distribution_update(action);
-}
+// REMOVED: new_slash_distribution_update - legacy code, not used
 
 /// Add a QueueParamsUpdate action to an intent
 public fun new_queue_params_update<Outcome, IW: drop>(
@@ -2144,7 +1994,6 @@ public fun get_twap_config_fields(update: &TwapConfigUpdateAction): (
 
 /// Get governance update fields
 public fun get_governance_fields(update: &GovernanceUpdateAction): (
-    &Option<bool>,
     &Option<u64>,
     &Option<u64>,
     &Option<u64>,
@@ -2152,7 +2001,6 @@ public fun get_governance_fields(update: &GovernanceUpdateAction): (
     &Option<u64>
 ) {
     (
-        &update.proposal_creation_enabled,
         &update.max_outcomes,
         &update.max_actions_per_outcome,
         &update.required_bond_amount,
@@ -2175,14 +2023,7 @@ public fun get_metadata_table_fields(update: &MetadataTableUpdateAction): (
 }
 
 /// Get slash distribution update fields
-public fun get_slash_distribution_fields(update: &SlashDistributionUpdateAction): (u16, u16, u16, u16) {
-    (
-        update.slasher_reward_bps,
-        update.dao_treasury_bps,
-        update.protocol_bps,
-        update.burn_bps
-    )
-}
+// REMOVED: get_slash_distribution_fields - legacy code, not used
 
 /// Get queue params update fields
 public fun get_queue_params_fields(update: &QueueParamsUpdateAction): (
@@ -2442,7 +2283,6 @@ public(package) fun twap_config_update_action_from_bytes(bytes: vector<u8>): Twa
 public(package) fun governance_update_action_from_bytes(bytes: vector<u8>): GovernanceUpdateAction {
     let mut bcs = bcs::new(bytes);
     GovernanceUpdateAction {
-        proposal_creation_enabled: bcs.peel_option_bool(),
         max_outcomes: bcs.peel_option_u64(),
         max_actions_per_outcome: bcs.peel_option_u64(),
         required_bond_amount: bcs.peel_option_u64(),
@@ -2500,16 +2340,7 @@ public(package) fun queue_params_update_action_from_bytes(bytes: vector<u8>): Qu
     }
 }
 
-/// Deserialize SlashDistributionUpdateAction from bytes
-public(package) fun slash_distribution_update_action_from_bytes(bytes: vector<u8>): SlashDistributionUpdateAction {
-    let mut bcs = bcs::new(bytes);
-    SlashDistributionUpdateAction {
-        slasher_reward_bps: bcs.peel_u16(),
-        dao_treasury_bps: bcs.peel_u16(),
-        protocol_bps: bcs.peel_u16(),
-        burn_bps: bcs.peel_u16(),
-    }
-}
+// REMOVED: slash_distribution_update_action_from_bytes - legacy code, not used
 
 /// Deserialize EarlyResolveConfigUpdateAction from bytes
 public(package) fun early_resolve_config_update_action_from_bytes(bytes: vector<u8>): EarlyResolveConfigUpdateAction {

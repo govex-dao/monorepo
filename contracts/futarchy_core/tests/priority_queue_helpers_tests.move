@@ -1,6 +1,8 @@
 #[test_only]
 module futarchy_core::priority_queue_helpers_tests;
 
+use account_protocol::account;
+use futarchy_core::proposal_fee_manager;
 use futarchy_core::priority_queue::{Self, ProposalQueue, QueueMutationAuth};
 use futarchy_core::priority_queue_helpers;
 use std::string;
@@ -162,6 +164,10 @@ fun test_extract_max_single_proposal() {
     let dao_id = object::id_from_address(@0xDA0);
     let mut queue = priority_queue::new<SUI>(dao_id, 10, 300000, ts::ctx(&mut scenario));
 
+    // Create fee manager and account for testing
+    let mut fee_manager = proposal_fee_manager::new<SUI>(ts::ctx(&mut scenario));
+    let mut account = account::new_for_testing(ts::ctx(&mut scenario));
+
     clock.set_for_testing(1000);
 
     // Add one proposal
@@ -173,7 +179,7 @@ fun test_extract_max_single_proposal() {
         &clock,
     );
 
-    let _ = priority_queue::insert(&mut queue, proposal, &clock, ts::ctx(&mut scenario));
+    let _ = priority_queue::insert(&mut queue, proposal, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
 
     // Extract it
     let auth = priority_queue::create_mutation_auth();
@@ -185,6 +191,8 @@ fun test_extract_max_single_proposal() {
 
     priority_queue::destroy_for_testing(extracted);
     priority_queue::destroy_queue_for_testing(queue);
+    proposal_fee_manager::destroy_for_testing(fee_manager);
+    account::destroy_for_testing<account::TestConfig>(account);
     end(scenario, clock);
 }
 
@@ -194,6 +202,10 @@ fun test_extract_max_multiple_proposals() {
 
     let dao_id = object::id_from_address(@0xDA0);
     let mut queue = priority_queue::new<SUI>(dao_id, 10, 300000, ts::ctx(&mut scenario));
+
+    // Create fee manager and account for testing
+    let mut fee_manager = proposal_fee_manager::new<SUI>(ts::ctx(&mut scenario));
+    let mut account = account::new_for_testing(ts::ctx(&mut scenario));
 
     clock.set_for_testing(1000);
 
@@ -220,9 +232,9 @@ fun test_extract_max_multiple_proposals() {
         &clock,
     );
 
-    let _ = priority_queue::insert(&mut queue, p1, &clock, ts::ctx(&mut scenario));
-    let _ = priority_queue::insert(&mut queue, p2, &clock, ts::ctx(&mut scenario));
-    let _ = priority_queue::insert(&mut queue, p3, &clock, ts::ctx(&mut scenario));
+    let _ = priority_queue::insert(&mut queue, p1, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
+    let _ = priority_queue::insert(&mut queue, p2, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
+    let _ = priority_queue::insert(&mut queue, p3, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
 
     // Extract max - should be highest fee (5000)
     let auth = priority_queue::create_mutation_auth();
@@ -233,6 +245,8 @@ fun test_extract_max_multiple_proposals() {
 
     priority_queue::destroy_for_testing(extracted);
     priority_queue::destroy_queue_for_testing(queue);
+    proposal_fee_manager::destroy_for_testing(fee_manager);
+    account::destroy_for_testing<account::TestConfig>(account);
     end(scenario, clock);
 }
 
@@ -242,6 +256,10 @@ fun test_extract_max_tie_breaking_by_timestamp() {
 
     let dao_id = object::id_from_address(@0xDA0);
     let mut queue = priority_queue::new<SUI>(dao_id, 10, 300000, ts::ctx(&mut scenario));
+
+    // Create fee manager and account for testing
+    let mut fee_manager = proposal_fee_manager::new<SUI>(ts::ctx(&mut scenario));
+    let mut account = account::new_for_testing(ts::ctx(&mut scenario));
 
     // Add proposals with same fee but different timestamps
     clock.set_for_testing(1000);
@@ -253,7 +271,7 @@ fun test_extract_max_tie_breaking_by_timestamp() {
         &clock,
     );
     // Insert p1 while clock is at 1000
-    let _ = priority_queue::insert(&mut queue, p1, &clock, ts::ctx(&mut scenario));
+    let _ = priority_queue::insert(&mut queue, p1, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
 
     // Now change clock for p2
     clock.set_for_testing(2000);
@@ -265,7 +283,7 @@ fun test_extract_max_tie_breaking_by_timestamp() {
         &clock,
     );
     // Insert p2 while clock is at 2000
-    let _ = priority_queue::insert(&mut queue, p2, &clock, ts::ctx(&mut scenario));
+    let _ = priority_queue::insert(&mut queue, p2, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
 
     // Extract max - should be earliest timestamp (p1)
     let auth = priority_queue::create_mutation_auth();
@@ -276,6 +294,8 @@ fun test_extract_max_tie_breaking_by_timestamp() {
 
     priority_queue::destroy_for_testing(extracted);
     priority_queue::destroy_queue_for_testing(queue);
+    proposal_fee_manager::destroy_for_testing(fee_manager);
+    account::destroy_for_testing<account::TestConfig>(account);
     end(scenario, clock);
 }
 

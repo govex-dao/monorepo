@@ -232,15 +232,9 @@ public fun update(oracle: &mut SimpleTWAP, price: u128, clock: &Clock) {
 /// Result: Cap grows with TWAP, but steps are arithmetic within each batch
 ///
 fun finalize_window(oracle: &mut SimpleTWAP, now: u64, num_windows: u64) {
-    // Calculate raw TWAP from accumulated price * time
-    let total_duration = now - oracle.window_start;
-    let raw_twap = if (total_duration > 0) {
-        let twap_u256 = oracle.cumulative_price / (total_duration as u256);
-        assert!(twap_u256 <= (std::u128::max_value!() as u256), EOverflow);
-        (twap_u256 as u128)
-    } else {
-        oracle.last_window_twap
-    };
+    // The "raw" target is the current spot price we're tracking toward
+    // We cap the movement from last_window_twap toward this spot price
+    let raw_twap = oracle.last_price;
 
     // Calculate FIXED cap for this entire batch (% of current TWAP)
     let max_step_u256 =
@@ -256,18 +250,10 @@ fun finalize_window(oracle: &mut SimpleTWAP, now: u64, num_windows: u64) {
         (oracle.last_window_twap - raw_twap, false)
     };
 
-    // Calculate total movement (capped by num_windows × max_step)
-    // Protect against overflow: max_step × num_windows
-    let max_total_movement = if (max_step > 0 && num_windows > 0) {
-        let max_total_u256 = (max_step as u256) * (num_windows as u256);
-        if (max_total_u256 > (std::u128::max_value!() as u256)) {
-            std::u128::max_value!()
-        } else {
-            (max_total_u256 as u128)
-        }
-    } else {
-        0
-    };
+    // Calculate total movement (capped by SINGLE max_step for O(1) gas)
+    // CRITICAL: Take ONE step regardless of num_windows for predictable gas cost
+    // This means catching up after missed windows requires multiple update() calls
+    let max_total_movement = max_step;
 
     let actual_movement = if (total_gap > max_total_movement) {
         max_total_movement

@@ -52,25 +52,11 @@ public fun protocol_max_threshold_negative(): u128 {
 
 // === Errors ===
 
-const EInvalidSlashDistribution: u64 = 0;
 const ELaunchpadPriceAlreadySet: u64 = 101;
 const EThresholdExceedsProtocolMax: u64 = 102;
 const EDAOTerminated: u64 = 103; // DAO is terminated, operation not allowed
 
 // === Structs ===
-
-/// Configuration for how slashed proposal fees are distributed
-public struct SlashDistribution has copy, drop, store {
-    /// Percentage (in basis points) that goes to the slasher who evicted the proposal
-    slasher_reward_bps: u16,
-    /// Percentage (in basis points) that goes to the DAO treasury
-    dao_treasury_bps: u16,
-    /// Percentage (in basis points) that goes to protocol revenue
-    protocol_bps: u16,
-    /// Percentage (in basis points) that gets burned
-    burn_bps: u16,
-}
-
 
 /// Early resolve configuration - per DAO
 /// Enables proposals to resolve early when markets reach consensus
@@ -179,8 +165,6 @@ public struct FutarchyConfig has copy, drop, store {
     stable_type: String,
     // Core DAO configuration
     config: DaoConfig,
-    // Slash distribution configuration
-    slash_distribution: SlashDistribution,
     // Reward configurations (paid from protocol revenue in SUI)
     // Set to 0 to disable rewards (default), or configure per DAO
     proposal_pass_reward: u64, // Reward for proposal creator when proposal passes (in SUI, default: 0)
@@ -216,6 +200,10 @@ public struct DaoState has store {
     total_proposals: u64,
     attestation_url: String,
     verification_pending: bool,
+    // Dissolution fields (set when DAO terminated)
+    terminated_at_ms: Option<u64>,  // When DAO was terminated
+    dissolution_unlock_delay_ms: Option<u64>,  // How long to wait before redemption
+    dissolution_capability_created: bool,  // Prevent multiple capability creation
 }
 
 /// Key for storing DaoState as a dynamic field
@@ -241,21 +229,11 @@ public struct TreasuryKey has copy, drop, store {}
 /// Creates a new pure FutarchyConfig
 public fun new<AssetType: drop, StableType: drop>(
     dao_config: DaoConfig,
-    slash_distribution: SlashDistribution,
 ): FutarchyConfig {
-    // Validate slash distribution
-    let total_bps =
-        (slash_distribution.slasher_reward_bps as u64) +
-                   (slash_distribution.dao_treasury_bps as u64) +
-                   (slash_distribution.protocol_bps as u64) +
-                   (slash_distribution.burn_bps as u64);
-    assert!(total_bps == 10000, EInvalidSlashDistribution);
-
     FutarchyConfig {
         asset_type: type_name::get<AssetType>().into_string().to_string(),
         stable_type: type_name::get<StableType>().into_string().to_string(),
         config: dao_config,
-        slash_distribution,
         proposal_pass_reward: 0, // No default reward (DAO must configure)
         outcome_win_reward: 0, // No default reward (DAO must configure)
         review_to_trading_fee: 1_000_000_000, // 1 SUI default
@@ -277,31 +255,14 @@ public fun new_dao_state(): DaoState {
         total_proposals: 0,
         attestation_url: b"".to_string(),
         verification_pending: false,
+        terminated_at_ms: option::none(),
+        dissolution_unlock_delay_ms: option::none(),
+        dissolution_capability_created: false,
     }
 }
 
-/// Creates a SlashDistribution configuration
-public fun new_slash_distribution(
-    slasher_reward_bps: u16,
-    dao_treasury_bps: u16,
-    protocol_bps: u16,
-    burn_bps: u16,
-): SlashDistribution {
-    // Validate total equals 100%
-    let total_bps =
-        (slasher_reward_bps as u64) +
-                   (dao_treasury_bps as u64) +
-                   (protocol_bps as u64) +
-                   (burn_bps as u64);
-    assert!(total_bps == 10000, EInvalidSlashDistribution);
-
-    SlashDistribution {
-        slasher_reward_bps,
-        dao_treasury_bps,
-        protocol_bps,
-        burn_bps,
-    }
-}
+// REMOVED: new_slash_distribution - legacy code, not used
+// REMOVED: SlashDistribution struct and getters - legacy code, not used
 
 // === Getters for FutarchyConfig ===
 
@@ -319,10 +280,6 @@ public fun dao_config(config: &FutarchyConfig): &DaoConfig {
 
 public fun dao_config_mut(config: &mut FutarchyConfig): &mut DaoConfig {
     &mut config.config
-}
-
-public fun slash_distribution(config: &FutarchyConfig): &SlashDistribution {
-    &config.slash_distribution
 }
 
 public fun proposal_pass_reward(config: &FutarchyConfig): u64 {
@@ -361,23 +318,7 @@ public fun refund_quota_on_eviction(config: &FutarchyConfig): bool {
     config.refund_quota_on_eviction
 }
 
-// === Getters for SlashDistribution ===
-
-public fun slasher_reward_bps(dist: &SlashDistribution): u16 {
-    dist.slasher_reward_bps
-}
-
-public fun dao_treasury_bps(dist: &SlashDistribution): u16 {
-    dist.dao_treasury_bps
-}
-
-public fun protocol_bps(dist: &SlashDistribution): u16 {
-    dist.protocol_bps
-}
-
-public fun burn_bps(dist: &SlashDistribution): u16 {
-    dist.burn_bps
-}
+// REMOVED: Getters for SlashDistribution - legacy code, not used
 
 // === Getters for DaoState ===
 
@@ -412,14 +353,52 @@ public fun is_terminated(state: &DaoState): bool {
 }
 
 /// Assert DAO is not terminated (use before operations that require active state)
+/// Only allows ACTIVE state (rejects TERMINATED state)
 public fun assert_not_terminated(state: &DaoState) {
-    assert!(state.operational_state != DAO_STATE_TERMINATED, EDAOTerminated);
+    assert!(state.operational_state == DAO_STATE_ACTIVE, EDAOTerminated);
 }
 
 // === Setters for DaoState (mutable) ===
 
 public fun set_operational_state(state: &mut DaoState, new_state: u8) {
     state.operational_state = new_state;
+}
+
+/// Set dissolution parameters when terminating DAO
+public fun set_dissolution_params(
+    state: &mut DaoState,
+    terminated_at_ms: u64,
+    unlock_delay_ms: u64,
+) {
+    state.terminated_at_ms = option::some(terminated_at_ms);
+    state.dissolution_unlock_delay_ms = option::some(unlock_delay_ms);
+}
+
+/// Mark that dissolution capability has been created (one-time flag)
+public fun mark_dissolution_capability_created(state: &mut DaoState) {
+    state.dissolution_capability_created = true;
+}
+
+/// Get dissolution unlock time (terminated_at + delay)
+/// Returns none if DAO not terminated
+public fun dissolution_unlock_time(state: &DaoState): Option<u64> {
+    if (state.terminated_at_ms.is_some() && state.dissolution_unlock_delay_ms.is_some()) {
+        let terminated_at = *state.terminated_at_ms.borrow();
+        let delay = *state.dissolution_unlock_delay_ms.borrow();
+        option::some(terminated_at + delay)
+    } else {
+        option::none()
+    }
+}
+
+/// Get termination timestamp
+public fun terminated_at(state: &DaoState): Option<u64> {
+    state.terminated_at_ms
+}
+
+/// Check if dissolution capability has been created
+public fun dissolution_capability_created(state: &DaoState): bool {
+    state.dissolution_capability_created
 }
 
 public fun increment_active_proposals(state: &mut DaoState) {
@@ -457,7 +436,6 @@ public fun with_rewards(
         asset_type: config.asset_type,
         stable_type: config.stable_type,
         config: config.config,
-        slash_distribution: config.slash_distribution,
         proposal_pass_reward,
         outcome_win_reward,
         review_to_trading_fee,
@@ -476,7 +454,6 @@ public fun with_verification_level(config: FutarchyConfig, verification_level: u
         asset_type: config.asset_type,
         stable_type: config.stable_type,
         config: config.config,
-        slash_distribution: config.slash_distribution,
         proposal_pass_reward: config.proposal_pass_reward,
         outcome_win_reward: config.outcome_win_reward,
         review_to_trading_fee: config.review_to_trading_fee,
@@ -495,7 +472,6 @@ public fun with_dao_score(config: FutarchyConfig, dao_score: u64): FutarchyConfi
         asset_type: config.asset_type,
         stable_type: config.stable_type,
         config: config.config,
-        slash_distribution: config.slash_distribution,
         proposal_pass_reward: config.proposal_pass_reward,
         outcome_win_reward: config.outcome_win_reward,
         review_to_trading_fee: config.review_to_trading_fee,
@@ -509,27 +485,7 @@ public fun with_dao_score(config: FutarchyConfig, dao_score: u64): FutarchyConfi
     }
 }
 
-public fun with_slash_distribution(
-    config: FutarchyConfig,
-    slash_distribution: SlashDistribution,
-): FutarchyConfig {
-    FutarchyConfig {
-        asset_type: config.asset_type,
-        stable_type: config.stable_type,
-        config: config.config,
-        slash_distribution,
-        proposal_pass_reward: config.proposal_pass_reward,
-        outcome_win_reward: config.outcome_win_reward,
-        review_to_trading_fee: config.review_to_trading_fee,
-        finalization_fee: config.finalization_fee,
-        verification_level: config.verification_level,
-        dao_score: config.dao_score,
-        optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
-        launchpad_initial_price: config.launchpad_initial_price,
-        early_resolve_config: config.early_resolve_config,
-        refund_quota_on_eviction: config.refund_quota_on_eviction,
-    }
-}
+// REMOVED: with_slash_distribution - legacy code, not used
 
 /// Builder function: Set optimistic intent challenge enabled
 ///
@@ -545,7 +501,6 @@ public fun with_optimistic_intent_challenge_enabled(
         asset_type: config.asset_type,
         stable_type: config.stable_type,
         config: config.config,
-        slash_distribution: config.slash_distribution,
         proposal_pass_reward: config.proposal_pass_reward,
         outcome_win_reward: config.outcome_win_reward,
         review_to_trading_fee: config.review_to_trading_fee,
@@ -812,9 +767,9 @@ public fun set_max_actions_per_outcome(config: &mut FutarchyConfig, max: u64) {
     dao_config::set_max_actions_per_outcome(gov_cfg, max);
 }
 
-public fun set_required_bond_amount(config: &mut FutarchyConfig, amount: u64) {
+public fun set_queue_entry_bond(config: &mut FutarchyConfig, amount: u64) {
     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
-    dao_config::set_required_bond_amount(gov_cfg, amount);
+    dao_config::set_queue_entry_bond(gov_cfg, amount);
 }
 
 public fun set_max_intents_per_outcome(config: &mut FutarchyConfig, max: u64) {
@@ -827,9 +782,9 @@ public fun set_proposal_intent_expiry_ms(config: &mut FutarchyConfig, expiry: u6
     dao_config::set_proposal_intent_expiry_ms(gov_cfg, expiry);
 }
 
-public fun set_fee_escalation_basis_points(config: &mut FutarchyConfig, points: u64) {
+public fun set_queue_fullness_multiplier_bps(config: &mut FutarchyConfig, points: u64) {
     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
-    dao_config::set_fee_escalation_basis_points(gov_cfg, points);
+    dao_config::set_queue_fullness_multiplier_bps(gov_cfg, points);
 }
 
 public fun set_enable_premarket_reservation_lock(config: &mut FutarchyConfig, enabled: bool) {
@@ -883,25 +838,7 @@ public fun set_refund_quota_on_eviction(config: &mut FutarchyConfig, refund: boo
     config.refund_quota_on_eviction = refund;
 }
 
-public fun update_slash_distribution(
-    config: &mut FutarchyConfig,
-    slasher_reward_bps: u16,
-    dao_treasury_bps: u16,
-    protocol_bps: u16,
-    burn_bps: u16,
-) {
-    assert!(
-        slasher_reward_bps + dao_treasury_bps + protocol_bps + burn_bps == 10000,
-        EInvalidSlashDistribution,
-    );
-    config.slash_distribution =
-        SlashDistribution {
-            slasher_reward_bps,
-            dao_treasury_bps,
-            protocol_bps,
-            burn_bps,
-        };
-}
+// REMOVED: update_slash_distribution - legacy code, not used
 
 /// Set proposal enablement state
 ///
@@ -1077,6 +1014,9 @@ public fun destroy_dao_state_for_testing(state: DaoState) {
         total_proposals: _,
         attestation_url: _,
         verification_pending: _,
+        dissolution_capability_created: _,
+        dissolution_unlock_delay_ms: _,
+        terminated_at_ms: _,
     } = state;
 }
 
@@ -1091,7 +1031,6 @@ public(package) fun destroy_for_migration(config: FutarchyConfig) {
         asset_type: _,
         stable_type: _,
         config: _,
-        slash_distribution: _,
         proposal_pass_reward: _,
         outcome_win_reward: _,
         review_to_trading_fee: _,

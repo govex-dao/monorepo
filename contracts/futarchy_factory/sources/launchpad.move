@@ -63,6 +63,7 @@ const EEarlyCompletionNotAllowed: u64 = 133;
 const EInvalidCrankFee: u64 = 134;
 const EBatchSizeTooLarge: u64 = 135;
 const EEmptyBatch: u64 = 136;
+const ENoProtocolFeesToSweep: u64 = 137;
 
 // === Constants ===
 const STATE_FUNDING: u8 = 0;
@@ -220,6 +221,13 @@ public struct BatchClaimCompleted has copy, drop {
     attempted: u64,
     successful: u64,
     total_reward: u64,
+}
+
+public struct ProtocolFeesSwept has copy, drop {
+    raise_id: ID,
+    amount: u64,
+    recipient: address,
+    timestamp: u64,
 }
 
 // === Init ===
@@ -401,6 +409,7 @@ public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
 /// Contribute with max_total_cap (use UNLIMITED_CAP to accept any raise amount)
 public entry fun contribute<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    factory: &factory::Factory,
     payment: Coin<StableCoin>,
     max_total_cap: u64,
     crank_fee: Coin<sui::sui::SUI>,
@@ -413,8 +422,9 @@ public entry fun contribute<RaiseToken, StableCoin>(
     let amount = payment.value();
     assert!(amount > 0, EZeroContribution);
 
-    // Collect 0.1 SUI crank fee
-    assert!(crank_fee.value() == constants::launchpad_crank_fee_per_contribution(), EInvalidCrankFee);
+    // Collect bid fee (configured at factory level)
+    let required_fee = factory::launchpad_bid_fee(factory);
+    assert!(crank_fee.value() == required_fee, EInvalidCrankFee);
     raise.crank_fee_vault.join(crank_fee.into_balance());
 
     assert!(
@@ -711,14 +721,16 @@ public entry fun claim_tokens<RaiseToken: drop + store, StableCoin: drop + store
     };
 }
 
-/// Batch claim tokens for multiple contributors (cranker earns 0.1 SUI per successful claim)
+/// Batch claim tokens for multiple contributors (cranker earns reward per successful claim)
 /// Gracefully skips already-claimed contributors instead of failing
 public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    factory: &factory::Factory,
     contributors: vector<address>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    let cranker_reward = factory::launchpad_cranker_reward(factory);
     assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
 
     let batch_size = vector::length(&contributors);
@@ -747,13 +759,13 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
             let refund = coin::from_balance(raise.stable_coin_vault.split(contrib.amount), ctx);
             sui_transfer::public_transfer(refund, contributor);
 
-            // Accumulate cranker fee
-            if (raise.crank_fee_vault.value() >= constants::launchpad_crank_fee_per_contribution()) {
-                let crank_reward = coin::from_balance(
-                    raise.crank_fee_vault.split(constants::launchpad_crank_fee_per_contribution()),
+            // Accumulate cranker reward
+            if (raise.crank_fee_vault.value() >= cranker_reward) {
+                let reward = coin::from_balance(
+                    raise.crank_fee_vault.split(cranker_reward),
                     ctx
                 );
-                total_crank_reward.join(crank_reward);
+                total_crank_reward.join(reward);
                 successful_claims = successful_claims + 1;
             };
 
@@ -783,13 +795,13 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
         let tokens = coin::from_balance(raise.raise_token_vault.split(tokens_to_claim), ctx);
         sui_transfer::public_transfer(tokens, contributor);
 
-        // Accumulate cranker fee
-        if (raise.crank_fee_vault.value() >= constants::launchpad_crank_fee_per_contribution()) {
-            let crank_reward = coin::from_balance(
-                raise.crank_fee_vault.split(constants::launchpad_crank_fee_per_contribution()),
+        // Accumulate cranker reward
+        if (raise.crank_fee_vault.value() >= cranker_reward) {
+            let reward = coin::from_balance(
+                raise.crank_fee_vault.split(cranker_reward),
                 ctx
             );
-            total_crank_reward.join(crank_reward);
+            total_crank_reward.join(reward);
             successful_claims = successful_claims + 1;
         };
 
@@ -828,7 +840,7 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
         cranker: ctx.sender(),
         attempted: batch_size,
         successful: successful_claims,
-        total_reward: successful_claims * constants::launchpad_crank_fee_per_contribution(),
+        total_reward: successful_claims * cranker_reward,
     });
 }
 
@@ -874,14 +886,16 @@ public entry fun claim_refund<RaiseToken: drop + store, StableCoin: drop + store
     });
 }
 
-/// Batch claim refunds for failed raise (cranker earns 0.1 SUI per successful claim)
+/// Batch claim refunds for failed raise (cranker earns reward per successful claim)
 /// Gracefully skips already-claimed contributors instead of failing
 public entry fun batch_claim_refund_for<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    factory: &factory::Factory,
     contributors: vector<address>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    let cranker_reward = factory::launchpad_cranker_reward(factory);
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
 
     // Check if raise failed
@@ -925,12 +939,12 @@ public entry fun batch_claim_refund_for<RaiseToken: drop + store, StableCoin: dr
         sui_transfer::public_transfer(refund, contributor);
 
         // Pay cranker
-        if (raise.crank_fee_vault.value() >= constants::launchpad_crank_fee_per_contribution()) {
-            let crank_reward = coin::from_balance(
-                raise.crank_fee_vault.split(constants::launchpad_crank_fee_per_contribution()),
+        if (raise.crank_fee_vault.value() >= cranker_reward) {
+            let reward = coin::from_balance(
+                raise.crank_fee_vault.split(cranker_reward),
                 ctx
             );
-            sui_transfer::public_transfer(crank_reward, ctx.sender());
+            sui_transfer::public_transfer(reward, ctx.sender());
             successful_claims = successful_claims + 1;
         };
 
@@ -948,7 +962,7 @@ public entry fun batch_claim_refund_for<RaiseToken: drop + store, StableCoin: dr
         cranker: ctx.sender(),
         attempted: batch_size,
         successful: successful_claims,
-        total_reward: successful_claims * constants::launchpad_crank_fee_per_contribution(),
+        total_reward: successful_claims * cranker_reward,
     });
 }
 
@@ -1071,6 +1085,44 @@ public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
         stable_dust_amount: remaining_stable_balance,
         token_recipient: raise.creator,
         stable_recipient: object::id(dao_account),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Sweep remaining protocol fees after raise is settled (SUCCESS or FAILED)
+/// Can be called by factory admin after all claims are processed
+/// Difference between bid fee (0.1 SUI) and cranker rewards (0.05 SUI per claim) goes to protocol
+public entry fun sweep_protocol_fees<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    _owner_cap: &factory::FactoryOwnerCap,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Only holder of FactoryOwnerCap can call this (verified by Sui runtime)
+
+    // Can only sweep after raise is settled (either SUCCESS or FAILED)
+    assert!(
+        raise.state == STATE_SUCCESSFUL || raise.state == STATE_FAILED,
+        EInvalidStateForAction
+    );
+
+    // Must have some fees to sweep
+    let remaining_fees = raise.crank_fee_vault.value();
+    assert!(remaining_fees > 0, ENoProtocolFeesToSweep);
+
+    // Extract all remaining fees
+    let protocol_fees = coin::from_balance(
+        raise.crank_fee_vault.split(remaining_fees),
+        ctx
+    );
+
+    // Send to factory admin
+    sui_transfer::public_transfer(protocol_fees, ctx.sender());
+
+    event::emit(ProtocolFeesSwept {
+        raise_id: object::id(raise),
+        amount: remaining_fees,
+        recipient: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
 }

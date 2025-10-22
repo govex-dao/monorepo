@@ -42,6 +42,7 @@ const EInvalidWinningOutcome: u64 = 5;
 const EIntentExpiryTooLong: u64 = 6;
 const ENotEligibleForEarlyResolve: u64 = 7;
 const EInsufficientSpread: u64 = 8;
+const EProposalCreationBlocked: u64 = 9; // Pool launch fee decay in progress
 
 // === Constants ===
 const OUTCOME_ACCEPTED: u64 = 0;
@@ -121,6 +122,16 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ID, ID) {
+    // Check DAO operational state - only allow proposals if DAO is ACTIVE
+    let dao_state = futarchy_config::state_mut_from_account(account);
+    futarchy_config::assert_not_terminated(dao_state);
+
+    // Check pool launch state - prevent proposals during fee decay
+    assert!(
+        unified_spot_pool::can_create_proposals(spot_pool, clock),
+        EProposalCreationBlocked
+    );
+
     // Try to activate the next proposal from the queue
     let auth = priority_queue::create_mutation_auth();
     let mut queued_proposal_opt = priority_queue::try_activate_next(auth, queue);
@@ -155,12 +166,45 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     let outcome_messages = *priority_queue::get_outcome_messages(&data);
     let details = *priority_queue::get_outcome_details(&data);
 
-    // Create fee escrow (bond or empty)
-    let fee_escrow = if (bond.is_some()) {
-        bond.extract().into_balance()
-    } else {
-        balance::zero<StableType>()
+    // Split bond on activation: 50% activator, 50% DAO
+    // Activator = ctx.sender() (person calling advance_proposal_state)
+    if (bond.is_some()) {
+        let bond_coin = bond.extract();
+        let bond_amount = coin::value(&bond_coin);
+
+        let (activator_share, dao_share) = proposal_fee_manager::calculate_bond_split_on_activate(bond_amount);
+
+        // Split bond
+        let activator_bond = coin::split(&mut bond_coin, activator_share, ctx);
+        let dao_bond = bond_coin;
+
+        // Transfer activator's share
+        transfer::public_transfer(activator_bond, ctx.sender());
+
+        // Deposit DAO's share to treasury vault (permissionless deposit)
+        vault::deposit_approved<FutarchyConfig, StableType>(
+            account,
+            b"treasury".to_string(),
+            dao_bond,
+        );
     };
+
+    // Split priority fee on activation: 100% to DAO
+    let dao_priority_fee = proposal_fee_manager::split_priority_fee_on_activate(
+        proposal_fee_manager,
+        proposal_id,
+        ctx,
+    );
+
+    // Deposit priority fee to treasury vault (permissionless deposit)
+    vault::deposit_approved<FutarchyConfig, StableType>(
+        account,
+        b"treasury".to_string(),
+        dao_priority_fee,
+    );
+
+    // Bond is now empty after split (no fee escrow from bond)
+    let fee_escrow = balance::zero<StableType>();
 
     // Track the proposer's fee amount for outcome creator refunds
     let proposer_fee_paid = fee_escrow.value();
@@ -559,6 +603,10 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
 ) {
     use futarchy_markets_core::proposal as proposal_mod;
 
+    // Check DAO operational state - only allow proposals if DAO is ACTIVE
+    let dao_state = futarchy_config::state_mut_from_account(account);
+    futarchy_config::assert_not_terminated(dao_state);
+
     // Prevent double reservation
     assert!(!priority_queue::has_reserved(queue), EProposalNotActive);
 
@@ -590,15 +638,50 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     let auth2 = priority_queue::create_mutation_auth();
     priority_queue::mark_proposal_activated(auth2, queue, uses_dao_liquidity);
 
-    // Extract optional bond -> becomes fee_escrow in proposal
+    // Extract optional bond
     let auth3 = priority_queue::create_mutation_auth();
     let mut bond = priority_queue::extract_bond(auth3, &mut qp);
-    let fee_escrow = if (bond.is_some()) {
-        bond.extract().into_balance()
-    } else {
-        balance::zero<StableType>()
+
+    // Split bond on activation: 50% activator, 50% DAO
+    // Activator = ctx.sender() (person calling reserve_next_proposal)
+    if (bond.is_some()) {
+        let bond_coin = bond.extract();
+        let bond_amount = coin::value(&bond_coin);
+
+        let (activator_share, dao_share) = proposal_fee_manager::calculate_bond_split_on_activate(bond_amount);
+
+        // Split bond
+        let activator_bond = coin::split(&mut bond_coin, activator_share, ctx);
+        let dao_bond = bond_coin;
+
+        // Transfer activator's share
+        transfer::public_transfer(activator_bond, ctx.sender());
+
+        // Deposit DAO's share to treasury vault (permissionless deposit)
+        vault::deposit_approved<FutarchyConfig, StableType>(
+            account,
+            b"treasury".to_string(),
+            dao_bond,
+        );
     };
     bond.destroy_none();
+
+    // Split priority fee on activation: 100% to DAO
+    let dao_priority_fee = proposal_fee_manager::split_priority_fee_on_activate(
+        proposal_fee_manager,
+        queued_id,
+        ctx,
+    );
+
+    // Deposit priority fee to treasury vault (permissionless deposit)
+    vault::deposit_approved<FutarchyConfig, StableType>(
+        account,
+        b"treasury".to_string(),
+        dao_priority_fee,
+    );
+
+    // No fee escrow from bond anymore (bond is split above)
+    let fee_escrow = balance::zero<StableType>();
 
     // Config from account
     let cfg = account.config();

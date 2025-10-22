@@ -11,8 +11,12 @@ module futarchy_one_shot_utils::constants;
 /// Maximum fee in basis points (100%) - for calculations only
 public fun max_fee_bps(): u64 { 10000 }
 
-/// Maximum AMM fee in basis points (5%) - hard cap for all AMM fees
+/// Maximum AMM fee in basis points (5%) - hard cap for steady-state fees
 public fun max_amm_fee_bps(): u64 { 500 }
+
+/// Maximum AMM fee during launch window in basis points (99%)
+/// Allows high initial fees for anti-snipe protection
+public fun max_launch_fee_bps(): u64 { 9900 }
 
 /// LP fee share in basis points for CONDITIONAL AMMs (80% of fees go to LPs)
 public fun conditional_lp_fee_share_bps(): u64 { 8000 }
@@ -124,8 +128,49 @@ public fun default_proposal_intent_expiry_ms(): u64 { 2_592_000_000 }
 
 // REMOVED: default_proposal_recreation_window_ms and default_max_proposal_chain_depth (second-order proposals deleted)
 
-/// Default fee escalation basis points (5%)
+/// Default fee escalation basis points (5%) - DEPRECATED, use default_queue_fullness_multiplier_bps
 public fun default_fee_escalation_bps(): u64 { 500 }
+
+/// Default queue fullness multiplier for exponential fee scaling (50%)
+/// Controls how aggressively fees increase as queue fills up
+public fun default_queue_fullness_multiplier_bps(): u64 { 5000 }
+
+// === Queue Fee Split Constants ===
+// Two fees: Bond (spam prevention) + Priority Fee (queue position)
+// NO protocol cuts - all revenue stays with DAO
+
+// === Cancellation Splits ===
+/// Bond split on cancellation: 50% proposer (partial refund), 50% DAO (spam tax)
+public fun bond_cancel_proposer_bps(): u64 { 5000 }
+public fun bond_cancel_dao_bps(): u64 { 5000 }
+
+/// Priority fee on cancellation: 100% refund to proposer
+public fun priority_fee_cancel_refund_bps(): u64 { 10000 }
+
+// === Eviction Splits ===
+/// Bond split on eviction: 50% evictor (reward), 50% DAO
+public fun bond_evict_evictor_bps(): u64 { 5000 }
+public fun bond_evict_dao_bps(): u64 { 5000 }
+
+/// Priority fee on eviction: 90% proposer (partial refund), 10% evictor (reward)
+public fun priority_fee_evict_proposer_bps(): u64 { 9000 }
+public fun priority_fee_evict_evictor_bps(): u64 { 1000 }
+
+// === Activation Splits ===
+/// Bond split on activation: 50% activator (reward for cranking), 50% DAO
+public fun bond_activation_activator_bps(): u64 { 5000 }
+public fun bond_activation_dao_bps(): u64 { 5000 }
+
+/// Priority fee on activation: 100% to DAO treasury (full governance revenue!)
+public fun priority_fee_activation_dao_bps(): u64 { 10000 }
+
+/// Default proposal creation cooldown after DAO creation (2 hours in milliseconds)
+/// Prevents immediate sniping of proposal queue slots
+public fun default_proposal_creation_cooldown_ms(): u64 { 7_200_000 }
+
+/// Maximum proposal creation cooldown (24 hours in milliseconds)
+/// Hard cap to prevent DAOs from being permanently locked
+public fun max_proposal_creation_cooldown_ms(): u64 { 86_400_000 }
 
 // === Cleanup Constants ===
 
@@ -201,7 +246,10 @@ public fun launchpad_duration_ms(): u64 { 345_600_000 }
 public fun launchpad_claim_period_ms(): u64 { 1_209_600_000 }
 
 /// Minimum SUI fee per contribution (0.1 SUI) to prevent spam and fund settlement cranking
-public fun launchpad_crank_fee_per_contribution(): u64 { 100_000_000 }
+public fun launchpad_bid_fee_per_contribution(): u64 { 100_000_000 }
+
+/// Reward paid to cranker per successful claim (0.05 SUI) - decoupled from bid fee
+public fun launchpad_cranker_reward_per_claim(): u64 { 50_000_000 }
 
 /// Reward per cap processed during settlement cranking (0.05 SUI)
 public fun launchpad_reward_per_cap_processed(): u64 { 50_000_000 }

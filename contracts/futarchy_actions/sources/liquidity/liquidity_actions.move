@@ -285,6 +285,7 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
     account: &mut Account,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
+    clock: &Clock,
     witness: IW,
     ctx: &mut TxContext,
 ): (ResourceReceipt<CreatePoolAction<AssetType, StableType>>, ID) {
@@ -299,7 +300,7 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
     assert!(coin::value(&stable_coin) >= initial_stable_amount, EInvalidAmount);
     
     // Create the pool using account_spot_pool
-    let mut pool = unified_spot_pool::new<AssetType, StableType>(fee_bps, ctx);
+    let mut pool = unified_spot_pool::new<AssetType, StableType>(fee_bps, option::none(), clock, ctx);
     
     // Add initial liquidity to the pool
     let lp_token = unified_spot_pool::add_liquidity_and_return(

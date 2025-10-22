@@ -4,6 +4,7 @@ edition = "2024"
 license = "BSL"
 
 [dependencies]
+AccountActions = { local = "../move-framework/packages/actions" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_markets_primitives = { local = "../futarchy_markets_primitives" }
 futarchy_types = { local = "../futarchy_types" }

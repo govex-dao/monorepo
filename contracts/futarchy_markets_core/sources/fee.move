@@ -544,6 +544,47 @@ public fun deposit_stable_fees<StableType>(
     });
 }
 
+// Registry type for asset fee balances (similar to StableFeeRegistry)
+public struct AssetFeeRegistry<phantom T> has copy, drop, store {}
+
+/// Deposit asset token fees from AMM swaps
+public fun deposit_asset_fees<AssetType>(
+    fee_manager: &mut FeeManager,
+    fees: Balance<AssetType>,
+    proposal_id: ID,
+    clock: &Clock,
+) {
+    let amount = fees.value();
+
+    if (
+        dynamic_field::exists_with_type<
+            AssetFeeRegistry<AssetType>,
+            StableCoinBalance<AssetType>,
+        >(&fee_manager.id, AssetFeeRegistry<AssetType> {})
+    ) {
+        let fee_balance_wrapper = dynamic_field::borrow_mut<
+            AssetFeeRegistry<AssetType>,
+            StableCoinBalance<AssetType>,
+        >(&mut fee_manager.id, AssetFeeRegistry<AssetType> {});
+        fee_balance_wrapper.balance.join(fees);
+    } else {
+        let balance_wrapper = StableCoinBalance<AssetType> {
+            balance: fees,
+        };
+        dynamic_field::add(&mut fee_manager.id, AssetFeeRegistry<AssetType> {}, balance_wrapper);
+    };
+
+    let type_name = type_name::with_defining_ids<AssetType>();
+    let type_str = type_name.into_string();
+    // Emit collection event (reuse StableFeesCollected event for asset fees too)
+    event::emit(StableFeesCollected {
+        amount,
+        stable_type: type_str,  // Using same field name for simplicity
+        proposal_id,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
 public entry fun withdraw_stable_fees<StableType>(
     fee_manager: &mut FeeManager,
     admin_cap: &FeeAdminCap,
@@ -583,6 +624,55 @@ public entry fun withdraw_stable_fees<StableType>(
         event::emit(StableFeesWithdrawn {
             amount,
             stable_type: type_str,
+            recipient: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
+        });
+
+        // Transfer to sender
+        public_transfer(coin, ctx.sender());
+    }
+}
+
+/// Withdraw asset fees collected from AMM swaps
+public entry fun withdraw_asset_fees<AssetType>(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Verify the admin cap belongs to this fee manager
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+
+    // Check if the asset type exists in the registry
+    if (
+        !dynamic_field::exists_with_type<
+            AssetFeeRegistry<AssetType>,
+            StableCoinBalance<AssetType>,
+        >(
+            &fee_manager.id,
+            AssetFeeRegistry<AssetType> {},
+        )
+    ) {
+        // No fees of this type have been collected, nothing to withdraw
+        return
+    };
+
+    let fee_balance_wrapper = dynamic_field::borrow_mut<
+        AssetFeeRegistry<AssetType>,
+        StableCoinBalance<AssetType>,
+    >(&mut fee_manager.id, AssetFeeRegistry<AssetType> {});
+    let amount = fee_balance_wrapper.balance.value();
+
+    if (amount > 0) {
+        let withdrawn = fee_balance_wrapper.balance.split(amount);
+        let coin = withdrawn.into_coin(ctx);
+
+        let type_name = type_name::with_defining_ids<AssetType>();
+        let type_str = type_name.into_string();
+        // Emit withdrawal event
+        event::emit(StableFeesWithdrawn {
+            amount,
+            stable_type: type_str,  // Using same field name for simplicity
             recipient: ctx.sender(),
             timestamp: clock.timestamp_ms(),
         });

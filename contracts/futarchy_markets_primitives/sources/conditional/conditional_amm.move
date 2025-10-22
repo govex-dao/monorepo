@@ -71,7 +71,8 @@ public struct LiquidityPool has key, store {
     fee_percent: u64,
     oracle: Oracle, // Futarchy oracle (for determining winner, internal use)
     simple_twap: SimpleTWAP, // SimpleTWAP oracle (for external consumers)
-    protocol_fees: u64, // Track accumulated stable fees
+    protocol_fees_asset: u64, // Track accumulated asset token fees
+    protocol_fees_stable: u64, // Track accumulated stable token fees
     lp_supply: u64, // Track total LP shares for this pool
     // Bucket tracking for LP withdrawal system
     // LIVE: Came from spot.LIVE via quantum split (will recombine to spot.LIVE)
@@ -168,7 +169,8 @@ public fun new_pool(
         fee_percent,
         oracle,
         simple_twap: simple_twap_oracle,
-        protocol_fees: 0,
+        protocol_fees_asset: 0,
+        protocol_fees_stable: 0,
         lp_supply: 0, // Start at 0 so first provider logic works correctly
         // Initialize all liquidity in LIVE bucket (from quantum split)
         asset_live: initial_asset,
@@ -202,11 +204,11 @@ public fun swap_asset_to_stable(
     let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
 
     // When selling outcome tokens (asset -> stable):
-    // STANDARD UNISWAP V2 FEE MODEL: Take fee from INPUT
+    // STANDARD UNISWAP V2 FEE MODEL: Take fee from INPUT (asset token)
     // 1. Calculate the fee from the input amount (amount_in).
     // 2. The actual amount used for the swap (amount_in_after_fee) is the original input minus the fee.
     // 3. Split the total fee: 80% for LPs (lp_share), 20% for the protocol (protocol_share).
-    // 4. `protocol_share` is moved to `pool.protocol_fees`.
+    // 4. `protocol_share` is moved to `pool.protocol_fees_asset` (fee in ASSET token).
     // 5. `amount_in_after_fee` is used to calculate the swap output.
     // 6. The pool's asset reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
     let total_fee = calculate_fee(amount_in, pool.fee_percent);
@@ -227,8 +229,8 @@ public fun swap_asset_to_stable(
         pool.stable_reserve,
     );
 
-    // Send protocol's share to the fee collector
-    pool.protocol_fees = pool.protocol_fees + protocol_share;
+    // Send protocol's share to the fee collector (asset token fee)
+    pool.protocol_fees_asset = pool.protocol_fees_asset + protocol_share;
 
     assert!(amount_out >= min_amount_out, EExcessiveSlippage);
     assert!(amount_out < pool.stable_reserve, EPoolEmpty);
@@ -307,10 +309,11 @@ public fun swap_stable_to_asset(
     let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
 
     // When buying outcome tokens (stable -> asset):
+    // STANDARD UNISWAP V2 FEE MODEL: Take fee from INPUT (stable token)
     // 1. Calculate the fee from the input amount (amount_in).
     // 2. The actual amount used for the swap (amount_in_after_fee) is the original input minus the fee.
     // 3. Split the total fee: 80% for LPs (lp_share), 20% for the protocol (protocol_share).
-    // 4. `protocol_share` is moved to `pool.protocol_fees`.
+    // 4. `protocol_share` is moved to `pool.protocol_fees_stable` (fee in STABLE token).
     // 5. `amount_in_after_fee` is used to calculate the swap output.
     // 6. The pool's stable reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
     let total_fee = calculate_fee(amount_in, pool.fee_percent);
@@ -324,8 +327,8 @@ public fun swap_stable_to_asset(
     // Amount used for the swap calculation
     let amount_in_after_fee = amount_in - total_fee;
 
-    // Send protocol's share to the fee collector
-    pool.protocol_fees = pool.protocol_fees + protocol_share;
+    // Send protocol's share to the fee collector (stable token fee)
+    pool.protocol_fees_stable = pool.protocol_fees_stable + protocol_share;
 
     // Calculate output based on amount after fee
     let amount_out = calculate_output(
@@ -857,16 +860,30 @@ public fun check_price_under_max(price: u128) {
     assert!(price <= max_price, EPriceTooHigh)
 }
 
+/// Get accumulated protocol fees in asset token
+public fun get_protocol_fees_asset(pool: &LiquidityPool): u64 {
+    pool.protocol_fees_asset
+}
+
+/// Get accumulated protocol fees in stable token
+public fun get_protocol_fees_stable(pool: &LiquidityPool): u64 {
+    pool.protocol_fees_stable
+}
+
+/// DEPRECATED: Use get_protocol_fees_stable() instead
+/// Returns stable fees for backward compatibility
 public fun get_protocol_fees(pool: &LiquidityPool): u64 {
-    pool.protocol_fees
+    pool.protocol_fees_stable
 }
 
 public fun get_ms_id(pool: &LiquidityPool): ID {
     pool.market_id
 }
 
+/// Reset both asset and stable protocol fees to zero
 public fun reset_protocol_fees(pool: &mut LiquidityPool) {
-    pool.protocol_fees = 0;
+    pool.protocol_fees_asset = 0;
+    pool.protocol_fees_stable = 0;
 }
 
 // === Test Functions ===
@@ -938,7 +955,8 @@ public fun create_test_pool(
         fee_percent,
         oracle: oracle_obj,
         simple_twap: PCW_TWAP_oracle::new_default(initial_price, clock), // Windowed capped TWAP
-        protocol_fees: 0,
+        protocol_fees_asset: 0,
+        protocol_fees_stable: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
         // Initialize all liquidity in LIVE bucket for testing
         asset_live: asset_reserve,
@@ -987,7 +1005,8 @@ public fun create_pool_for_testing(
         fee_percent: fee_bps,
         oracle: oracle_obj,
         simple_twap,
-        protocol_fees: 0,
+        protocol_fees_asset: 0,
+        protocol_fees_stable: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
         // Initialize all liquidity in LIVE bucket for testing
         asset_live: asset_amount,
@@ -1010,7 +1029,8 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         fee_percent: _,
         oracle,
         simple_twap,
-        protocol_fees: _,
+        protocol_fees_asset: _,
+        protocol_fees_stable: _,
         lp_supply: _,
         asset_live: _,
         asset_transitioning: _,

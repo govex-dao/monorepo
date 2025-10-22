@@ -3,7 +3,7 @@
 
 module futarchy_core::proposal_fee_manager;
 
-use futarchy_core::futarchy_config::{Self, SlashDistribution};
+use futarchy_core::futarchy_config;
 use futarchy_core::proposal_quota_registry;
 use futarchy_one_shot_utils::constants;
 use futarchy_one_shot_utils::math;
@@ -12,7 +12,6 @@ use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
-use sui::sui::SUI;
 use sui::transfer;
 
 // === Errors ===
@@ -20,20 +19,21 @@ const EInvalidFeeAmount: u64 = 0;
 const EProposalFeeNotFound: u64 = 1;
 
 // === Constants ===
-const FIXED_ACTIVATOR_REWARD: u64 = 1_000_000; // 0.001 SUI fixed reward for activators
+const FIXED_ACTIVATOR_REWARD: u64 = 1_000_000; // 0.001 tokens fixed reward for activators
 
 // === Structs ===
 
 /// Manages proposal submission fees and activator rewards
-public struct ProposalFeeManager has key, store {
+/// Generic over StableType to support different stable coins per DAO
+public struct ProposalFeeManager<phantom StableType> has key, store {
     id: UID,
     /// Stores fees paid for proposals waiting in the queue
-    /// Key is the proposal ID, value is the SUI Balance
+    /// Key is the proposal ID, value is the StableType Balance
     pending_proposal_fees: Bag,
     /// Total fees collected by the protocol from evicted/slashed proposals
-    protocol_revenue: Balance<SUI>,
+    protocol_revenue: Balance<StableType>,
     /// Queue fees collected for proposals
-    queue_fees: Balance<SUI>,
+    queue_fees: Balance<StableType>,
 }
 
 // === Events ===
@@ -54,7 +54,7 @@ public struct ProposalFeeUpdated has copy, drop {
 // === Public Functions ===
 
 /// Creates a new ProposalFeeManager
-public fun new(ctx: &mut TxContext): ProposalFeeManager {
+public fun new<StableType>(ctx: &mut TxContext): ProposalFeeManager<StableType> {
     ProposalFeeManager {
         id: object::new(ctx),
         pending_proposal_fees: bag::new(ctx),
@@ -64,10 +64,10 @@ public fun new(ctx: &mut TxContext): ProposalFeeManager {
 }
 
 /// Called by the DAO when a proposal is submitted to the queue
-public fun deposit_proposal_fee(
-    manager: &mut ProposalFeeManager,
+public fun deposit_proposal_fee<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     proposal_id: ID,
-    fee_coin: Coin<SUI>,
+    fee_coin: Coin<StableType>,
 ) {
     assert!(fee_coin.value() > 0, EInvalidFeeAmount);
     let fee_balance = fee_coin.into_balance();
@@ -76,9 +76,9 @@ public fun deposit_proposal_fee(
 
 /// Called when a proposal is submitted to the queue to pay the queue fee
 /// Splits fee 80/20 between queue maintenance and protocol revenue
-public fun deposit_queue_fee(
-    manager: &mut ProposalFeeManager,
-    fee_coin: Coin<SUI>,
+public fun deposit_queue_fee<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
+    fee_coin: Coin<StableType>,
     clock: &Clock,
     ctx: &TxContext,
 ) {
@@ -114,10 +114,10 @@ public fun deposit_queue_fee(
 }
 
 /// Called when a user increases the fee for an existing queued proposal
-public fun add_to_proposal_fee(
-    manager: &mut ProposalFeeManager,
+public fun add_to_proposal_fee<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     proposal_id: ID,
-    additional_fee: Coin<SUI>,
+    additional_fee: Coin<StableType>,
     clock: &Clock,
 ) {
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
@@ -125,7 +125,7 @@ public fun add_to_proposal_fee(
 
     let additional_amount = additional_fee.value();
     // Get the existing balance, join the new one, and put it back
-    let mut existing_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
+    let mut existing_balance: Balance<StableType> = manager.pending_proposal_fees.remove(proposal_id);
     existing_balance.join(additional_fee.into_balance());
     let new_total = existing_balance.value();
 
@@ -141,14 +141,14 @@ public fun add_to_proposal_fee(
 
 /// Called by the DAO when activating a proposal
 /// Returns a fixed reward to the activator and keeps the rest as protocol revenue
-public fun take_activator_reward(
-    manager: &mut ProposalFeeManager,
+public fun take_activator_reward<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     proposal_id: ID,
     ctx: &mut TxContext,
-): Coin<SUI> {
+): Coin<StableType> {
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
 
-    let mut fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
+    let mut fee_balance: Balance<StableType> = manager.pending_proposal_fees.remove(proposal_id);
     let total_fee = fee_balance.value();
 
     if (total_fee == 0) {
@@ -168,56 +168,20 @@ public fun take_activator_reward(
     }
 }
 
-/// Called by the DAO when a proposal is evicted from the queue
-/// Splits the fee according to SlashDistribution config:
-/// - slasher_reward_bps% to slasher
-/// - remainder to proposal creator as refund
-/// Returns (slasher_reward, creator_refund)
-public fun slash_proposal_fee_with_distribution(
-    manager: &mut ProposalFeeManager,
-    proposal_id: ID,
-    slash_config: &SlashDistribution,
-    ctx: &mut TxContext,
-): (Coin<SUI>, Coin<SUI>) {
-    // Returns (slasher_reward, proposal_creator_refund)
-    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
-
-    let mut fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
-    let total_amount = fee_balance.value();
-
-    if (total_amount == 0) {
-        fee_balance.destroy_zero();
-        return (coin::zero(ctx), coin::zero(ctx))
-    };
-
-    // Get slasher reward percentage from DAO config
-    let slasher_bps = futarchy_config::slasher_reward_bps(slash_config) as u64;
-    let slasher_amount = (total_amount * slasher_bps) / 10000;
-
-    // Create slasher reward coin
-    let slasher_reward = if (slasher_amount > 0) {
-        coin::from_balance(fee_balance.split(slasher_amount), ctx)
-    } else {
-        coin::zero(ctx)
-    };
-
-    // Remaining goes to proposal creator as refund
-    let creator_refund = coin::from_balance(fee_balance, ctx);
-
-    (slasher_reward, creator_refund)
-}
+// REMOVED: slash_proposal_fee_with_distribution - replaced by split_priority_fee_with_penalty
+// Old system used SlashDistribution config, new system uses constants for consistent behavior
 
 /// Gets the current protocol revenue
-public fun protocol_revenue(manager: &ProposalFeeManager): u64 {
+public fun protocol_revenue<StableType>(manager: &ProposalFeeManager<StableType>): u64 {
     manager.protocol_revenue.value()
 }
 
 /// Withdraws accumulated protocol revenue to the main fee manager
-public fun withdraw_protocol_revenue(
-    manager: &mut ProposalFeeManager,
+public fun withdraw_protocol_revenue<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     amount: u64,
     ctx: &mut TxContext,
-): Coin<SUI> {
+): Coin<StableType> {
     coin::from_balance(manager.protocol_revenue.split(amount), ctx)
 }
 
@@ -226,25 +190,25 @@ public fun withdraw_protocol_revenue(
 /// Called by the priority queue when a proposal is cancelled.
 /// Removes the pending fee from the manager and returns it as a Coin.
 /// This should be a friend function, callable only by the priority_queue module.
-public fun refund_proposal_fee(
-    manager: &mut ProposalFeeManager,
+public fun refund_proposal_fee<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     proposal_id: ID,
     ctx: &mut TxContext,
-): Coin<SUI> {
+): Coin<StableType> {
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
-    let fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
+    let fee_balance: Balance<StableType> = manager.pending_proposal_fees.remove(proposal_id);
     coin::from_balance(fee_balance, ctx)
 }
 
 /// Check if a proposal fee exists
-public fun has_proposal_fee(manager: &ProposalFeeManager, proposal_id: ID): bool {
+public fun has_proposal_fee<StableType>(manager: &ProposalFeeManager<StableType>, proposal_id: ID): bool {
     manager.pending_proposal_fees.contains(proposal_id)
 }
 
 /// Get the fee amount for a proposal
-public fun get_proposal_fee(manager: &ProposalFeeManager, proposal_id: ID): u64 {
+public fun get_proposal_fee<StableType>(manager: &ProposalFeeManager<StableType>, proposal_id: ID): u64 {
     if (manager.pending_proposal_fees.contains(proposal_id)) {
-        let balance: &Balance<SUI> = &manager.pending_proposal_fees[proposal_id];
+        let balance: &Balance<StableType> = &manager.pending_proposal_fees[proposal_id];
         balance.value()
     } else {
         0
@@ -253,11 +217,11 @@ public fun get_proposal_fee(manager: &ProposalFeeManager, proposal_id: ID): u64 
 
 /// Pay reward to proposal creator when proposal passes
 /// Takes from protocol revenue
-public fun pay_proposal_creator_reward(
-    manager: &mut ProposalFeeManager,
+public fun pay_proposal_creator_reward<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     reward_amount: u64,
     ctx: &mut TxContext,
-): Coin<SUI> {
+): Coin<StableType> {
     if (manager.protocol_revenue.value() >= reward_amount) {
         coin::from_balance(manager.protocol_revenue.split(reward_amount), ctx)
     } else {
@@ -273,11 +237,11 @@ public fun pay_proposal_creator_reward(
 
 /// Pay reward to outcome creator when their outcome wins
 /// Takes from protocol revenue
-public fun pay_outcome_creator_reward(
-    manager: &mut ProposalFeeManager,
+public fun pay_outcome_creator_reward<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     reward_amount: u64,
     ctx: &mut TxContext,
-): Coin<SUI> {
+): Coin<StableType> {
     if (manager.protocol_revenue.value() >= reward_amount) {
         coin::from_balance(manager.protocol_revenue.split(reward_amount), ctx)
     } else {
@@ -293,7 +257,7 @@ public fun pay_outcome_creator_reward(
 
 /// Collect fee for advancing proposal state
 /// Called when advancing from review to trading or when finalizing
-public fun collect_advancement_fee(manager: &mut ProposalFeeManager, fee_coin: Coin<SUI>) {
+public fun collect_advancement_fee<StableType>(manager: &mut ProposalFeeManager<StableType>, fee_coin: Coin<StableType>) {
     manager.protocol_revenue.join(fee_coin.into_balance());
 }
 
@@ -301,7 +265,7 @@ public fun collect_advancement_fee(manager: &mut ProposalFeeManager, fee_coin: C
 
 /// Calculate the actual fee a proposer should pay, considering quotas
 /// Returns (actual_fee_amount, used_quota)
-public fun calculate_fee_with_quota(
+public fun calculate_fee_with_quota<StableType>(
     quota_registry: &proposal_quota_registry::ProposalQuotaRegistry,
     dao_id: ID,
     proposer: address,
@@ -327,7 +291,7 @@ public fun calculate_fee_with_quota(
 
 /// Commit quota usage after successful proposal creation
 /// Should only be called if used_quota = true from calculate_fee_with_quota
-public fun use_quota_for_proposal(
+public fun use_quota_for_proposal<StableType>(
     quota_registry: &mut proposal_quota_registry::ProposalQuotaRegistry,
     dao_id: ID,
     proposer: address,
@@ -338,7 +302,7 @@ public fun use_quota_for_proposal(
 
 /// Deposit revenue into protocol revenue (e.g., from proposal fee escrow)
 /// Used when proposal fees are not fully refunded and should go to protocol
-public fun deposit_revenue(manager: &mut ProposalFeeManager, revenue_coin: Coin<SUI>) {
+public fun deposit_revenue<StableType>(manager: &mut ProposalFeeManager<StableType>, revenue_coin: Coin<StableType>) {
     manager.protocol_revenue.join(revenue_coin.into_balance());
 }
 
@@ -346,12 +310,12 @@ public fun deposit_revenue(manager: &mut ProposalFeeManager, revenue_coin: Coin<
 /// This is called after a proposal is finalized and the winning outcome is determined
 /// Refunds are paid from protocol revenue
 /// DEPRECATED: Use proposal fee escrow instead for per-proposal tracking
-public fun refund_outcome_creator_fees(
-    manager: &mut ProposalFeeManager,
+public fun refund_outcome_creator_fees<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
     outcome_creator: address,
     refund_amount: u64,
     ctx: &mut TxContext,
-): Coin<SUI> {
+): Coin<StableType> {
     if (manager.protocol_revenue.value() >= refund_amount) {
         coin::from_balance(manager.protocol_revenue.split(refund_amount), ctx)
     } else {
@@ -363,4 +327,135 @@ public fun refund_outcome_creator_fees(
             coin::zero(ctx)
         }
     }
+}
+
+// === Queue Fee Split Functions ===
+
+/// Split priority fee on CANCELLATION: 100% to DAO (NOT refunded)
+/// This prevents evict-and-cancel exploits
+/// Returns dao_coin
+public fun split_priority_fee_on_cancel<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
+    proposal_id: ID,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
+    let fee_balance: Balance<StableType> = manager.pending_proposal_fees.remove(proposal_id);
+    coin::from_balance(fee_balance, ctx) // Goes to DAO
+}
+
+/// Split priority fee on EVICTION: 100% to DAO (NOT refunded)
+/// Priority fees ALWAYS go to DAO to prevent exploits
+/// Returns dao_coin
+public fun split_priority_fee_on_evict<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
+    proposal_id: ID,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
+    let fee_balance: Balance<StableType> = manager.pending_proposal_fees.remove(proposal_id);
+    coin::from_balance(fee_balance, ctx) // Goes to DAO
+}
+
+/// Split priority fee on ACTIVATION: 100% to DAO treasury
+/// Returns dao_coin
+public fun split_priority_fee_on_activate<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
+    proposal_id: ID,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
+    let fee_balance: Balance<StableType> = manager.pending_proposal_fees.remove(proposal_id);
+    coin::from_balance(fee_balance, ctx)
+}
+
+/// Calculate bond split on CANCELLATION: 50% proposer, 50% DAO
+/// Returns (proposer_share, dao_share)
+public fun calculate_bond_split_on_cancel(bond_amount: u64): (u64, u64) {
+    if (bond_amount == 0) {
+        return (0, 0)
+    };
+
+    let proposer_bps = constants::bond_cancel_proposer_bps();
+    let proposer_share = math::mul_div_to_64(bond_amount, proposer_bps, constants::total_fee_bps());
+    let dao_share = bond_amount - proposer_share; // DAO gets remainder
+
+    (proposer_share, dao_share)
+}
+
+/// Calculate bond split on EVICTION: 50% DAO, 50% evictor
+/// This prevents bond-farming exploits where attacker evicts and cancels for profit
+/// Returns (dao_share, evictor_share)
+public fun calculate_bond_split_on_evict(bond_amount: u64): (u64, u64) {
+    if (bond_amount == 0) {
+        return (0, 0)
+    };
+
+    // Split evenly: 50% to DAO, 50% to evictor
+    let evictor_share = bond_amount / 2;
+    let dao_share = bond_amount - evictor_share; // DAO gets remainder (handles odd amounts)
+
+    (dao_share, evictor_share)
+}
+
+/// Calculate bond split on ACTIVATION: 50% proposer (refund), 50% activator (crank reward)
+/// Returns (proposer_share, activator_share)
+public fun calculate_bond_split_on_activate(bond_amount: u64): (u64, u64) {
+    if (bond_amount == 0) {
+        return (0, 0)
+    };
+
+    let activator_bps = constants::bond_activation_activator_bps();
+    let activator_share = math::mul_div_to_64(bond_amount, activator_bps, constants::total_fee_bps());
+    let proposer_share = bond_amount - activator_share; // Proposer gets remainder
+
+    (proposer_share, activator_share)
+}
+
+/// Split priority fee on TIMEOUT: 100% to DAO (NOT refunded)
+/// Priority fees ALWAYS go to DAO to prevent exploits
+/// Returns dao_coin
+public fun split_priority_fee_on_timeout<StableType>(
+    manager: &mut ProposalFeeManager<StableType>,
+    proposal_id: ID,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
+    let fee_balance: Balance<StableType> = manager.pending_proposal_fees.remove(proposal_id);
+    coin::from_balance(fee_balance, ctx) // Goes to DAO
+}
+
+/// Calculate bond split on TIMEOUT: 50% timeout_caller (cleanup reward), 50% DAO
+/// Incentivizes permissionless cleanup of expired proposals
+/// Returns (dao_share, timeout_caller_share)
+public fun calculate_bond_split_on_timeout(bond_amount: u64): (u64, u64) {
+    if (bond_amount == 0) {
+        return (0, 0)
+    };
+
+    // Split evenly: 50% to timeout caller (cleanup bounty), 50% to DAO
+    let caller_share = bond_amount / 2;
+    let dao_share = bond_amount - caller_share; // DAO gets remainder (handles odd amounts)
+
+    (dao_share, caller_share)
+}
+
+// === Test Only Functions ===
+
+#[test_only]
+/// Destroy a ProposalFeeManager for testing
+public fun destroy_for_testing<StableType>(manager: ProposalFeeManager<StableType>) {
+    use sui::test_utils::destroy;
+
+    let ProposalFeeManager {
+        id,
+        pending_proposal_fees,
+        protocol_revenue,
+        queue_fees,
+    } = manager;
+
+    object::delete(id);
+    destroy(pending_proposal_fees);
+    destroy(protocol_revenue);
+    destroy(queue_fees);
 }

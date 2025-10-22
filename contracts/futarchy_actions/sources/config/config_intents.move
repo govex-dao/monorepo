@@ -206,7 +206,6 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
     account: &mut Account,
     params: Params,
     outcome: Outcome,
-    proposals_enabled: bool,
     max_outcomes: u64,
     max_actions_per_outcome: u64,
     required_bond_amount: u64,
@@ -221,7 +220,6 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
         ctx,
         |intent, iw| {
             let action = config_actions::new_governance_update_action(
-                option::some(proposals_enabled),
                 option::some(max_outcomes),
                 option::some(max_actions_per_outcome),
                 option::some(required_bond_amount),
@@ -245,7 +243,6 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
     account: &mut Account,
     params: Params,
     outcome: Outcome,
-    proposals_enabled: Option<bool>,
     max_outcomes: Option<u64>,
     max_actions_per_outcome: Option<u64>,
     required_bond_amount: Option<u64>,
@@ -264,7 +261,6 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
         ctx,
         |intent, iw| {
             let action = config_actions::new_governance_update_action(
-                proposals_enabled,
                 max_outcomes,
                 max_actions_per_outcome,
                 required_bond_amount,
@@ -283,40 +279,7 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
     );
 }
 
-/// Create intent to update slash distribution
-public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>(
-    account: &mut Account,
-    params: Params,
-    outcome: Outcome,
-    slasher_reward_bps: u16,
-    dao_treasury_bps: u16,
-    protocol_bps: u16,
-    burn_bps: u16,
-    ctx: &mut TxContext,
-) {
-    account.build_intent!(
-        params,
-        outcome,
-        b"config_update_slash_distribution".to_string(),
-        version::current(),
-        ConfigIntent {},
-        ctx,
-        |intent, iw| {
-            let action = config_actions::new_slash_distribution_update_action(
-                slasher_reward_bps,
-                dao_treasury_bps,
-                protocol_bps,
-                burn_bps,
-            );
-            let action_bytes = bcs::to_bytes(&action);
-            intent.add_typed_action(
-                type_name::get<config_actions::SlashDistributionUpdate>().into_string().to_string(),
-                action_bytes,
-                iw,
-            );
-        },
-    );
-}
+// REMOVED: create_update_slash_distribution_intent - legacy code, not used
 
 /// Create intent to update queue parameters
 public fun create_update_queue_params_intent<Outcome: store + drop + copy>(

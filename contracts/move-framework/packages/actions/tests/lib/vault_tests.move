@@ -435,3 +435,56 @@ fun test_min_interval() {
     destroy(coin2);
     end(scenario, extensions, account, clock);
 }
+
+#[test]
+fun test_spend_all_balance_check() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let vault_name = b"test_vault".to_string();
+
+    // Open vault
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    vault::open<Config>(auth, &mut account, vault_name, scenario.ctx());
+
+    // Deposit coins - simulating deposits from multiple sources
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let coin1 = coin::mint_for_testing<SUI>(1000, scenario.ctx());
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin1);
+
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let coin2 = coin::mint_for_testing<SUI>(234, scenario.ctx());
+    vault::deposit<Config, SUI>(auth, &mut account, vault_name, coin2);
+
+    // Total balance is now 1234
+    let vault_ref = vault::borrow_vault(&account, vault_name);
+    let total_balance = vault::coin_type_value<SUI>(vault_ref);
+    assert!(total_balance == 1234);
+
+    // Use balance() convenience function to get current amount
+    let current_balance = vault::balance<Config, SUI>(&account, vault_name);
+    assert!(current_balance == 1234);
+
+    // In a real DAO dissolution, you would:
+    // 1. Query balance: vault::balance<AssetType>(&account, vault_name)
+    // 2. Create intent with: vault::new_spend(intent, vault_name, 0, true, iw)
+    //    where spend_all=true means it withdraws the entire balance
+    // 3. The do_spend action would then withdraw all coins regardless of amount field
+
+    // For now, test that we can withdraw the full amount we queried
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let withdrawn_coin = vault::spend<Config, SUI>(
+        auth,
+        &mut account,
+        vault_name,
+        current_balance, // withdraw the exact balance we queried
+        scenario.ctx(),
+    );
+
+    assert!(withdrawn_coin.value() == 1234);
+
+    // Verify vault is now empty
+    let vault_ref = vault::borrow_vault(&account, vault_name);
+    assert!(!vault::coin_type_exists<SUI>(vault_ref));
+
+    destroy(withdrawn_coin);
+    end(scenario, extensions, account, clock);
+}

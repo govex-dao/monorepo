@@ -420,6 +420,7 @@ public entry fun remove_liquidity_entry<
 
 /// Collect protocol fees from the winning pool after finalization
 /// Withdraws fees from escrow and deposits them to the fee manager
+/// NOW COLLECTS BOTH ASSET AND STABLE TOKEN FEES
 public fun collect_protocol_fees<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
@@ -431,25 +432,52 @@ public fun collect_protocol_fees<AssetType, StableType>(
     assert!(proposal.is_winning_outcome_set(), EInvalidState);
 
     let winning_outcome = proposal.get_winning_outcome();
-    // Get winning pool from market_state
-    let market_state = escrow.get_market_state_mut();
-    let winning_pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
-        market_state,
-        (winning_outcome as u8),
-    );
-    let protocol_fee_amount = winning_pool.get_protocol_fees();
+    // Get protocol fees from winning pool
+    let (protocol_fee_asset, protocol_fee_stable) = {
+        let market_state = escrow.get_market_state_mut();
+        let winning_pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
+            market_state,
+            (winning_outcome as u8),
+        );
 
-    if (protocol_fee_amount > 0) {
-        // Reset fees in the pool
-        winning_pool.reset_protocol_fees();
+        // Get both asset and stable protocol fees
+        let fee_asset = winning_pool.get_protocol_fees_asset();
+        let fee_stable = winning_pool.get_protocol_fees_stable();
+        (fee_asset, fee_stable)
+    }; // winning_pool borrow dropped here
 
-        // Extract the fees from escrow (fees are in stable coins)
+    let mut total_fees_collected = 0u64;
+
+    // Collect asset token fees
+    if (protocol_fee_asset > 0) {
         let (spot_asset, spot_stable) = coin_escrow::get_spot_balances(escrow);
-        assert!(spot_stable >= protocol_fee_amount, EInsufficientAmount);
+        assert!(spot_asset >= protocol_fee_asset, EInsufficientAmount);
+
+        let fee_balance_coin = coin_escrow::withdraw_asset_balance(
+            escrow,
+            protocol_fee_asset,
+            ctx,
+        );
+        let fee_balance = coin::into_balance(fee_balance_coin);
+
+        // Deposit to fee manager
+        fee_manager.deposit_asset_fees<AssetType>(
+            fee_balance,
+            proposal.get_id(),
+            clock,
+        );
+
+        total_fees_collected = total_fees_collected + protocol_fee_asset;
+    };
+
+    // Collect stable token fees
+    if (protocol_fee_stable > 0) {
+        let (spot_asset, spot_stable) = coin_escrow::get_spot_balances(escrow);
+        assert!(spot_stable >= protocol_fee_stable, EInsufficientAmount);
 
         let fee_balance_coin = coin_escrow::withdraw_stable_balance(
             escrow,
-            protocol_fee_amount,
+            protocol_fee_stable,
             ctx,
         );
         let fee_balance = coin::into_balance(fee_balance_coin);
@@ -461,11 +489,23 @@ public fun collect_protocol_fees<AssetType, StableType>(
             clock,
         );
 
+        total_fees_collected = total_fees_collected + protocol_fee_stable;
+    };
+
+    // Reset fees in the pool after collection
+    if (protocol_fee_asset > 0 || protocol_fee_stable > 0) {
+        let market_state = escrow.get_market_state_mut();
+        let winning_pool = futarchy_markets_primitives::market_state::get_pool_mut_by_outcome(
+            market_state,
+            (winning_outcome as u8),
+        );
+        winning_pool.reset_protocol_fees();
+
         // Emit event
         event::emit(ProtocolFeesCollected {
             proposal_id: proposal.get_id(),
             winning_outcome,
-            fee_amount: protocol_fee_amount,
+            fee_amount: total_fees_collected,
             timestamp_ms: clock.timestamp_ms(),
         });
     }

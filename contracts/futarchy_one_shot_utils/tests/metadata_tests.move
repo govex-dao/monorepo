@@ -403,7 +403,7 @@ fun test_duplicate_key_rejected() {
 // === Coverage Tests for Uncovered Lines ===
 
 #[test]
-#[expected_failure(abort_code = 2)] // EInvalidMetadataLength
+#[expected_failure(abort_code = 0)] // EInvalidMetadataLength
 fun test_mismatched_key_value_lengths() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);
@@ -419,7 +419,7 @@ fun test_mismatched_key_value_lengths() {
 }
 
 #[test]
-#[expected_failure(abort_code = 2)] // EInvalidMetadataLength
+#[expected_failure(abort_code = 0)] // EInvalidMetadataLength
 fun test_too_many_entries() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);
@@ -441,7 +441,7 @@ fun test_too_many_entries() {
 }
 
 #[test]
-#[expected_failure(abort_code = 0)] // EEmptyKey
+#[expected_failure(abort_code = 1)] // EEmptyKey
 fun test_empty_key() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);
@@ -456,11 +456,11 @@ fun test_empty_key() {
 }
 
 #[test]
-#[expected_failure(abort_code = 1)] // EKeyTooLong
-fun test_key_too_long() {
+#[expected_failure(abort_code = 2)] // EKeyTooLong
+fun test_key_too_long_256() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);
-    
+
     // Create key longer than MAX_KEY_LENGTH (256)
     // This should hit line 47: assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
     let mut long_key_bytes = vector[];
@@ -471,7 +471,7 @@ fun test_key_too_long() {
     };
     let keys = vector[string::utf8(long_key_bytes)];
     let values = vector[string::utf8(b"value")];
-    
+
     let table = metadata::new_from_vectors(keys, values, ctx);
     sui::table::drop(table);
     test_scenario::end(scenario);
@@ -479,10 +479,10 @@ fun test_key_too_long() {
 
 #[test]
 #[expected_failure(abort_code = 3)] // EValueTooLong
-fun test_value_too_long() {
+fun test_value_too_long_2048() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);
-    
+
     // Create value longer than MAX_VALUE_LENGTH (2048)
     // This should hit line 48: assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
     let mut long_value_bytes = vector[];
@@ -493,7 +493,7 @@ fun test_value_too_long() {
     };
     let keys = vector[string::utf8(b"key")];
     let values = vector[string::utf8(long_value_bytes)];
-    
+
     let table = metadata::new_from_vectors(keys, values, ctx);
     sui::table::drop(table);
     test_scenario::end(scenario);
@@ -516,7 +516,7 @@ fun test_duplicate_key_in_vector() {
 }
 
 #[test]
-#[expected_failure(abort_code = 2)] // EInvalidMetadataLength
+#[expected_failure(abort_code = 0)] // EInvalidMetadataLength
 fun test_add_entry_max_entries_exceeded() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);

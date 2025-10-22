@@ -64,7 +64,7 @@ public fun request_spend_and_transfer<Config: store, Outcome: store, CoinType: d
         SpendAndTransferIntent(),
         ctx,
         |intent, iw| amounts.zip_do!(recipients, |amount, recipient| {
-            vault::new_spend<_, CoinType, _>(intent, vault_name, amount, iw);
+            vault::new_spend<_, CoinType, _>(intent, vault_name, amount, false, iw);
             acc_transfer::new_transfer(intent, recipient, iw);
         }),
     );

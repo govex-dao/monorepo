@@ -258,7 +258,6 @@ fun test_add_liquidity_proportional() {
     unified_spot_pool::destroy_lp_token_for_testing(lp1);
     unified_spot_pool::destroy_lp_token_for_testing(lp2);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -279,7 +278,6 @@ fun test_add_liquidity_zero_amount() {
 
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -301,7 +299,6 @@ fun test_add_liquidity_below_minimum() {
 
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -329,7 +326,6 @@ fun test_add_liquidity_slippage_exceeded() {
 
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -366,7 +362,6 @@ fun test_remove_liquidity_success() {
     coin::burn_for_testing(asset_out);
     coin::burn_for_testing(stable_out);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -399,7 +394,6 @@ fun test_remove_liquidity_zero_amount() {
     coin::burn_for_testing(asset_out);
     coin::burn_for_testing(stable_out);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -558,7 +552,6 @@ fun test_get_reserves() {
     // Cleanup
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -586,7 +579,6 @@ fun test_get_spot_price() {
     // Cleanup
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -615,7 +607,6 @@ fun test_simulate_swap() {
     // Cleanup
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
     unified_spot_pool::destroy_for_testing(pool);
-    clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
 
@@ -665,18 +656,18 @@ fun test_fee_schedule_basic_decay() {
 
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
-    let mut clock = create_test_clock(0, ctx);
-
-    // Create fee schedule: 99% → 0.3% over 2 hours
-    let schedule = fee_scheduler::new_schedule(9900, 7_200_000);
+    let clock = create_test_clock(0, ctx);
 
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         30, // 0.3% final fee
-        option::some(schedule),
         8000,
         &clock,
         ctx,
     );
+
+    // Enable fee schedule: 99% → 0.3% over 2 hours
+    let schedule = fee_scheduler::new_schedule(9900, 7_200_000);
+    unified_spot_pool::set_fee_schedule(&mut pool, schedule, &clock);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(1_000_000, ctx);
@@ -718,16 +709,16 @@ fun test_protocol_fee_collection_during_mev_protection() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(0, ctx);
 
-    // Create fee schedule: 99% → 0.3% over 2 hours
-    let schedule = fee_scheduler::new_schedule(9900, 7_200_000);
-
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         30, // 0.3% final fee
-        option::some(schedule),
         8000,
         &clock,
         ctx,
     );
+
+    // Enable fee schedule: 99% → 0.3% over 2 hours
+    let schedule = fee_scheduler::new_schedule(9900, 7_200_000);
+    unified_spot_pool::set_fee_schedule(&mut pool, schedule, &clock);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(10_000_000, ctx);
@@ -735,7 +726,7 @@ fun test_protocol_fee_collection_during_mev_protection() {
     let lp_token = unified_spot_pool::add_liquidity(&mut pool, asset_liq, stable_liq, 0, ctx);
 
     // Check initial protocol fees (should be zero)
-    let (initial_asset_fees, initial_stable_fees) = unified_spot_pool::get_protocol_fee_amounts(&pool);
+    let (initial_asset_fees, initial_stable_fees) = unified_spot_pool::get_protocol_fees(&pool);
     assert!(initial_asset_fees == 0, 0);
     assert!(initial_stable_fees == 0, 1);
 
@@ -746,7 +737,7 @@ fun test_protocol_fee_collection_during_mev_protection() {
     coin::burn_for_testing(stable_out);
 
     // Check protocol fees collected
-    let (asset_fees_after, stable_fees_after) = unified_spot_pool::get_protocol_fee_amounts(&pool);
+    let (asset_fees_after, stable_fees_after) = unified_spot_pool::get_protocol_fees(&pool);
 
     // Protocol should have collected 10% of the 99% fee in AssetType (swapped-in token)
     // Total fee = ~990,000 (99% of 1M), protocol share = ~99,000 (10% of fee)
@@ -769,12 +760,9 @@ fun test_protocol_fee_collection_both_directions() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(0, ctx);
 
-    // Create fee schedule: 99% → 0.3% over 2 hours
-    let schedule = fee_scheduler::new_schedule(5000, 3_600_000);
-
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         30,
-        option::some(schedule),
+        option::none(),
         8000,
         &clock,
         ctx,
@@ -782,6 +770,7 @@ fun test_protocol_fee_collection_both_directions() {
 
     // Enable fee schedule: 50% → 0.3% over 1 hour
     let schedule = fee_scheduler::new_schedule(5000, 3_600_000);
+    unified_spot_pool::set_fee_schedule(&mut pool, schedule, &clock);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(10_000_000, ctx);
@@ -794,7 +783,7 @@ fun test_protocol_fee_collection_both_directions() {
     coin::burn_for_testing(stable_out);
 
     // Check fees (should be in asset only)
-    let (asset_fees_1, stable_fees_1) = unified_spot_pool::get_protocol_fee_amounts(&pool);
+    let (asset_fees_1, stable_fees_1) = unified_spot_pool::get_protocol_fees(&pool);
     assert!(asset_fees_1 > 0, 0);
     assert!(stable_fees_1 == 0, 1);
 
@@ -804,7 +793,7 @@ fun test_protocol_fee_collection_both_directions() {
     coin::burn_for_testing(asset_out);
 
     // Check fees (should have both now)
-    let (asset_fees_2, stable_fees_2) = unified_spot_pool::get_protocol_fee_amounts(&pool);
+    let (asset_fees_2, stable_fees_2) = unified_spot_pool::get_protocol_fees(&pool);
     assert!(asset_fees_2 == asset_fees_1, 2); // Asset fees unchanged
     assert!(stable_fees_2 > 0, 3); // Stable fees collected
 
@@ -825,7 +814,6 @@ fun test_protocol_fee_split_90_10() {
 
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         1000, // 10% base fee for easier math
-        option::none(),
         8000,
         &clock,
         ctx,
@@ -850,7 +838,7 @@ fun test_protocol_fee_split_90_10() {
     // LP share = 90,000 (90%)
     // Protocol share = 10,000 (10%)
 
-    let (protocol_asset_fees, protocol_stable_fees) = unified_spot_pool::get_protocol_fee_amounts(&pool);
+    let (protocol_asset_fees, protocol_stable_fees) = unified_spot_pool::get_protocol_fees(&pool);
 
     // Protocol should have ~10% of total fee
     assert!(protocol_asset_fees >= 9_000, 0); // At least 9k
@@ -884,6 +872,7 @@ fun test_no_protocol_fee_without_aggregator() {
 
     // Enable fee schedule
     let schedule = fee_scheduler::new_schedule(9900, 7_200_000);
+    unified_spot_pool::set_fee_schedule(&mut pool, schedule, &clock);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(1_000_000, ctx);
@@ -912,14 +901,10 @@ fun test_fee_decay_linear_progression() {
 
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
-    let mut clock = create_test_clock(0, ctx);
-
-    // Create fee schedule: 99% → 0.3% over 2 hours
-    let schedule = fee_scheduler::new_schedule(10000, 36_000_000);
+    let clock = create_test_clock(0, ctx);
 
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         100, // 1% final fee
-        option::none(),
         8000,
         &clock,
         ctx,
@@ -927,6 +912,7 @@ fun test_fee_decay_linear_progression() {
 
     // Fee schedule: 10000 bps (100%) → 100 bps (1%) over 10 hours
     let schedule = fee_scheduler::new_schedule(10000, 36_000_000);
+    unified_spot_pool::set_fee_schedule(&mut pool, schedule, &clock);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(100_000_000, ctx);
@@ -972,12 +958,9 @@ fun test_protocol_fee_accumulation_multiple_swaps() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(0, ctx);
 
-    // Create fee schedule: 99% → 0.3% over 2 hours
-    let schedule = fee_scheduler::new_schedule(5000, 3_600_000); // 50% → 0.3%
-
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         30,
-        option::some(schedule),
+        option::none(),
         8000,
         &clock,
         ctx,
@@ -985,6 +968,7 @@ fun test_protocol_fee_accumulation_multiple_swaps() {
 
     // Enable high MEV fee
     let schedule = fee_scheduler::new_schedule(5000, 3_600_000); // 50% → 0.3%
+    unified_spot_pool::set_fee_schedule(&mut pool, schedule, &clock);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(100_000_000, ctx);
@@ -999,7 +983,7 @@ fun test_protocol_fee_accumulation_multiple_swaps() {
         let stable_out = unified_spot_pool::swap_asset_for_stable(&mut pool, asset_in, 0, &clock, ctx);
         coin::burn_for_testing(stable_out);
 
-        let (current_fees, _) = unified_spot_pool::get_protocol_fee_amounts(&pool);
+        let (current_fees, _) = unified_spot_pool::get_protocol_fees(&pool);
 
         // Fees should monotonically increase
         assert!(current_fees > prev_fees, i);
@@ -1009,7 +993,7 @@ fun test_protocol_fee_accumulation_multiple_swaps() {
     };
 
     // Final protocol fees should be substantial
-    let (final_asset_fees, _) = unified_spot_pool::get_protocol_fee_amounts(&pool);
+    let (final_asset_fees, _) = unified_spot_pool::get_protocol_fees(&pool);
     assert!(final_asset_fees > 40_000, 0); // At least 40k from 10 swaps
 
     // Cleanup
@@ -1027,12 +1011,8 @@ fun test_zero_duration_skips_mev_protection() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(0, ctx);
 
-    // Create fee schedule: 99% → 0.3% over 2 hours
-    let schedule = fee_scheduler::new_schedule(9900, 0);
-
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         30, // 0.3% final fee
-        option::none(),
         8000,
         &clock,
         ctx,
@@ -1040,6 +1020,7 @@ fun test_zero_duration_skips_mev_protection() {
 
     // Zero duration = skip MEV, use final fee immediately
     let schedule = fee_scheduler::new_schedule(9900, 0);
+    unified_spot_pool::set_fee_schedule(&mut pool, schedule, &clock);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(1_000_000, ctx);

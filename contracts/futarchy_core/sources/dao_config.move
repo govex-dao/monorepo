@@ -86,9 +86,8 @@ public struct GovernanceConfig has copy, drop, store {
     max_outcomes: u64,
     max_actions_per_outcome: u64, // Maximum actions allowed per single outcome
     proposal_fee_per_outcome: u64,
-    required_bond_amount: u64,
-    fee_escalation_basis_points: u64,
-    proposal_creation_enabled: bool,
+    queue_entry_bond: u64, // Partially refundable bond for queue spam prevention (50% refund on cancel, 0% on evict)
+    queue_fullness_multiplier_bps: u64, // Exponential fee multiplier as queue fills
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
@@ -239,9 +238,8 @@ public fun new_governance_config(
     max_outcomes: u64,
     max_actions_per_outcome: u64,
     proposal_fee_per_outcome: u64,
-    required_bond_amount: u64,
-    fee_escalation_basis_points: u64,
-    proposal_creation_enabled: bool,
+    queue_entry_bond: u64,
+    queue_fullness_multiplier_bps: u64,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
@@ -256,8 +254,8 @@ public fun new_governance_config(
         EMaxActionsExceedsProtocol,
     );
     assert!(proposal_fee_per_outcome > 0, EInvalidProposalFee);
-    assert!(required_bond_amount > 0, EInvalidBondAmount);
-    assert!(fee_escalation_basis_points <= constants::max_fee_bps(), EInvalidFee);
+    assert!(queue_entry_bond > 0, EInvalidBondAmount);
+    assert!(queue_fullness_multiplier_bps <= constants::max_fee_bps(), EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
     assert!(
         eviction_grace_period_ms >= constants::min_eviction_grace_period_ms(),
@@ -268,9 +266,8 @@ public fun new_governance_config(
         max_outcomes,
         max_actions_per_outcome,
         proposal_fee_per_outcome,
-        required_bond_amount,
-        fee_escalation_basis_points,
-        proposal_creation_enabled,
+        queue_entry_bond,
+        queue_fullness_multiplier_bps,
         accept_new_proposals,
         max_intents_per_outcome,
         eviction_grace_period_ms,
@@ -480,15 +477,13 @@ public fun max_actions_per_outcome(gov: &GovernanceConfig): u64 { gov.max_action
 
 public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_fee_per_outcome }
 
-public fun required_bond_amount(gov: &GovernanceConfig): u64 { gov.required_bond_amount }
+public fun queue_entry_bond(gov: &GovernanceConfig): u64 { gov.queue_entry_bond }
 
 // REMOVED: proposal_recreation_window_ms and max_proposal_chain_depth (second-order proposals deleted)
 
-public fun fee_escalation_basis_points(gov: &GovernanceConfig): u64 {
-    gov.fee_escalation_basis_points
+public fun queue_fullness_multiplier_bps(gov: &GovernanceConfig): u64 {
+    gov.queue_fullness_multiplier_bps
 }
-
-public fun proposal_creation_enabled(gov: &GovernanceConfig): bool { gov.proposal_creation_enabled }
 
 public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_proposals }
 
@@ -786,20 +781,16 @@ public(package) fun set_proposal_fee_per_outcome(gov: &mut GovernanceConfig, fee
     gov.proposal_fee_per_outcome = fee;
 }
 
-public(package) fun set_required_bond_amount(gov: &mut GovernanceConfig, amount: u64) {
+public(package) fun set_queue_entry_bond(gov: &mut GovernanceConfig, amount: u64) {
     assert!(amount > 0, EInvalidBondAmount);
-    gov.required_bond_amount = amount;
+    gov.queue_entry_bond = amount;
 }
 
 // REMOVED: Setters for proposal_recreation_window_ms and max_proposal_chain_depth
 
-public(package) fun set_fee_escalation_basis_points(gov: &mut GovernanceConfig, points: u64) {
+public(package) fun set_queue_fullness_multiplier_bps(gov: &mut GovernanceConfig, points: u64) {
     assert!(points <= constants::max_fee_bps(), EInvalidFee);
-    gov.fee_escalation_basis_points = points;
-}
-
-public(package) fun set_proposal_creation_enabled(gov: &mut GovernanceConfig, enabled: bool) {
-    gov.proposal_creation_enabled = enabled;
+    gov.queue_fullness_multiplier_bps = points;
 }
 
 public(package) fun set_accept_new_proposals(gov: &mut GovernanceConfig, accept: bool) {
@@ -1115,9 +1106,8 @@ public fun default_governance_config(): GovernanceConfig {
         max_outcomes: constants::default_max_outcomes(),
         max_actions_per_outcome: constants::default_max_actions_per_outcome(),
         proposal_fee_per_outcome: 1000000, // 1 token per outcome
-        required_bond_amount: 10000000, // 10 tokens
-        fee_escalation_basis_points: constants::default_fee_escalation_bps(),
-        proposal_creation_enabled: true,
+        queue_entry_bond: 100000, // 0.1 token - small spam filter
+        queue_fullness_multiplier_bps: constants::default_queue_fullness_multiplier_bps(),
         accept_new_proposals: true,
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
         eviction_grace_period_ms: constants::default_eviction_grace_period_ms(),
