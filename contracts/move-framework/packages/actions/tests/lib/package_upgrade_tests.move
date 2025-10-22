@@ -213,9 +213,15 @@ fun test_lock_commit_cap() {
     let (mut scenario, extensions, mut account, clock) = start();
     let package_name = b"test_package".to_string();
 
-    // Lock commit cap
+    // First lock the upgrade cap to set up UpgradeRules
+    let upgrade_cap = create_test_upgrade_cap(&mut scenario);
     let auth = account.new_auth<Config, Witness>(version::current(), Witness());
-    pkg_upgrade::lock_commit_cap(auth, &mut account, package_name, scenario.ctx());
+    let six_months_ms = 15552000000; // 6 months
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, six_months_ms);
+
+    // Now lock commit cap
+    let auth2 = account.new_auth<Config, Witness>(version::current(), Witness());
+    pkg_upgrade::lock_commit_cap(auth2, &mut account, package_name, scenario.ctx());
 
     // Verify cap is stored
     assert!(pkg_upgrade::has_commit_cap(&account, package_name));
@@ -228,9 +234,15 @@ fun test_borrow_and_return_commit_cap() {
     let (mut scenario, extensions, mut account, clock) = start();
     let package_name = b"test_package".to_string();
 
-    // Lock commit cap
+    // First lock the upgrade cap to set up UpgradeRules
+    let upgrade_cap = create_test_upgrade_cap(&mut scenario);
     let auth = account.new_auth<Config, Witness>(version::current(), Witness());
-    pkg_upgrade::lock_commit_cap(auth, &mut account, package_name, scenario.ctx());
+    let six_months_ms = 15552000000; // 6 months
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, six_months_ms);
+
+    // Now lock commit cap
+    let auth2 = account.new_auth<Config, Witness>(version::current(), Witness());
+    pkg_upgrade::lock_commit_cap(auth2, &mut account, package_name, scenario.ctx());
 
     // Borrow it
     let commit_cap = pkg_upgrade::borrow_commit_cap<Config>(&mut account, package_name, version::current());
@@ -251,6 +263,12 @@ fun test_borrow_and_return_commit_cap() {
 fun test_init_lock_commit_cap() {
     let (mut scenario, extensions, mut account, clock) = start();
     let package_name = b"test_package".to_string();
+
+    // First lock the upgrade cap to set up UpgradeRules
+    let upgrade_cap = create_test_upgrade_cap(&mut scenario);
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let six_months_ms = 15552000000; // 6 months
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, six_months_ms);
 
     // Use init function (unshared)
     pkg_upgrade::do_lock_commit_cap_unshared(&mut account, package_name, scenario.ctx());
@@ -399,18 +417,27 @@ fun test_nonce_increments_on_reclaim_request() {
 
 #[test]
 fun test_create_cap_with_current_nonce() {
-    let (mut scenario, extensions, mut account, clock) = start();
+    let (mut scenario, extensions, mut account, mut clock) = start();
     let package_name = b"test_package".to_string();
     let recipient = @0xBEEF;
 
     // Setup
     let upgrade_cap = create_test_upgrade_cap(&mut scenario);
     let auth = account.new_auth<Config, Witness>(version::current(), Witness());
-    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, 15552000000);
+    let six_months_ms = 15552000000; // 6 months
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000, six_months_ms);
 
     // Request reclaim (nonce -> 1)
     let auth = account.new_auth<Config, Witness>(version::current(), Witness());
     pkg_upgrade::request_reclaim_commit_cap<Config>(auth, &mut account, package_name, &clock);
+
+    // Fast forward past reclaim delay
+    let reclaim_time = clock.timestamp_ms() + six_months_ms + 1;
+    clock.set_for_testing(reclaim_time);
+
+    // Clear reclaim request to allow creating new caps
+    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    pkg_upgrade::clear_reclaim_request<Config>(auth, &mut account, package_name, &clock);
 
     // Create new cap - should have nonce=1
     let auth = account.new_auth<Config, Witness>(version::current(), Witness());

@@ -56,12 +56,10 @@ const EInsufficientVestedAmount: u64 = 8;
 const EInvalidStreamParameters: u64 = 9;
 const EIntentAmountMismatch: u64 = 10;
 // Additional error codes
-const EStreamPaused: u64 = 11;
 const EAmountMustBeGreaterThanZero: u64 = 20;
 const EVaultDoesNotExist: u64 = 21;
 const ECoinTypeDoesNotExist: u64 = 22;
 const EInsufficientBalance: u64 = 23;
-const EStreamNotPaused: u64 = 12;
 const ENotTransferable: u64 = 13;
 const ENotCancellable: u64 = 14;
 const EBeneficiaryAlreadyExists: u64 = 15;
@@ -69,10 +67,7 @@ const EBeneficiaryNotFound: u64 = 16;
 const EUnsupportedActionVersion: u64 = 17;
 const ECannotReduceBelowClaimed: u64 = 18;
 const ETooManyBeneficiaries: u64 = 19;
-const ETimeCalculationOverflow: u64 = 24;
-const EVestingPaused: u64 = 25;  // Reusing vesting error code for stream pause
-const EEmergencyFrozen: u64 = 26;
-const EVestingNotPaused: u64 = 27;
+const EStreamExpired: u64 = 28;
 
 // === Action Type Markers ===
 
@@ -87,12 +82,6 @@ public struct VaultApproveCoinType has drop {}
 
 /// Remove coin type approval
 public struct VaultRemoveApprovedCoinType has drop {}
-
-/// Toggle stream pause (pause/resume)
-public struct ToggleStreamPause has drop {}
-
-/// Toggle stream emergency freeze
-public struct ToggleStreamFreeze has drop {}
 
 /// Cancel stream
 public struct CancelStream has drop {}
@@ -115,7 +104,6 @@ public struct Vault has store {
 /// Stream enhancements:
 /// Added features include:
 /// - Multiple beneficiaries support
-/// - Stream pausing/resuming
 /// - Metadata for extensibility
 /// - Transfer and reduction capabilities
 public struct VaultStream has store, drop {
@@ -136,12 +124,6 @@ public struct VaultStream has store, drop {
     // Multiple beneficiaries support
     additional_beneficiaries: vector<address>,
     max_beneficiaries: u64,  // Configurable per stream
-    // Pause functionality
-    is_paused: bool,
-    paused_at: Option<u64>,
-    paused_until: Option<u64>,  // None = indefinite, Some(ts) = pause until timestamp
-    paused_duration: u64,  // Total time paused (affects vesting calculation)
-    emergency_frozen: bool,  // If true, even unpause won't work
     // Expiry
     expiry_timestamp: Option<u64>,  // Stream becomes invalid after this time
     // Metadata for extensibility
@@ -178,19 +160,6 @@ public struct StreamCancelled has copy, drop {
     final_payment: u64,
 }
 
-/// Emitted when a stream is paused
-public struct StreamPaused has copy, drop {
-    stream_id: ID,
-    paused_at: u64,
-}
-
-/// Emitted when a stream is resumed
-public struct StreamResumed has copy, drop {
-    stream_id: ID,
-    resumed_at: u64,
-    pause_duration: u64,
-}
-
 /// Emitted when a beneficiary is added
 public struct BeneficiaryAdded has copy, drop {
     stream_id: ID,
@@ -222,18 +191,6 @@ public struct StreamAmountReduced has copy, drop {
     new_amount: u64,
 }
 
-/// Emitted when a stream is emergency frozen
-public struct StreamFrozen has copy, drop {
-    stream_id: ID,
-    timestamp: u64,
-}
-
-/// Emitted when emergency freeze is removed
-public struct StreamUnfrozen has copy, drop {
-    stream_id: ID,
-    timestamp: u64,
-}
-
 /// Action to deposit an amount of this coin to the targeted Vault.
 public struct DepositAction<phantom CoinType> has store, drop {
     // vault name
@@ -259,20 +216,6 @@ public struct ApproveCoinTypeAction<phantom CoinType> has store, drop {
 public struct RemoveApprovedCoinTypeAction<phantom CoinType> has store, drop {
     // vault name
     name: String,
-}
-
-/// Action for toggling stream pause (combines pause/resume)
-public struct ToggleStreamPauseAction has store {
-    vault_name: String,
-    stream_id: ID,
-    pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
-}
-
-/// Action for toggling emergency freeze (combines freeze/unfreeze)
-public struct ToggleStreamFreezeAction has store {
-    vault_name: String,
-    stream_id: ID,
-    freeze: bool, // true = freeze, false = unfreeze
 }
 
 /// Action for canceling a stream
@@ -564,16 +507,6 @@ public fun destroy_remove_approved_coin_type_action<CoinType>(action: RemoveAppr
     let RemoveApprovedCoinTypeAction { name: _ } = action;
 }
 
-/// Destroy a ToggleStreamPauseAction after serialization
-public fun destroy_toggle_stream_pause_action(action: ToggleStreamPauseAction) {
-    let ToggleStreamPauseAction { vault_name: _, stream_id: _, pause_duration_ms: _ } = action;
-}
-
-/// Destroy a ToggleStreamFreezeAction after serialization
-public fun destroy_toggle_stream_freeze_action(action: ToggleStreamFreezeAction) {
-    let ToggleStreamFreezeAction { vault_name: _, stream_id: _, freeze: _ } = action;
-}
-
 /// Destroy a CancelStreamAction after serialization
 public fun destroy_cancel_stream_action(action: CancelStreamAction) {
     let CancelStreamAction { vault_name: _, stream_id: _ } = action;
@@ -735,42 +668,6 @@ public fun new_remove_approved_coin_type<Outcome, CoinType, IW: drop>(
     // Action already consumed by add_typed_action - no need to destroy
 }
 
-/// Creates a ToggleStreamPauseAction and adds it to an intent
-public fun new_toggle_stream_pause<Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    vault_name: String,
-    stream_id: ID,
-    pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
-    intent_witness: IW,
-) {
-    let action = ToggleStreamPauseAction { vault_name, stream_id, pause_duration_ms };
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
-        ToggleStreamPause {},
-        action_data,
-        intent_witness
-    );
-    destroy_toggle_stream_pause_action(action);
-}
-
-/// Creates a ToggleStreamFreezeAction and adds it to an intent
-public fun new_toggle_stream_freeze<Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    vault_name: String,
-    stream_id: ID,
-    freeze: bool, // true = freeze, false = unfreeze
-    intent_witness: IW,
-) {
-    let action = ToggleStreamFreezeAction { vault_name, stream_id, freeze };
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
-        ToggleStreamFreeze {},
-        action_data,
-        intent_witness
-    );
-    destroy_toggle_stream_freeze_action(action);
-}
-
 /// Creates a CancelStreamAction and adds it to an intent
 public fun new_cancel_stream<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
@@ -789,109 +686,6 @@ public fun new_cancel_stream<Outcome, IW: drop>(
 }
 
 // === Execution Functions ===
-
-/// Execute toggle stream pause action
-public fun do_toggle_stream_pause<Config: store, Outcome: store, CoinType, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account,
-    vault_name: String,
-    clock: &Clock,
-    version_witness: VersionWitness,
-    witness: IW,
-    ctx: &mut TxContext,
-) {
-    executable.intent().assert_is_account(account.addr());
-
-    let specs = executable.intent().action_specs();
-    let spec = specs.borrow(executable.action_idx());
-
-    // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<ToggleStreamPause>(spec);
-
-    // Check version before deserialization
-    let spec_version = intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    let action_data = intents::action_spec_data(spec);
-
-    // Create BCS reader and deserialize
-    let mut reader = bcs::new(*action_data);
-    let deserialized_vault_name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
-    let stream_id = bcs::peel_address(&mut reader).to_id();
-    let pause_duration_ms = bcs::peel_u64(&mut reader);
-
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Validate vault name matches
-    assert!(vault_name == deserialized_vault_name, EVaultDoesNotExist);
-
-    // Get vault
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version_witness);
-    assert!(vault.streams.contains(stream_id), EStreamNotFound);
-
-    // Execute pause/unpause logic
-    if (pause_duration_ms == 0) {
-        // Unpause
-        check_and_unpause_stream(vault, stream_id, clock);
-    } else {
-        // Pause
-        pause_stream<CoinType>(vault, stream_id, pause_duration_ms, clock, ctx);
-    };
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
-
-/// Execute toggle stream freeze action
-public fun do_toggle_stream_freeze<Config: store, Outcome: store, CoinType, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account,
-    vault_name: String,
-    clock: &Clock,
-    version_witness: VersionWitness,
-    witness: IW,
-) {
-    executable.intent().assert_is_account(account.addr());
-
-    let specs = executable.intent().action_specs();
-    let spec = specs.borrow(executable.action_idx());
-
-    // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<ToggleStreamFreeze>(spec);
-
-    // Check version before deserialization
-    let spec_version = intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    let action_data = intents::action_spec_data(spec);
-
-    // Create BCS reader and deserialize
-    let mut reader = bcs::new(*action_data);
-    let deserialized_vault_name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
-    let stream_id = bcs::peel_address(&mut reader).to_id();
-    let freeze = bcs::peel_bool(&mut reader);
-
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Validate vault name matches
-    assert!(vault_name == deserialized_vault_name, EVaultDoesNotExist);
-
-    // Get vault
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version_witness);
-    assert!(vault.streams.contains(stream_id), EStreamNotFound);
-
-    // Execute freeze/unfreeze logic
-    if (freeze) {
-        emergency_freeze_stream(vault, stream_id, clock);
-    } else {
-        emergency_unfreeze_stream(vault, stream_id, clock);
-    };
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
 
 /// Execute cancel stream action
 public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: drop>(
@@ -947,7 +741,6 @@ public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: d
             stream.start_time,
             stream.end_time,
             current_time,
-            stream.paused_duration,
             &stream.cliff_time,
         );
 
@@ -1207,11 +1000,6 @@ public fun create_stream<Config: store, CoinType: drop>(
         // additional checks
         additional_beneficiaries: vector::empty(),
         max_beneficiaries,
-        is_paused: false,
-        paused_at: option::none(),
-        paused_until: option::none(),
-        paused_duration: 0,
-        emergency_frozen: false,
         expiry_timestamp: option::none(),
         metadata: option::none(),
         is_transferable: true,
@@ -1266,7 +1054,6 @@ public fun cancel_stream<Config: store, CoinType: drop>(
             stream.start_time,
             stream.end_time,
             current_time,
-            stream.paused_duration,
             &stream.cliff_time,
         );
 
@@ -1312,9 +1099,10 @@ public fun withdraw_from_stream<Config: store, CoinType: drop>(
     assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
 
     let stream = table::borrow_mut(&mut vault.streams, stream_id);
-    assert!(!stream.is_paused, EStreamPaused);
-
     let current_time = clock.timestamp_ms();
+
+    // Check if stream is expired
+    assert!(!stream_utils::is_expired(&stream.expiry_timestamp, current_time), EStreamExpired);
 
     // Check if stream has started
     assert!(current_time >= stream.start_time, EStreamNotStarted);
@@ -1350,7 +1138,6 @@ public fun withdraw_from_stream<Config: store, CoinType: drop>(
         stream.start_time,
         stream.end_time,
         current_time,
-        stream.paused_duration,
         &stream.cliff_time,
     );
 
@@ -1399,7 +1186,6 @@ public fun calculate_claimable<Config: store>(
         stream.start_time,
         stream.end_time,
         current_time,
-        stream.paused_duration,
         &stream.cliff_time,
     )
 }
@@ -1409,7 +1195,7 @@ public fun stream_info<Config: store>(
     account: &Account,
     vault_name: String,
     stream_id: ID,
-): (address, u64, u64, u64, u64, bool, bool) {
+): (address, u64, u64, u64, u64, bool) {
     let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
     assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
 
@@ -1420,7 +1206,6 @@ public fun stream_info<Config: store>(
         stream.claimed_amount,
         stream.start_time,
         stream.end_time,
-        stream.is_paused,
         stream.is_cancellable
     )
 }
@@ -1502,11 +1287,6 @@ public(package) fun create_stream_unshared<Config: store, CoinType: drop>(
         max_per_withdrawal,
         min_interval_ms,
         last_withdrawal_time: 0,
-        paused_duration: 0,
-        paused_at: option::none(),
-        paused_until: option::none(),
-        is_paused: false,
-        emergency_frozen: false,
         expiry_timestamp: option::none(),
         is_cancellable: true,
         is_transferable: true,
@@ -1534,156 +1314,6 @@ public(package) fun create_stream_unshared<Config: store, CoinType: drop>(
     stream_id_copy
 }
 
-// === Stream Pause Control ===
-
-/// Pause a stream for a specific duration (in milliseconds)
-/// Pass 0 for pause_duration_ms to pause indefinitely
-public fun pause_stream<CoinType>(
-    vault: &mut Vault,
-    stream_id: ID,
-    pause_duration_ms: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let stream = table::borrow_mut(&mut vault.streams, stream_id);
-
-    // Only beneficiary can pause
-    let sender = tx_context::sender(ctx);
-    assert!(stream.beneficiary == sender || stream.additional_beneficiaries.contains(&sender), EUnauthorizedBeneficiary);
-    assert!(!stream.is_paused, EVestingPaused);
-    assert!(!stream.emergency_frozen, EEmergencyFrozen);
-
-    let current_time = clock.timestamp_ms();
-
-    // Use stream_utils for validation and calculation
-    assert!(stream_utils::validate_pause_duration(current_time, pause_duration_ms), ETimeCalculationOverflow);
-
-    stream.is_paused = true;
-    stream.paused_at = option::some(current_time);
-    stream.paused_until = stream_utils::calculate_pause_until(current_time, pause_duration_ms);
-
-    event::emit(StreamPaused {
-        stream_id,
-        paused_at: current_time,
-    });
-}
-
-/// Resume a paused stream
-public fun resume_stream<CoinType>(
-    vault: &mut Vault,
-    stream_id: ID,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let stream = table::borrow_mut(&mut vault.streams, stream_id);
-
-    // Only beneficiary can resume
-    let sender = tx_context::sender(ctx);
-    assert!(stream.beneficiary == sender || stream.additional_beneficiaries.contains(&sender), EUnauthorizedBeneficiary);
-    assert!(stream.is_paused, EVestingNotPaused);
-    assert!(!stream.emergency_frozen, EEmergencyFrozen);
-
-    let current_time = clock.timestamp_ms();
-
-    // Calculate pause duration
-    if (stream.paused_at.is_some()) {
-        let pause_start = *stream.paused_at.borrow();
-        let pause_duration = stream_utils::calculate_pause_duration(pause_start, current_time);
-        stream.paused_duration = stream.paused_duration + pause_duration;
-    };
-
-    stream.is_paused = false;
-    stream.paused_at = option::none();
-    stream.paused_until = option::none();
-
-    event::emit(StreamResumed {
-        stream_id,
-        resumed_at: current_time,
-        pause_duration: stream.paused_duration,
-    });
-}
-
-/// Check if pause has expired and auto-unpause if needed
-/// Can be called by anyone
-public fun check_and_unpause_stream(
-    vault: &mut Vault,
-    stream_id: ID,
-    clock: &Clock,
-) {
-    let stream = table::borrow_mut(&mut vault.streams, stream_id);
-
-    if (!stream.is_paused) {
-        return
-    };
-
-    let current_time = clock.timestamp_ms();
-
-    // Use stream_utils to check if pause expired
-    if (stream_utils::is_pause_expired(&stream.paused_until, current_time)) {
-        // Calculate pause duration
-        if (stream.paused_at.is_some()) {
-            let pause_start = *stream.paused_at.borrow();
-            let pause_duration = stream_utils::calculate_pause_duration(pause_start, current_time);
-            stream.paused_duration = stream.paused_duration + pause_duration;
-        };
-
-        stream.is_paused = false;
-        stream.paused_at = option::none();
-        stream.paused_until = option::none();
-
-        event::emit(StreamResumed {
-            stream_id,
-            resumed_at: current_time,
-            pause_duration: stream.paused_duration,
-        });
-    };
-}
-
-// === Emergency Controls ===
-
-/// Emergency freeze a stream - prevents all claims and unpause
-/// Only callable by governance/authority
-public fun emergency_freeze_stream(
-    vault: &mut Vault,
-    stream_id: ID,
-    clock: &Clock,
-) {
-    let stream = table::borrow_mut(&mut vault.streams, stream_id);
-    assert!(!stream.emergency_frozen, EEmergencyFrozen);
-
-    stream.emergency_frozen = true;
-    if (!stream.is_paused) {
-        stream.is_paused = true;
-        stream.paused_at = option::some(clock.timestamp_ms());
-        stream.paused_until = option::none(); // Indefinite
-    };
-
-    event::emit(StreamFrozen {
-        stream_id,
-        timestamp: clock.timestamp_ms(),
-    });
-}
-
-/// Remove emergency freeze
-/// Only callable by governance/authority
-public fun emergency_unfreeze_stream(
-    vault: &mut Vault,
-    stream_id: ID,
-    clock: &Clock,
-) {
-    let stream = table::borrow_mut(&mut vault.streams, stream_id);
-    assert!(stream.emergency_frozen, EVestingNotPaused);
-
-    stream.emergency_frozen = false;
-
-    event::emit(StreamUnfrozen {
-        stream_id,
-        timestamp: clock.timestamp_ms(),
-    });
-
-    // Note: Does NOT auto-unpause - beneficiary must explicitly unpause after unfreezing
-}
-
 // === Preview Functions ===
 
 /// Calculate currently claimable amount from a stream
@@ -1695,13 +1325,8 @@ public fun stream_claimable_now(
     let stream = table::borrow(&vault.streams, stream_id);
     let current_time = clock.timestamp_ms();
 
-    // Use stream_utils to check if claiming is allowed
-    if (!stream_utils::can_claim(
-        stream.is_paused,
-        stream.emergency_frozen,
-        &stream.expiry_timestamp,
-        current_time
-    )) {
+    // Check if stream is expired
+    if (stream_utils::is_expired(&stream.expiry_timestamp, current_time)) {
         return 0
     };
 
@@ -1722,7 +1347,6 @@ public fun stream_claimable_now(
         stream.start_time,
         stream.end_time,
         current_time,
-        stream.paused_duration,
         &stream.cliff_time
     )
 }

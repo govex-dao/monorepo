@@ -7,10 +7,10 @@
 /// This module provides comprehensive vesting functionality similar to vault streams.
 /// A vesting has configurable parameters for maximum flexibility:
 /// - Multiple beneficiaries support
-/// - Pause/resume functionality
 /// - Metadata for extensibility
 /// - Transfer and cancellation settings
 /// - Cliff periods and rate limiting
+/// - Configurable expiry timestamps
 module account_actions::vesting;
 
 // === Imports ===
@@ -49,8 +49,6 @@ const EBalanceNotEmpty: u64 = 0;
 const ETooEarly: u64 = 1;
 const EWrongVesting: u64 = 2;
 const EVestingNotCancelable: u64 = 3;
-const EVestingPaused: u64 = 4;
-const EVestingNotPaused: u64 = 5;
 const ENotTransferable: u64 = 6;
 const EUnauthorizedBeneficiary: u64 = 7;
 const EBeneficiaryAlreadyExists: u64 = 8;
@@ -62,8 +60,6 @@ const ECliffNotReached: u64 = 13;
 const EWithdrawalLimitExceeded: u64 = 14;
 const EWithdrawalTooSoon: u64 = 15;
 const EInvalidInput: u64 = 16;
-const ETimeCalculationOverflow: u64 = 17;  // Keep for pause duration validation
-const EEmergencyFrozen: u64 = 18;
 const EVestingExpired: u64 = 19;
 const EUnsupportedActionVersion: u64 = 20;
 
@@ -73,15 +69,9 @@ const EUnsupportedActionVersion: u64 = 20;
 public struct VestingCreate has drop {}
 /// Cancel vesting schedule
 public struct VestingCancel has drop {}
-/// Toggle vesting pause
-public struct ToggleVestingPause has drop {}
-/// Toggle vesting freeze
-public struct ToggleVestingFreeze has drop {}
 
 public fun vesting_create(): VestingCreate { VestingCreate {} }
 public fun vesting_cancel(): VestingCancel { VestingCancel {} }
-public fun toggle_vesting_pause(): ToggleVestingPause { ToggleVestingPause {} }
-public fun toggle_vesting_freeze(): ToggleVestingFreeze { ToggleVestingFreeze {} }
 
 // === Structs ===
 
@@ -103,11 +93,6 @@ public struct Vesting<phantom CoinType> has key {
     min_interval_ms: u64,
     last_withdrawal_time: u64,
     // Control flags
-    is_paused: bool,
-    paused_at: Option<u64>,
-    paused_until: Option<u64>,  // None = indefinite, Some(ts) = pause until timestamp
-    paused_duration: u64,
-    emergency_frozen: bool,     // If true, even unpause won't work
     is_transferable: bool,
     is_cancelable: bool,
     // Expiry
@@ -142,18 +127,6 @@ public struct CancelVestingAction has drop, store {
     vesting_id: ID,
 }
 
-/// Action for toggling vesting pause (combines pause/resume)
-public struct ToggleVestingPauseAction has drop, store {
-    vesting_id: ID,
-    pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
-}
-
-/// Action for toggling emergency freeze (combines freeze/unfreeze)
-public struct ToggleVestingFreezeAction has drop, store {
-    vesting_id: ID,
-    freeze: bool, // true = freeze, false = unfreeze
-}
-
 // === Events ===
 
 /// Emitted when a vesting is created
@@ -180,19 +153,6 @@ public struct VestingCancelled has copy, drop {
     final_payment: u64,
 }
 
-/// Emitted when a vesting is paused
-public struct VestingPaused has copy, drop {
-    vesting_id: ID,
-    paused_at: u64,
-}
-
-/// Emitted when a vesting is resumed
-public struct VestingResumed has copy, drop {
-    vesting_id: ID,
-    resumed_at: u64,
-    pause_duration: u64,
-}
-
 /// Emitted when a beneficiary is added
 public struct BeneficiaryAdded has copy, drop {
     vesting_id: ID,
@@ -210,18 +170,6 @@ public struct VestingTransferred has copy, drop {
     vesting_id: ID,
     old_beneficiary: address,
     new_beneficiary: address,
-}
-
-/// Emitted when a vesting is emergency frozen
-public struct VestingFrozen has copy, drop {
-    vesting_id: ID,
-    timestamp: u64,
-}
-
-/// Emitted when emergency freeze is removed
-public struct VestingUnfrozen has copy, drop {
-    vesting_id: ID,
-    timestamp: u64,
 }
 
 // === Destruction Functions ===
@@ -246,16 +194,6 @@ public fun destroy_create_vesting_action<CoinType>(action: CreateVestingAction<C
 /// Destroy a CancelVestingAction after serialization
 public fun destroy_cancel_vesting_action(action: CancelVestingAction) {
     let CancelVestingAction { vesting_id: _ } = action;
-}
-
-/// Destroy a ToggleVestingPauseAction after serialization
-public fun destroy_toggle_vesting_pause_action(action: ToggleVestingPauseAction) {
-    let ToggleVestingPauseAction { vesting_id: _, pause_duration_ms: _ } = action;
-}
-
-/// Destroy a ToggleVestingFreezeAction after serialization
-public fun destroy_toggle_vesting_freeze_action(action: ToggleVestingFreezeAction) {
-    let ToggleVestingFreezeAction { vesting_id: _, freeze: _ } = action;
 }
 
 // === Public Functions ===
@@ -391,11 +329,6 @@ public fun do_vesting<Config: store, Outcome: store, CoinType, IW: drop>(
         max_per_withdrawal,
         min_interval_ms,
         last_withdrawal_time: 0,
-        is_paused: false,
-        paused_at: option::none(),
-        paused_until: option::none(),
-        paused_duration: 0,
-        emergency_frozen: false,
         is_transferable,
         is_cancelable,
         expiry_timestamp: option::none(),  // No expiry by default
@@ -474,11 +407,6 @@ public(package) fun do_create_vesting_unshared<CoinType>(
         max_per_withdrawal: 0,  // No limit
         min_interval_ms: 0,     // No minimum interval
         last_withdrawal_time: 0,
-        is_paused: false,
-        paused_at: option::none(),
-        paused_until: option::none(),
-        paused_duration: 0,
-        emergency_frozen: false,
         is_transferable: false,  // Not transferable by default
         is_cancelable: false,    // Not cancelable for security
         expiry_timestamp: option::none(),
@@ -523,13 +451,8 @@ public fun claim_vesting<CoinType>(
 
     let current_time = clock.timestamp_ms();
 
-    // Use stream_utils to check if claiming is allowed
-    assert!(stream_utils::can_claim(
-        vesting.is_paused,
-        vesting.emergency_frozen,
-        &vesting.expiry_timestamp,
-        current_time
-    ), EVestingPaused); // Use EVestingPaused as generic "can't claim" error
+    // Check if vesting is still valid (not expired)
+    assert!(!stream_utils::is_expired(&vesting.expiry_timestamp, current_time), EVestingExpired);
 
     // Check cliff if applicable
     if (vesting.cliff_time.is_some()) {
@@ -564,7 +487,6 @@ public fun claim_vesting<CoinType>(
         vesting.start_timestamp,
         vesting.end_timestamp,
         current_time,
-        vesting.paused_duration,
         &vesting.cliff_time
     );
     assert!(amount <= available, EBalanceNotEmpty);
@@ -633,24 +555,19 @@ public fun cancel_vesting<Config: store, Outcome: store, CoinType, IW: drop>(
     assert!(object::id(&vesting) == vesting_id, EWrongVesting);
     assert!(vesting.is_cancelable, EVestingNotCancelable);
 
-    let Vesting { 
-        id, 
-        mut balance, 
+    let Vesting {
+        id,
+        mut balance,
         claimed_amount,
         start_timestamp,
         end_timestamp,
         primary_beneficiary,
-        paused_duration,
         cliff_time,
         additional_beneficiaries: _,
         max_beneficiaries: _,
         max_per_withdrawal: _,
         min_interval_ms: _,
         last_withdrawal_time: _,
-        is_paused: _,
-        paused_at: _,
-        paused_until: _,
-        emergency_frozen: _,
         is_transferable: _,
         is_cancelable: _,
         expiry_timestamp: _,
@@ -671,7 +588,6 @@ public fun cancel_vesting<Config: store, Outcome: store, CoinType, IW: drop>(
         start_timestamp,
         end_timestamp,
         current_time,
-        paused_duration,
         &cliff_time
     );
 
@@ -707,94 +623,6 @@ public fun cancel_vesting<Config: store, Outcome: store, CoinType, IW: drop>(
 
     // Increment action index
     executable::increment_action_idx(executable);
-}
-
-/// Pauses a vesting for a specific duration (in milliseconds)
-/// Pass 0 for pause_duration_ms to pause indefinitely
-public fun pause_vesting<CoinType>(
-    vesting: &mut Vesting<CoinType>,
-    pause_duration_ms: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    assert!(tx_context::sender(ctx) == vesting.primary_beneficiary, EUnauthorizedBeneficiary);
-    assert!(!vesting.is_paused, EVestingNotPaused);
-    assert!(!vesting.emergency_frozen, EEmergencyFrozen);
-
-    let current_time = clock.timestamp_ms();
-
-    // Use stream_utils for pause calculation and validation
-    assert!(stream_utils::validate_pause_duration(current_time, pause_duration_ms), ETimeCalculationOverflow);
-
-    vesting.is_paused = true;
-    vesting.paused_at = option::some(current_time);
-    vesting.paused_until = stream_utils::calculate_pause_until(current_time, pause_duration_ms);
-
-    event::emit(VestingPaused {
-        vesting_id: object::id(vesting),
-        paused_at: current_time,
-    });
-}
-
-/// Resumes a paused vesting
-public fun resume_vesting<CoinType>(
-    vesting: &mut Vesting<CoinType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    assert!(tx_context::sender(ctx) == vesting.primary_beneficiary, EUnauthorizedBeneficiary);
-    assert!(vesting.is_paused, EVestingNotPaused);
-    assert!(!vesting.emergency_frozen, EEmergencyFrozen);
-
-    let current_time = clock.timestamp_ms();
-    if (vesting.paused_at.is_some()) {
-        let pause_start = *vesting.paused_at.borrow();
-        let pause_duration = stream_utils::calculate_pause_duration(pause_start, current_time);
-        vesting.paused_duration = vesting.paused_duration + pause_duration;
-    };
-
-    vesting.is_paused = false;
-    vesting.paused_at = option::none();
-    vesting.paused_until = option::none();
-
-    event::emit(VestingResumed {
-        vesting_id: object::id(vesting),
-        resumed_at: current_time,
-        pause_duration: vesting.paused_duration,
-    });
-}
-
-/// Check if pause has expired and auto-unpause if needed
-/// Can be called by anyone to help beneficiary
-public fun check_and_unpause<CoinType>(
-    vesting: &mut Vesting<CoinType>,
-    clock: &Clock,
-) {
-    if (!vesting.is_paused) {
-        return
-    };
-
-    let current_time = clock.timestamp_ms();
-
-    // Use stream_utils to check if pause expired
-    if (stream_utils::is_pause_expired(&vesting.paused_until, current_time)) {
-        // Auto-unpause (doesn't require beneficiary permission)
-        if (vesting.paused_at.is_some()) {
-            let pause_start = *vesting.paused_at.borrow();
-            let pause_duration = stream_utils::calculate_pause_duration(pause_start, current_time);
-            vesting.paused_duration = vesting.paused_duration + pause_duration;
-        };
-
-        vesting.is_paused = false;
-        vesting.paused_at = option::none();
-        vesting.paused_until = option::none();
-
-        event::emit(VestingResumed {
-            vesting_id: object::id(vesting),
-            resumed_at: current_time,
-            pause_duration: vesting.paused_duration,
-        });
-    };
 }
 
 /// Adds a beneficiary to the vesting
@@ -870,48 +698,6 @@ public fun update_metadata<CoinType>(
     vesting.metadata = metadata;
 }
 
-// === Emergency Controls ===
-
-/// Emergency freeze - prevents all claims and unpause
-/// Only callable by governance/authority (not beneficiary)
-/// Note: This is public so DAO governance can call it
-public fun emergency_freeze<CoinType>(
-    vesting: &mut Vesting<CoinType>,
-    clock: &Clock,
-) {
-    assert!(!vesting.emergency_frozen, EEmergencyFrozen);
-
-    vesting.emergency_frozen = true;
-    if (!vesting.is_paused) {
-        vesting.is_paused = true;
-        vesting.paused_at = option::some(clock.timestamp_ms());
-        vesting.paused_until = option::none(); // Indefinite
-    };
-
-    event::emit(VestingFrozen {
-        vesting_id: object::id(vesting),
-        timestamp: clock.timestamp_ms(),
-    });
-}
-
-/// Remove emergency freeze
-/// Only callable by governance/authority
-public fun emergency_unfreeze<CoinType>(
-    vesting: &mut Vesting<CoinType>,
-    clock: &Clock,
-) {
-    assert!(vesting.emergency_frozen, EVestingNotPaused);
-
-    vesting.emergency_frozen = false;
-
-    event::emit(VestingUnfrozen {
-        vesting_id: object::id(vesting),
-        timestamp: clock.timestamp_ms(),
-    });
-
-    // Note: Does NOT auto-unpause - beneficiary must explicitly unpause after unfreezing
-}
-
 // === Preview Functions ===
 
 /// Calculate currently claimable amount (vested but not yet claimed)
@@ -921,13 +707,8 @@ public fun claimable_now<CoinType>(
 ): u64 {
     let current_time = clock.timestamp_ms();
 
-    // Use stream_utils to check if claiming is allowed
-    if (!stream_utils::can_claim(
-        vesting.is_paused,
-        vesting.emergency_frozen,
-        &vesting.expiry_timestamp,
-        current_time
-    )) {
+    // Check if vesting is expired
+    if (stream_utils::is_expired(&vesting.expiry_timestamp, current_time)) {
         return 0
     };
 
@@ -949,7 +730,6 @@ public fun claimable_now<CoinType>(
         vesting.start_timestamp,
         vesting.end_timestamp,
         current_time,
-        vesting.paused_duration,
         &vesting.cliff_time
     )
 }
@@ -996,124 +776,7 @@ public fun new_cancel_vesting<Outcome, IW: drop>(
     destroy_cancel_vesting_action(action);
 }
 
-/// Proposes to toggle vesting pause (pause or resume)
-public fun new_toggle_vesting_pause<Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    vesting_id: ID,
-    pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
-    intent_witness: IW,
-) {
-    let action = ToggleVestingPauseAction { vesting_id, pause_duration_ms };
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
-        toggle_vesting_pause(),
-        action_data,
-        intent_witness
-    );
-    destroy_toggle_vesting_pause_action(action);
-}
-
-/// Proposes to toggle vesting emergency freeze
-public fun new_toggle_vesting_freeze<Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    vesting_id: ID,
-    freeze: bool, // true = freeze, false = unfreeze
-    intent_witness: IW,
-) {
-    let action = ToggleVestingFreezeAction { vesting_id, freeze };
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
-        toggle_vesting_freeze(),
-        action_data,
-        intent_witness
-    );
-    destroy_toggle_vesting_freeze_action(action);
-}
-
 // === Execution Functions ===
-
-/// Execute toggle vesting pause action
-public fun do_toggle_vesting_pause<Config: store, Outcome: store, CoinType, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    _account: &Account,
-    vesting: &mut Vesting<CoinType>,
-    clock: &Clock,
-    version: VersionWitness,
-    witness: IW,
-    ctx: &mut TxContext,
-) {
-    let specs = executable.intent().action_specs();
-    let spec = specs.borrow(executable.action_idx());
-
-    // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<ToggleVestingPause>(spec);
-
-    // Check version before deserialization
-    let spec_version = intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    let action_data = intents::action_spec_data(spec);
-
-    // Create BCS reader and deserialize
-    let mut reader = bcs::new(*action_data);
-    let vesting_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
-    let pause_duration_ms = bcs::peel_u64(&mut reader);
-
-    // Validate vesting ID matches
-    assert!(object::id(vesting) == vesting_id, EWrongVesting);
-
-    // Execute pause/unpause logic
-    if (pause_duration_ms == 0) {
-        // Unpause
-        check_and_unpause(vesting, clock);
-    } else {
-        // Pause
-        pause_vesting(vesting, pause_duration_ms, clock, ctx);
-    };
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
-
-/// Execute toggle vesting freeze action
-public fun do_toggle_vesting_freeze<Config: store, Outcome: store, CoinType, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    _account: &Account,
-    vesting: &mut Vesting<CoinType>,
-    clock: &Clock,
-    version: VersionWitness,
-    witness: IW,
-) {
-    let specs = executable.intent().action_specs();
-    let spec = specs.borrow(executable.action_idx());
-
-    // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<ToggleVestingFreeze>(spec);
-
-    // Check version before deserialization
-    let spec_version = intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    let action_data = intents::action_spec_data(spec);
-
-    // Create BCS reader and deserialize
-    let mut reader = bcs::new(*action_data);
-    let vesting_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
-    let freeze = bcs::peel_bool(&mut reader);
-
-    // Validate vesting ID matches
-    assert!(object::id(vesting) == vesting_id, EWrongVesting);
-
-    // Execute freeze/unfreeze logic
-    if (freeze) {
-        emergency_freeze(vesting, clock);
-    } else {
-        emergency_unfreeze(vesting, clock);
-    };
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
 
 /// Deletes the CreateVestingAction
 public fun delete_vesting_action<CoinType>(expired: &mut Expired) {
@@ -1180,11 +843,6 @@ public fun is_cancelable<CoinType>(vesting: &Vesting<CoinType>): bool {
 #[test_only]
 public fun is_transferable<CoinType>(vesting: &Vesting<CoinType>): bool {
     vesting.is_transferable
-}
-
-#[test_only]
-public fun is_paused<CoinType>(vesting: &Vesting<CoinType>): bool {
-    vesting.is_paused
 }
 
 #[test_only]

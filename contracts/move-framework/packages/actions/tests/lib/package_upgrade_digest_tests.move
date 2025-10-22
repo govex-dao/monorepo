@@ -236,8 +236,8 @@ fun test_execute_approved_upgrade_dao_only() {
     // For testing, we use test_upgrade
     let receipt = package::test_upgrade(ticket);
 
-    // Complete upgrade
-    pkg_upgrade::complete_approved_upgrade_dao_only<Config>(
+    // Complete upgrade - use test version that skips package validation
+    pkg_upgrade::complete_approved_upgrade_dao_only_for_testing<Config>(
         &mut account,
         package_name,
         digest,

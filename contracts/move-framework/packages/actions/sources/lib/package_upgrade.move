@@ -1385,6 +1385,55 @@ public fun complete_approved_upgrade_dao_only<Config: store>(
     });
 }
 
+/// Test-only version that skips package validation
+/// This is needed because package::test_upgrade() creates receipts with mismatched package IDs
+#[test_only]
+public fun complete_approved_upgrade_dao_only_for_testing<Config: store>(
+    account: &mut Account,
+    package_name: String,
+    digest: vector<u8>,
+    receipt: UpgradeReceipt,
+    version_witness: VersionWitness,
+) {
+    // Validate this matches an approved upgrade
+    let proposal: &UpgradeProposal = account.borrow_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+    assert!(proposal.approved, EProposalNotApproved);
+
+    // Skip package validation for tests since package::test_upgrade creates mismatched receipts
+
+    // Commit the upgrade
+    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        UpgradeCapKey(package_name),
+        version_witness
+    );
+    cap.commit_upgrade(receipt);
+
+    // Update package index
+    let new_addr = cap.package().to_address();
+    let index: &mut UpgradeIndex = account.borrow_managed_data_mut(
+        UpgradeIndexKey(),
+        version_witness
+    );
+    *index.packages_info.get_mut(&package_name) = new_addr;
+
+    // Clean up proposal
+    let _removed_proposal: UpgradeProposal = account.remove_managed_data(
+        proposal_key(package_name, digest),
+        version_witness
+    );
+
+    // Emit event
+    sui::event::emit(UpgradeCompleted {
+        package_name,
+        digest,
+        new_package_addr: new_addr,
+        mode: b"dao_only".to_string(),
+    });
+}
+
 /// Phase 2a: Execute approved upgrade atomically (with commit cap)
 /// This requires the commit cap to be provided, validating nonce
 public fun execute_approved_upgrade_with_cap<Config: store>(

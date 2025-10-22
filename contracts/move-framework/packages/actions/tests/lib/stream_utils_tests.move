@@ -70,28 +70,6 @@ fun test_cliff_vesting_after_cliff() {
 
 // === Effective Time Tests ===
 
-#[test]
-fun test_effective_time_no_pause() {
-    let eff_time = stream_utils::calculate_effective_time(
-        150, // current_time
-        200, // end_time
-        0, // paused_duration
-    );
-    assert!(eff_time == 150, 0);
-}
-
-#[test]
-fun test_effective_time_with_pause_before_adjusted_end() {
-    let eff_time = stream_utils::calculate_effective_time(150, 200, 50);
-    assert!(eff_time == 150, 0);
-}
-
-#[test]
-fun test_effective_time_with_pause_after_adjusted_end() {
-    let eff_time = stream_utils::calculate_effective_time(300, 200, 50);
-    assert!(eff_time == 250, 0); // Capped at end_time + paused_duration
-}
-
 // === Time Parameter Validation Tests ===
 
 #[test]
@@ -224,7 +202,6 @@ fun test_calculate_claimable_nothing_vested() {
         100, // start_time
         200, // end_time
         50, // current_time (before start)
-        0, // paused_duration
         &std::option::none(),
     );
     assert!(claimable == 0, 0);
@@ -238,7 +215,6 @@ fun test_calculate_claimable_partial_vested() {
         100, // start_time
         200, // end_time
         150, // current_time (50% vested = 500)
-        0, // paused_duration
         &std::option::none(),
     );
     assert!(claimable == 300, 0); // 500 vested - 200 claimed
@@ -252,25 +228,9 @@ fun test_calculate_claimable_all_vested() {
         100,
         200,
         250, // current_time (after end)
-        0,
         &std::option::none(),
     );
     assert!(claimable == 1000, 0);
-}
-
-#[test]
-fun test_calculate_claimable_with_pause() {
-    let claimable = stream_utils::calculate_claimable(
-        1000,
-        0,
-        100,
-        200,
-        150, // current_time
-        50, // paused_duration extends end to 250
-        &std::option::none(),
-    );
-    // At time 150 with pause, only 33.3% vested
-    assert!(claimable == 333, 0);
 }
 
 // === Split Vested/Unvested Tests ===
@@ -284,7 +244,6 @@ fun test_split_vested_unvested_all_vested() {
         100, // start_time
         200, // end_time
         250, // current_time (after end, all vested)
-        0, // paused_duration
         &std::option::none(),
     );
 
@@ -302,7 +261,6 @@ fun test_split_vested_unvested_partial() {
         100, // start_time
         200, // end_time
         150, // current_time (50% vested = 500)
-        0, // paused_duration
         &std::option::none(),
     );
 
@@ -321,7 +279,6 @@ fun test_split_vested_unvested_overclaimed() {
         100, // start_time
         200, // end_time
         150, // current_time (50% vested = 500)
-        0, // paused_duration
         &std::option::none(),
     );
 
@@ -330,58 +287,11 @@ fun test_split_vested_unvested_overclaimed() {
     assert!(unvested_claimed == 200, 0); // 200 was claimed before vesting
 }
 
-// === Pause Control Tests ===
-
-#[test]
-fun test_calculate_pause_until_indefinite() {
-    let pause_until = stream_utils::calculate_pause_until(
-        100, // current_time
-        0, // pause_duration_ms (0 = indefinite)
-    );
-    assert!(pause_until.is_none(), 0);
-}
-
-#[test]
-fun test_calculate_pause_until_timed() {
-    let pause_until = stream_utils::calculate_pause_until(100, 500);
-    assert!(pause_until.is_some(), 0);
-    assert!(*pause_until.borrow() == 600, 0);
-}
-
-#[test]
-fun test_is_pause_expired_indefinite() {
-    let expired = stream_utils::is_pause_expired(
-        &std::option::none(), // Indefinite pause
-        1000, // current_time
-    );
-    assert!(!expired, 0); // Never expires
-}
-
-#[test]
-fun test_is_pause_expired_not_yet() {
-    let expired = stream_utils::is_pause_expired(
-        &std::option::some(500), // Pause until 500
-        400, // current_time (before expiry)
-    );
-    assert!(!expired, 0);
-}
-
-#[test]
-fun test_is_pause_expired_yes() {
-    let expired = stream_utils::is_pause_expired(
-        &std::option::some(500),
-        600, // current_time (after expiry)
-    );
-    assert!(expired, 0);
-}
-
 // === State Check Tests ===
 
 #[test]
 fun test_can_claim_all_clear() {
     let can = stream_utils::can_claim(
-        false, // is_paused
-        false, // is_frozen
         &std::option::some(1000), // expiry
         500, // current_time (before expiry)
     );
@@ -389,32 +299,8 @@ fun test_can_claim_all_clear() {
 }
 
 #[test]
-fun test_can_claim_paused() {
-    let can = stream_utils::can_claim(
-        true, // is_paused
-        false,
-        &std::option::some(1000),
-        500,
-    );
-    assert!(!can, 0);
-}
-
-#[test]
-fun test_can_claim_frozen() {
-    let can = stream_utils::can_claim(
-        false,
-        true, // is_frozen
-        &std::option::some(1000),
-        500,
-    );
-    assert!(!can, 0);
-}
-
-#[test]
 fun test_can_claim_expired() {
     let can = stream_utils::can_claim(
-        false,
-        false,
         &std::option::some(500), // expiry
         1000, // current_time (after expiry)
     );
@@ -436,14 +322,3 @@ fun test_large_amounts_no_overflow() {
     assert!(vested > 0, 0);
 }
 
-#[test]
-fun test_pause_duration_calculation() {
-    let duration = stream_utils::calculate_pause_duration(100, 500);
-    assert!(duration == 400, 0);
-}
-
-#[test]
-fun test_pause_duration_invalid_order() {
-    let duration = stream_utils::calculate_pause_duration(500, 100);
-    assert!(duration == 0, 0); // Returns 0 if resumed_at < paused_at
-}
