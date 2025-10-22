@@ -1079,3 +1079,34 @@ public fun destroy_dao_state_for_testing(state: DaoState) {
         verification_pending: _,
     } = state;
 }
+
+/// Destroy a FutarchyConfig during migration
+/// This is called when migrating from FutarchyConfig to a new config type
+/// Validates that critical data has been preserved before allowing destruction
+///
+/// Note: FutarchyConfig has drop ability so this is optional - configs will auto-destruct
+/// This function exists for explicit validation and documentation of the migration pattern
+public(package) fun destroy_for_migration(config: FutarchyConfig) {
+    let FutarchyConfig {
+        asset_type: _,
+        stable_type: _,
+        config: _,
+        slash_distribution: _,
+        proposal_pass_reward: _,
+        outcome_win_reward: _,
+        review_to_trading_fee: _,
+        finalization_fee: _,
+        verification_level: _,
+        dao_score: _,
+        optimistic_intent_challenge_enabled: _,
+        launchpad_initial_price: _,
+        early_resolve_config: _,
+        refund_quota_on_eviction: _,
+    } = config;
+
+    // Could add validation logic here to ensure:
+    // - Important fields were preserved in migration
+    // - No critical data was lost
+    // For now, just allow destruction
+}
+

@@ -638,6 +638,60 @@ public fun config_mut<Config: store, CW: drop>(
     df::borrow_mut<ConfigKey, Config>(&mut account.id, ConfigKey {})
 }
 
+/// Migrate account config from one type to another.
+///
+/// This is a DANGEROUS operation that changes the config type stored in the Account.
+/// Should only be called via governance after thorough validation.
+///
+/// # Type Parameters:
+/// * `OldConfig` - Current config type (must match what's stored)
+/// * `NewConfig` - New config type to migrate to
+///
+/// # Arguments:
+/// * `account` - The account to migrate
+/// * `new_config` - The new config data
+/// * `version_witness` - Version witness for dependency checking
+///
+/// # Returns:
+/// The old config (for validation/destruction)
+///
+/// # Safety:
+/// - Checks version witness (ensures caller is approved package)
+/// - Validates OldConfig matches stored type
+/// - Swaps config dynamic field atomically
+/// - Updates type tracking
+/// - Returns old config for validation before destruction
+///
+/// # Aborts:
+/// - If OldConfig doesn't match stored config type
+/// - If version witness check fails
+public(package) fun migrate_config<OldConfig: store, NewConfig: store>(
+    account: &mut Account,
+    new_config: NewConfig,
+    version_witness: VersionWitness,
+): OldConfig {
+    // Ensure caller is authorized via deps
+    account.deps().check(version_witness);
+
+    // Validate that OldConfig matches what's currently stored
+    let stored_type = df::borrow<ConfigTypeKey, TypeName>(&account.id, ConfigTypeKey {});
+    let old_type = type_name::get<OldConfig>();
+    assert!(&old_type == stored_type, EWrongConfigType);
+
+    // Remove old config from dynamic field
+    let old_config: OldConfig = df::remove(&mut account.id, ConfigKey {});
+
+    // Add new config to dynamic field
+    df::add(&mut account.id, ConfigKey {}, new_config);
+
+    // Update type tracking
+    let _old_type_removed: TypeName = df::remove(&mut account.id, ConfigTypeKey {});
+    df::add(&mut account.id, ConfigTypeKey {}, type_name::get<NewConfig>());
+
+    // Return old config for caller to validate/destroy
+    old_config
+}
+
 //**************************************************************************************************//
 // View functions                                                                                   //
 //**************************************************************************************************//
@@ -665,6 +719,12 @@ public fun intents(account: &Account): &Intents {
 /// Returns the config of the account.
 public fun config<Config: store>(account: &Account): &Config {
     df::borrow<ConfigKey, Config>(&account.id, ConfigKey {})
+}
+
+/// Returns the type name of the config stored in the account.
+/// Useful for migration validation and runtime type checking.
+public fun config_type(account: &Account): TypeName {
+    *df::borrow<ConfigTypeKey, TypeName>(&account.id, ConfigTypeKey {})
 }
 
 /// Returns object tracking stats (count, deposits_open, max)
