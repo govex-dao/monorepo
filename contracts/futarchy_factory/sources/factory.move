@@ -18,7 +18,6 @@ use futarchy_core::dao_config::{
     SecurityConfig
 };
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-// Removed: priority_queue - no queue mechanism needed
 use futarchy_core::version;
 use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};

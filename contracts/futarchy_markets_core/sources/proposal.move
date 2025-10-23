@@ -107,7 +107,6 @@ public struct OutcomeData has store {
 /// Core proposal object that owns AMM pools
 public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     id: UID,
-    /// The logical ID of the proposal from the priority queue.
     queued_proposal_id: ID,
     state: u8,
     dao_id: ID,
@@ -240,10 +239,10 @@ public fun initialize_market<AssetType, StableType>(
     initial_outcome_details: vector<String>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
-    proposer: address, // The original proposer from the queue
-    proposer_fee_paid: u64, // Fee paid by proposer (for tracking refunds)
+    proposer: address,
+    proposer_fee_paid: u64,
     uses_dao_liquidity: bool,
-    used_quota: bool, // Track if proposal used admin budget (from QueuedProposal)
+    used_quota: bool,
     fee_escrow: Balance<StableType>, // DAO fees if any
     mut intent_spec_for_yes: Option<InitActionSpecs>, // Intent spec for YES outcome
     clock: &Clock,

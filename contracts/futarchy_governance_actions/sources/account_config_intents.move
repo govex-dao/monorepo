@@ -178,10 +178,12 @@ public fun execute_update_deps(
 ) {
     // Delegate to account_protocol::config executor
     // This reuses all the validation and execution logic
+    // IMPORTANT: Pass futarchy_core::version, not account_protocol::version
     config::execute_config_deps<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome>(
         executable,
         account,
         registry,
+        version::current(), // futarchy_core::version::current()
     );
 }
 
@@ -198,8 +200,10 @@ public fun execute_toggle_unverified(
     account: &mut Account,
 ) {
     // Delegate to account_protocol::config executor
+    // IMPORTANT: Pass futarchy_core::version, not account_protocol::version
     config::execute_toggle_unverified_allowed<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome>(
         executable,
         account,
+        version::current(), // futarchy_core::version::current()
     );
 }

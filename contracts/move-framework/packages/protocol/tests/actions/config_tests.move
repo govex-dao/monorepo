@@ -159,7 +159,7 @@ fun test_request_execute_config_deps() {
         Witness(),
         scenario.ctx(),
     );
-    config::execute_config_deps<Config, Outcome>(&mut executable, &mut account, &extensions);
+    config::execute_config_deps<Config, Outcome>(&mut executable, &mut account, &extensions, version::current());
     account.confirm_execution(executable);
 
     let mut expired = account.destroy_empty_intent<Outcome>(key, scenario.ctx());
@@ -236,7 +236,7 @@ fun test_request_execute_toggle_unverified_allowed() {
         Witness(),
         scenario.ctx(),
     );
-    config::execute_toggle_unverified_allowed<Config, Outcome>(&mut executable, &mut account);
+    config::execute_toggle_unverified_allowed<Config, Outcome>(&mut executable, &mut account, version::current());
     account.confirm_execution(executable);
 
     let mut expired = account.destroy_empty_intent<Outcome>(key, scenario.ctx());

@@ -30,6 +30,7 @@ use account_protocol::{
     deps::{Self, Dep},
     metadata,
     version,
+    version_witness::VersionWitness,
     intent_interface,
 };
 use account_protocol::package_registry::PackageRegistry;
@@ -131,7 +132,7 @@ public fun new_manage_whitelist_action(
 
 /// Helper to deserialize deps data as three vectors
 /// Made public to allow governance layers (futarchy, etc.) to reuse execution logic
-public fun peel_deps_as_vectors(reader: &mut BCS): (vector<String>, vector<address>, vector<u64>) {
+fun peel_deps_as_vectors(reader: &mut BCS): (vector<String>, vector<address>, vector<u64>) {
     let len = bcs::peel_vec_length(reader);
     let mut names = vector::empty();
     let mut addrs = vector::empty();
@@ -290,10 +291,11 @@ public fun execute_config_deps<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
     registry: &PackageRegistry,
+    version_witness: VersionWitness,
 ) {
     account.process_intent!(
         executable,
-        version::current(),
+        version_witness,
         ConfigDepsIntent(),
         |executable, _iw| {
             // Get BCS bytes from ActionSpec
@@ -314,7 +316,7 @@ public fun execute_config_deps<Config: store, Outcome: store>(
             account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
 
             // Apply the action - reconstruct deps using the public constructor
-            *account::deps_mut(account, version::current()) =
+            *account::deps_mut(account, version_witness) =
                 deps::new_inner(registry, account.deps(), names, addrs, versions);
             account_protocol::executable::increment_action_idx(executable);
         }
@@ -377,10 +379,11 @@ public fun request_toggle_unverified_allowed<Config: store, Outcome: store>(
 public fun execute_toggle_unverified_allowed<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    version_witness: VersionWitness,
 ) {
     account.process_intent!(
         executable,
-        version::current(),
+        version_witness,
         ToggleUnverifiedAllowedIntent(),
         |executable, _iw| {
             // Check version before execution
@@ -391,10 +394,10 @@ public fun execute_toggle_unverified_allowed<Config: store, Outcome: store>(
 
             // ToggleUnverifiedAllowedAction is an empty struct, no deserialization needed
             // Just increment the action index
-            account::deps_mut(account, version::current()).toggle_unverified_allowed();
+            account::deps_mut(account, version_witness).toggle_unverified_allowed();
             account_protocol::executable::increment_action_idx(executable);
         },
-    );    
+    );
 }
 
 /// Deletes the ToggleUnverifiedAllowedAction from an expired intent
@@ -447,10 +450,11 @@ public fun request_configure_deposits<Config: store, Outcome: store>(
 public fun execute_configure_deposits<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    version_witness: VersionWitness,
 ) {
     account.process_intent!(
         executable,
-        version::current(),
+        version_witness,
         ConfigureDepositsIntent(),
         |executable, _iw| {
             // Get BCS bytes from ActionSpec
@@ -535,10 +539,11 @@ public fun request_manage_whitelist<Config: store, Outcome: store>(
 public fun execute_manage_whitelist<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    version_witness: VersionWitness,
 ) {
     account.process_intent!(
         executable,
-        version::current(),
+        version_witness,
         ManageWhitelistIntent(),
         |executable, _iw| {
             // Get BCS bytes from ActionSpec

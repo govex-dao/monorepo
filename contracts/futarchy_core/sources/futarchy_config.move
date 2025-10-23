@@ -208,9 +208,6 @@ public struct DaoState has store {
 /// Key for storing DaoState as a dynamic field
 public struct DaoStateKey has copy, drop, store {}
 
-/// Key for storing ProposalQueue as a dynamic field
-// Removed: ProposalQueueKey - no queue needed
-
 /// Key for storing SpotAMM as a dynamic field
 public struct SpotAMMKey has copy, drop, store {}
 
@@ -921,8 +918,6 @@ public fun new_auth_for_testing(
         ConfigWitness {},
     )
 }
-
-// Removed: Queue management functions - no queue needed
 
 /// Create auth witness for this account config
 public fun authenticate(account: &Account, ctx: &TxContext): ConfigWitness {
