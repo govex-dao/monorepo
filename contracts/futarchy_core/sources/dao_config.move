@@ -81,19 +81,13 @@ public struct TwapConfig has copy, drop, store {
     threshold: SignedU128,
 }
 
-/// Governance parameters configuration
 public struct GovernanceConfig has copy, drop, store {
     max_outcomes: u64,
-    max_actions_per_outcome: u64, // Maximum actions allowed per single outcome
+    max_actions_per_outcome: u64,
     proposal_fee_per_outcome: u64,
-    queue_entry_bond: u64, // Partially refundable bond for queue spam prevention (50% refund on cancel, 0% on evict)
-    queue_fullness_multiplier_bps: u64, // Exponential fee multiplier as queue fills
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
-    eviction_grace_period_ms: u64,
-    proposal_intent_expiry_ms: u64, // How long proposal intents remain valid
-    // If true, premarket proposals lock the queue reservation slot (anti-MEV)
-    // If false, no reservation lock (more market init opportunities, less MEV protection)
+    proposal_intent_expiry_ms: u64,
     enable_premarket_reservation_lock: bool,
 }
 
@@ -232,15 +226,11 @@ public fun new_governance_config(
     max_outcomes: u64,
     max_actions_per_outcome: u64,
     proposal_fee_per_outcome: u64,
-    queue_entry_bond: u64,
-    queue_fullness_multiplier_bps: u64,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
-    eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64,
     enable_premarket_reservation_lock: bool,
 ): GovernanceConfig {
-    // Validate inputs
     assert!(max_outcomes >= constants::min_outcomes(), EInvalidMaxOutcomes);
     assert!(max_outcomes <= constants::protocol_max_outcomes(), EMaxOutcomesExceedsProtocol);
     assert!(
@@ -248,23 +238,14 @@ public fun new_governance_config(
         EMaxActionsExceedsProtocol,
     );
     assert!(proposal_fee_per_outcome > 0, EInvalidProposalFee);
-    assert!(queue_entry_bond > 0, EInvalidBondAmount);
-    assert!(queue_fullness_multiplier_bps <= constants::max_fee_bps(), EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
-    assert!(
-        eviction_grace_period_ms >= constants::min_eviction_grace_period_ms(),
-        EInvalidGracePeriod,
-    );
 
     GovernanceConfig {
         max_outcomes,
         max_actions_per_outcome,
         proposal_fee_per_outcome,
-        queue_entry_bond,
-        queue_fullness_multiplier_bps,
         accept_new_proposals,
         max_intents_per_outcome,
-        eviction_grace_period_ms,
         proposal_intent_expiry_ms,
         enable_premarket_reservation_lock,
     }
@@ -464,17 +445,9 @@ public fun max_actions_per_outcome(gov: &GovernanceConfig): u64 { gov.max_action
 
 public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_fee_per_outcome }
 
-public fun queue_entry_bond(gov: &GovernanceConfig): u64 { gov.queue_entry_bond }
-
-public fun queue_fullness_multiplier_bps(gov: &GovernanceConfig): u64 {
-    gov.queue_fullness_multiplier_bps
-}
-
 public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_proposals }
 
 public fun max_intents_per_outcome(gov: &GovernanceConfig): u64 { gov.max_intents_per_outcome }
-
-public fun eviction_grace_period_ms(gov: &GovernanceConfig): u64 { gov.eviction_grace_period_ms }
 
 public fun proposal_intent_expiry_ms(gov: &GovernanceConfig): u64 { gov.proposal_intent_expiry_ms }
 
@@ -640,12 +613,7 @@ public fun validate_config_update(
         }
     };
 
-    // Check 4: Grace periods can't be reduced to zero
-    if (eviction_grace_period_ms(new_gov) == 0) {
-        return false
-    };
-
-    // Check 5: Trading periods must be reasonable
+    // Check 4: Trading periods must be reasonable
     let new_trading = trading_params(new_config);
     if (review_period_ms(new_trading) == 0 || trading_period_ms(new_trading) == 0) {
         return false
@@ -757,16 +725,6 @@ public(package) fun set_proposal_fee_per_outcome(gov: &mut GovernanceConfig, fee
     gov.proposal_fee_per_outcome = fee;
 }
 
-public(package) fun set_queue_entry_bond(gov: &mut GovernanceConfig, amount: u64) {
-    assert!(amount > 0, EInvalidBondAmount);
-    gov.queue_entry_bond = amount;
-}
-
-public(package) fun set_queue_fullness_multiplier_bps(gov: &mut GovernanceConfig, points: u64) {
-    assert!(points <= constants::max_fee_bps(), EInvalidFee);
-    gov.queue_fullness_multiplier_bps = points;
-}
-
 public(package) fun set_accept_new_proposals(gov: &mut GovernanceConfig, accept: bool) {
     gov.accept_new_proposals = accept;
 }
@@ -774,11 +732,6 @@ public(package) fun set_accept_new_proposals(gov: &mut GovernanceConfig, accept:
 public(package) fun set_max_intents_per_outcome(gov: &mut GovernanceConfig, max: u64) {
     assert!(max > 0, EInvalidMaxOutcomes);
     gov.max_intents_per_outcome = max;
-}
-
-public(package) fun set_eviction_grace_period_ms(gov: &mut GovernanceConfig, period: u64) {
-    assert!(period >= constants::min_eviction_grace_period_ms(), EInvalidGracePeriod);
-    gov.eviction_grace_period_ms = period;
 }
 
 public(package) fun set_proposal_intent_expiry_ms(gov: &mut GovernanceConfig, period: u64) {
@@ -1054,14 +1007,11 @@ public fun default_governance_config(): GovernanceConfig {
     GovernanceConfig {
         max_outcomes: constants::default_max_outcomes(),
         max_actions_per_outcome: constants::default_max_actions_per_outcome(),
-        proposal_fee_per_outcome: 1000000, // 1 token per outcome
-        queue_entry_bond: 100000, // 0.1 token - small spam filter
-        queue_fullness_multiplier_bps: constants::default_queue_fullness_multiplier_bps(),
+        proposal_fee_per_outcome: 1000000,
         accept_new_proposals: true,
-        max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
-        eviction_grace_period_ms: constants::default_eviction_grace_period_ms(),
+        max_intents_per_outcome: 10,
         proposal_intent_expiry_ms: constants::default_proposal_intent_expiry_ms(),
-        enable_premarket_reservation_lock: true, // Default: true for MEV protection
+        enable_premarket_reservation_lock: true,
     }
 }
 

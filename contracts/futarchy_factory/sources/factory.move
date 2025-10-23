@@ -18,7 +18,7 @@ use futarchy_core::dao_config::{
     SecurityConfig
 };
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_core::priority_queue::{Self, ProposalQueue};
+// Removed: priority_queue - no queue mechanism needed
 use futarchy_core::version;
 use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
@@ -62,7 +62,6 @@ const MAX_TRADING_TIME: u64 = 604_800_000; // 7 days in ms
 const MAX_REVIEW_TIME: u64 = 604_800_000; // 7 days in ms
 const MAX_TWAP_START_DELAY: u64 = 86_400_000; // 1 day in ms
 const MAX_TWAP_THRESHOLD: u64 = 1_000_000; // 10x increase required to pass
-const DEFAULT_MAX_PROPOSER_FUNDED: u64 = 30; // Default max proposals that can be funded by a single proposer
 
 // === Structs ===
 
@@ -370,15 +369,12 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 
     let governance_config = dao_config::new_governance_config(
         max_outcomes,
-        20, // max_actions_per_outcome (protocol limit)
-        1000000, // proposal_fee_per_outcome (1 token per outcome)
-        100_000_000, // queue_entry_bond
-        100, // queue_fullness_multiplier_bps
-        true, // accept_new_proposals
-        10, // max_intents_per_outcome
-        604_800_000, // eviction_grace_period_ms (7 days)
-        31_536_000_000, // proposal_intent_expiry_ms (365 days)
-        true, // enable_premarket_reservation_lock (default: true for MEV protection)
+        20,
+        1000000,
+        true,
+        10,
+        31_536_000_000,
+        true,
     );
 
     let metadata_config = dao_config::new_metadata_config(
@@ -437,28 +433,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Create the account with PackageRegistry validation for security
     let mut account = futarchy_config::new_with_package_registry(registry, config, ctx);
 
-    // Get queue parameters from governance config
-    let account_config = account::config<FutarchyConfig>(&account);
-    let dao_config = futarchy_config::dao_config(account_config);
-    let governance = dao_config::governance_config(dao_config);
-    let eviction_grace_period_ms = dao_config::eviction_grace_period_ms(governance);
-
-    // Now create the priority queue but do not share it yet.
-    let queue = priority_queue::new<StableType>(
-        object::id(&account), // dao_id
-        DEFAULT_MAX_PROPOSER_FUNDED,
-        eviction_grace_period_ms,
-        ctx,
-    );
-    let priority_queue_id = object::id(&queue);
-
-    // --- Phase 2: Configure the objects and link them together ---
-
-    // Note: DAO liquidity pool is not used in the new architecture
-    // The spot pool handles all liquidity needs
-
-    // Update the config with the actual priority queue ID
-    futarchy_config::set_proposal_queue_id(&mut account, option::some(priority_queue_id));
 
     // Action registry removed - using statically-typed pattern
 
@@ -540,7 +514,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // the transaction would abort and no objects would be created.
     transfer::public_share_object(account);
     unified_spot_pool::share(spot_pool);
-    transfer::public_share_object(queue);
 
     // --- Phase 4: Update Factory State and Emit Event ---
 
@@ -634,15 +607,12 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
 
     let governance_config = dao_config::new_governance_config(
         max_outcomes,
-        20, // max_actions_per_outcome (protocol limit)
-        1000000, // proposal_fee_per_outcome (1 token per outcome)
-        100_000_000, // queue_entry_bond
-        100, // queue_fullness_multiplier_bps
-        true, // accept_new_proposals
-        10, // max_intents_per_outcome
-        604_800_000, // eviction_grace_period_ms (7 days)
-        31_536_000_000, // proposal_intent_expiry_ms (365 days)
-        true, // enable_premarket_reservation_lock (default: true for MEV protection)
+        20,
+        1000000,
+        true,
+        10,
+        31_536_000_000,
+        true,
     );
 
     let metadata_config = dao_config::new_metadata_config(
@@ -690,28 +660,6 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
 
     // Create the account using test function
     let mut account = futarchy_config::new_account_test(config, ctx);
-
-    // Get queue parameters from governance config
-    let account_config = account::config<FutarchyConfig>(&account);
-    let dao_config = futarchy_config::dao_config(account_config);
-    let governance = dao_config::governance_config(dao_config);
-    let eviction_grace_period_ms = dao_config::eviction_grace_period_ms(governance);
-
-    // Now create the priority queue but do not share it yet.
-    let queue = priority_queue::new<StableType>(
-        object::id(&account), // dao_id
-        DEFAULT_MAX_PROPOSER_FUNDED,
-        eviction_grace_period_ms,
-        ctx,
-    );
-    let priority_queue_id = object::id(&queue);
-
-    // --- Phase 2: Configure the objects and link them together ---
-
-    // Update the config with the actual priority queue ID
-    futarchy_config::set_proposal_queue_id(&mut account, option::some(priority_queue_id));
-
-    // Action registry removed - using statically-typed pattern
 
     // Initialize the default treasury vault (test version)
     {
@@ -793,7 +741,6 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     // the transaction would abort and no objects would be created.
     transfer::public_share_object(account);
     unified_spot_pool::share(spot_pool);
-    transfer::public_share_object(queue);
 
     // --- Phase 4: Update Factory State and Emit Event ---
 
@@ -819,22 +766,6 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
 
 /// Create DAO and return it without sharing (for init actions)
 ///
-/// ## Minimal API - All config set via init actions
-/// This function only handles what's truly required for DAO creation.
-/// Everything else (metadata, trading params, TWAP, etc.) should be set via init actions.
-///
-/// ## Hot Potato Pattern:
-/// Returns (Account, ProposalQueue, UnifiedSpotPool) as unshared objects
-/// These can be passed as `&mut` to init actions before being shared
-///
-/// ## Usage:
-/// 1. Call this to create unshared DAO components with defaults
-/// 2. Execute init actions to configure metadata, trading params, etc.
-/// 3. Share the objects only after init succeeds
-///
-/// This ensures atomicity - if init fails, nothing is shared
-/// Create a DAO with unshared objects (for PTB composition)
-///
 /// optimistic_intent_challenge_enabled:
 ///   - none(): Use default (true - 10-day challenge period)
 ///   - some(enabled): Apply custom setting atomically during creation
@@ -847,7 +778,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Account, ProposalQueue<StableType>, UnifiedSpotPool<AssetType, StableType>) {
+): (Account, UnifiedSpotPool<AssetType, StableType>) {
     // Check factory is not permanently disabled
     assert!(!factory.permanently_disabled, EPermanentlyDisabled);
 
@@ -912,19 +843,6 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         ctx,
     );
 
-    // Get eviction grace period from config for the queue
-    let eviction_grace_period_ms = dao_config::eviction_grace_period_ms(
-        dao_config::governance_config(&dao_config),
-    );
-
-    // Create queue with defaults
-    let queue = priority_queue::new<StableType>(
-        object::id(&account), // dao_id
-        30, // max_proposer_funded (init actions can update)
-        eviction_grace_period_ms,
-        ctx,
-    );
-
     // Setup treasury cap if provided
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
@@ -958,19 +876,14 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         timestamp: clock.timestamp_ms(),
     });
 
-    (account, queue, spot_pool)
+    (account, spot_pool)
 }
 
-/// Share all DAO components after initialization is complete
-/// This is called at the end of the PTB after all init actions
 public fun finalize_and_share_dao<AssetType, StableType>(
     account: Account,
-    queue: ProposalQueue<StableType>,
     spot_pool: UnifiedSpotPool<AssetType, StableType>,
 ) {
-    // Each module provides its own share function
     account::share_account<FutarchyConfig>(account);
-    priority_queue::share_queue(queue);
     unified_spot_pool::share(spot_pool);
 }
 

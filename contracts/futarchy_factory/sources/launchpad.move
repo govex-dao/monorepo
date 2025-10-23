@@ -7,7 +7,6 @@ use account_actions::init_actions;
 use account_protocol::package_registry::PackageRegistry;
 use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_core::priority_queue::ProposalQueue;
 use futarchy_core::version;
 use futarchy_factory::factory;
 use futarchy_factory::init_actions as launchpad_init_actions;
@@ -623,9 +622,7 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     assert!(final_total >= raise.min_raise_amount, EMinRaiseNotMet);
     assert!(final_total > 0, EMinRaiseNotMet);
 
-    // Extract DAO components
     let mut account: Account = df::remove(&mut raise.id, DaoAccountKey {});
-    let mut queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
     let mut spot_pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
 
     // Deposit treasury cap
@@ -670,7 +667,6 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
 
     // Share DAO objects
     sui_transfer::public_share_object(account);
-    sui_transfer::public_share_object(queue);
     unified_spot_pool::share(spot_pool);
 
     event::emit(RaiseSuccessful {
@@ -1035,10 +1031,6 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
             sui_transfer::public_share_object(account);
         };
 
-        if (df::exists_(&raise.id, DaoQueueKey {})) {
-            let queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
-            sui_transfer::public_share_object(queue);
-        };
 
         if (df::exists_(&raise.id, DaoPoolKey {})) {
             let pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
@@ -1346,9 +1338,7 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
     assert!(final_total >= raise.min_raise_amount, EMinRaiseNotMet);
     assert!(final_total > 0, EMinRaiseNotMet);
 
-    // Extract DAO components
     let mut account: Account = df::remove(&mut raise.id, DaoAccountKey {});
-    let mut queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
     let mut spot_pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
 
     // Deposit treasury cap

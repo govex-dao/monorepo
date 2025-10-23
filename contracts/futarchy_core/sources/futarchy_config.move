@@ -209,7 +209,7 @@ public struct DaoState has store {
 public struct DaoStateKey has copy, drop, store {}
 
 /// Key for storing ProposalQueue as a dynamic field
-public struct ProposalQueueKey has copy, drop, store {}
+// Removed: ProposalQueueKey - no queue needed
 
 /// Key for storing SpotAMM as a dynamic field
 public struct SpotAMMKey has copy, drop, store {}
@@ -922,42 +922,7 @@ public fun new_auth_for_testing(
     )
 }
 
-/// Set the proposal queue ID as a dynamic field on the account
-public fun set_proposal_queue_id(account: &mut Account, queue_id: Option<ID>) {
-    if (queue_id.is_some()) {
-        account::add_managed_data(
-            account,
-            ProposalQueueKey {},
-            queue_id.destroy_some(),
-            version::current(),
-        );
-    } else {
-        // Remove the field if setting to none
-        if (
-            account::has_managed_data<ProposalQueueKey>(
-                account,
-                ProposalQueueKey {},
-            )
-        ) {
-            let _: ID = account::remove_managed_data(
-                account,
-                ProposalQueueKey {},
-                version::current(),
-            );
-        }
-    }
-}
-
-/// Get the proposal queue ID from dynamic field
-public fun get_proposal_queue_id(account: &Account): Option<ID> {
-    if (account::has_managed_data<ProposalQueueKey>(account, ProposalQueueKey {})) {
-        option::some(
-            *account::borrow_managed_data(account, ProposalQueueKey {}, version::current()),
-        )
-    } else {
-        option::none()
-    }
-}
+// Removed: Queue management functions - no queue needed
 
 /// Create auth witness for this account config
 public fun authenticate(account: &Account, ctx: &TxContext): ConfigWitness {

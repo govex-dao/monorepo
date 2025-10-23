@@ -130,7 +130,8 @@ public fun new_manage_whitelist_action(
 // === Helper Functions for BCS Deserialization ===
 
 /// Helper to deserialize deps data as three vectors
-fun peel_deps_as_vectors(reader: &mut BCS): (vector<String>, vector<address>, vector<u64>) {
+/// Made public to allow governance layers (futarchy, etc.) to reuse execution logic
+public fun peel_deps_as_vectors(reader: &mut BCS): (vector<String>, vector<address>, vector<u64>) {
     let len = bcs::peel_vec_length(reader);
     let mut names = vector::empty();
     let mut addrs = vector::empty();
