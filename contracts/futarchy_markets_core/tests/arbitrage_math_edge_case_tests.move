@@ -648,7 +648,7 @@ fun test_spot_tiny_conditional_large() {
 
 #[test]
 /// Test mixed conditionals: one (1, 1), one (1_000_000, 1_000_000)
-/// Expected: Pruning should handle this, (0, 0) likely due to tiny pool
+/// Expected: Algorithm should handle this, (0, 0) likely due to tiny pool bottleneck
 fun test_mixed_conditional_sizes() {
     let mut scenario = ts::begin(ADMIN);
 

@@ -33,7 +33,8 @@ fun drain_all(expired: &mut Expired) {
     gc_registry::delete_trading_params(expired);
     gc_registry::delete_metadata_update(expired);
     gc_registry::delete_governance_update(expired);
-    gc_registry::delete_slash_distribution(expired);
+    // REMOVED: delete_slash_distribution - underlying function was removed as legacy code
+    // gc_registry::delete_slash_distribution(expired);
 
     // Security Council
     gc_registry::delete_create_council(expired);

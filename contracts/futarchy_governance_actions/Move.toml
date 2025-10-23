@@ -4,6 +4,7 @@ edition = "2024.beta"
 published-at  = "0x0"
 
 [dependencies]
+AccountProtocol = { local = "../move-framework/packages/protocol" }
 AccountActions = { local = "../move-framework/packages/actions" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_types = { local = "../futarchy_types" }
@@ -13,7 +14,6 @@ futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 # futarchy_lifecycle = { local = "../futarchy_dissolution_actions" } # Circular dependency removed
 futarchy_factory = { local = "../futarchy_factory" }
-AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
 futarchy_governance_actions = "0xb1054e9a9b316e105c908be2cddb7f64681a63f0ae80e9e5922bf461589c4bc7"
 futarchy_one_shot_utils = "0x7e7d952d7668c969d6f20b68ccfae73a4ea510906aafc1e78b81d0cd1edecba0"

@@ -194,11 +194,13 @@ fun test_batch_refund_for_failed_raise() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<REFUND_STABLE>(10_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     ts::next_tx(&mut scenario, bob);
@@ -207,7 +209,7 @@ fun test_batch_refund_for_failed_raise() {
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let contribution = coin::mint_for_testing<REFUND_STABLE>(15_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
     };
@@ -216,11 +218,13 @@ fun test_batch_refund_for_failed_raise() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<REFUND_STABLE>(5_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Advance past deadline (raise failed)
@@ -238,7 +242,7 @@ fun test_batch_refund_for_failed_raise() {
         vector::push_back(&mut contributors, bob);
         vector::push_back(&mut contributors, charlie);
 
-        launchpad::batch_claim_refund_for(&mut raise, contributors, &clock, ts::ctx(&mut scenario));
+        launchpad::batch_claim_refund_for(&mut raise, &factory, contributors, &clock, ts::ctx(&mut scenario));
 
         // Verify raise is now in FAILED state
         assert!(launchpad::state(&raise) == 2, 0); // STATE_FAILED
@@ -351,11 +355,13 @@ fun test_batch_refund_skips_already_claimed() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<REFUND_STABLE>(10_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     ts::next_tx(&mut scenario, bob);
@@ -364,7 +370,7 @@ fun test_batch_refund_skips_already_claimed() {
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let contribution = coin::mint_for_testing<REFUND_STABLE>(15_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
     };
@@ -373,11 +379,13 @@ fun test_batch_refund_skips_already_claimed() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<REFUND_STABLE>(5_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Advance past deadline
@@ -404,7 +412,7 @@ fun test_batch_refund_skips_already_claimed() {
         vector::push_back(&mut contributors, bob);
         vector::push_back(&mut contributors, charlie);
 
-        launchpad::batch_claim_refund_for(&mut raise, contributors, &clock, ts::ctx(&mut scenario));
+        launchpad::batch_claim_refund_for(&mut raise, &factory, contributors, &clock, ts::ctx(&mut scenario));
 
         ts::return_shared(raise);
     };

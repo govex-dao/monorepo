@@ -133,7 +133,7 @@ fun test_fuzzing_high_dimensional_markets() {
             i = i + 1;
         };
 
-        // Run optimizer (should complete without gas issues due to pruning)
+        // Run optimizer (should complete without gas issues)
         let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<
             ASSET,
             STABLE,
@@ -256,7 +256,7 @@ fun test_fuzzing_max_dimensional_markets() {
 
 #[test]
 /// Maximum capacity test: N=50 conditionals (protocol limit)
-/// Validates optimizer handles maximum market complexity with pruning
+/// Validates optimizer handles maximum market complexity
 fun test_fuzzing_max_conditionals() {
     let mut rng = rng::seed(0xDEADC0DE, 0xBEEFF00D);
     let mut scenario = ts::begin(ADMIN);
@@ -295,7 +295,7 @@ fun test_fuzzing_max_conditionals() {
             i = i + 1;
         };
 
-        // Run optimizer (pruning should handle this efficiently)
+        // Run optimizer (should handle this efficiently)
         let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<
             ASSET,
             STABLE,

@@ -191,11 +191,13 @@ fun test_cleanup_failed_raise_returns_treasury_cap() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<CLEANUP_TOKEN, CLEANUP_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<CLEANUP_STABLE>(10_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Advance past deadline
@@ -284,11 +286,13 @@ fun test_cleanup_failed_raise_cleans_dao_resources() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<CLEANUP_TOKEN, CLEANUP_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<CLEANUP_STABLE>(10_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Advance past deadline
@@ -372,11 +376,13 @@ fun test_cleanup_cannot_run_on_successful_raise() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<CLEANUP_TOKEN, CLEANUP_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<CLEANUP_STABLE>(20_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Advance past deadline

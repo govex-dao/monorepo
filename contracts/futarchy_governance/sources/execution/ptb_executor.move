@@ -56,7 +56,7 @@ public fun begin_execution<AssetType, StableType>(
     account: &mut Account,
     proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
-    fee_manager: &mut ProposalFeeManager,
+    fee_manager: &mut ProposalFeeManager<StableType>,
     fee_coin: Coin<sui::sui::SUI>,
     clock: &Clock,
     ctx: &mut TxContext,

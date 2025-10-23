@@ -2,10 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "A572AB2FFEAAB382CD87223BEEF18B6CEEEF3B143E99288BC0425A225462AF8E"
-deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
+manifest_digest = "3991AE6FC83D45D4543C80366B8DB739102A64BBF270BC39BFD277FEDF0AA9B9"
+deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -81,6 +82,7 @@ source = { local = "../futarchy_actions" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -99,6 +101,7 @@ source = { local = "../futarchy_actions_tracker" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -118,6 +121,7 @@ id = "futarchy_core"
 source = { local = "../futarchy_core" }
 
 dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -173,6 +177,7 @@ id = "futarchy_markets_core"
 source = { local = "../futarchy_markets_core" }
 
 dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -188,6 +193,7 @@ id = "futarchy_markets_operations"
 source = { local = "../futarchy_markets_operations" }
 
 dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },

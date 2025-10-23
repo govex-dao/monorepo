@@ -4,6 +4,7 @@ edition = "2024.beta"
 published-at = "0x0"
 
 [dependencies]
+AccountProtocol = { local = "../move-framework/packages/protocol" }
 AccountActions = { local = "../move-framework/packages/actions" }
 futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }

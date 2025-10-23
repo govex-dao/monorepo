@@ -4,6 +4,7 @@ edition = "2024.beta"
 published-at  = "0x0"
 
 [dependencies]
+AccountProtocol = { local = "../move-framework/packages/protocol" }
 AccountActions = { local = "../move-framework/packages/actions" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_types = { local = "../futarchy_types" }
@@ -15,7 +16,6 @@ futarchy_oracle = { local = "../futarchy_oracle_actions" }
 futarchy_actions = { local = "../futarchy_actions" }
 # REMOVED: futarchy_stream_actions - moved to v3_streams (not needed in factory)
 # REMOVED: futarchy_lifecycle (dissolution) - no longer needed in core protocol
-AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
 futarchy_factory = "0xebf0495aa4283acab969829613bfa749dfcf50e93f038fc4c1d34799a19e500f"
 futarchy_types = "0xb413174c17d48ce1dc02f433dfd3bea87bf9d869d20727127abebf8a4cfd9ec5"

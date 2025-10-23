@@ -81,9 +81,10 @@ public fun delete_governance_update(expired: &mut Expired) {
     config_actions::delete_governance_update<FutarchyConfig>(expired);
 }
 
-public fun delete_slash_distribution(expired: &mut Expired) {
-    config_actions::delete_slash_distribution_update<FutarchyConfig>(expired);
-}
+// REMOVED: delete_slash_distribution - underlying function was removed as legacy code
+// public fun delete_slash_distribution(expired: &mut Expired) {
+//     config_actions::delete_slash_distribution_update<FutarchyConfig>(expired);
+// }
 
 // === Security Council Actions ===
 // These are stub implementations since council/policy actions are not yet implemented

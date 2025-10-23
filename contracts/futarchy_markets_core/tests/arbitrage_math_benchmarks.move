@@ -15,7 +15,7 @@
 /// - Gas consumption for N=2, 5, 10, 20, 50 conditionals
 /// - Algorithmic complexity validation (should be O(N²))
 /// - Performance degradation with extreme values
-/// - Pruning effectiveness (gas reduction)
+/// - Performance with various pool configurations
 ///
 /// **Usage:**
 /// ```bash
@@ -117,18 +117,17 @@ fun test_benchmark_gas_scaling() {
 }
 
 #[test]
-/// Benchmark: Pruning effectiveness
-/// Measures gas reduction from dominated pool pruning
+/// Benchmark: Performance with competitive vs dominated pools
 ///
 /// Tests two scenarios:
-/// 1. All pools competitive (no pruning) - worst case
-/// 2. Many dominated pools (heavy pruning) - best case
+/// 1. All pools competitive - all pools participate in max_i calculation
+/// 2. Many dominated pools - some pools never selected by max_i
 ///
-/// Expected: Pruning should reduce gas by 40-60% when effective
-fun test_benchmark_pruning_effectiveness() {
+/// Expected: Similar performance (max_i naturally handles both cases)
+fun test_benchmark_pool_configurations() {
     let mut scenario = ts::begin(ADMIN);
 
-    // Scenario 1: All pools competitive (no pruning possible)
+    // Scenario 1: All pools competitive
     // Create arbitrage: spot cheap (more asset), conditionals expensive (less asset)
     let spot_pool_1 = create_spot_pool(
         1_500_000, // High asset = cheap asset price
@@ -163,7 +162,7 @@ fun test_benchmark_pruning_effectiveness() {
     cleanup_spot_pool(spot_pool_1);
     cleanup_conditional_pools(competitive_pools);
 
-    // Scenario 2: Many dominated pools (heavy pruning)
+    // Scenario 2: Mix of competitive and economically irrelevant pools
     // Same arbitrage setup: spot cheap, conditionals expensive
     let spot_pool_2 = create_spot_pool(
         1_500_000, // High asset = cheap
@@ -720,7 +719,7 @@ fun test_benchmark_extreme_size_imbalance() {
 
 #[test]
 /// Benchmark: Cond→Spot with 50 pools and small bounds
-/// Absolute worst case - no pruning, many pools, Cond→Spot direction
+/// Absolute worst case - many pools, Cond→Spot direction
 fun test_benchmark_cond_to_spot_50_pools_small() {
     let mut scenario = ts::begin(ADMIN);
 
@@ -742,7 +741,7 @@ fun test_benchmark_cond_to_spot_50_pools_small() {
     );
 
     // This setup attempts to force Cond→Spot direction which:
-    // - Doesn't use pruning (must buy from ALL 50 pools)
+    // - Must buy from ALL 50 pools (quantum liquidity requirement)
     // - Has small upper_bound
     // - Most expensive combination possible
     let (_amt, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(

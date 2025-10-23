@@ -537,25 +537,29 @@ fun test_calculate_bond_split_on_cancel_large_amount() {
 
 #[test]
 fun test_calculate_bond_split_on_evict() {
-    // 100% to evictor
+    // 50% to DAO, 50% to evictor
     let bond_amount = 1000;
-    let evictor_share = proposal_fee_manager::calculate_bond_split_on_evict(bond_amount);
+    let (dao_share, evictor_share) = proposal_fee_manager::calculate_bond_split_on_evict(bond_amount);
 
-    assert!(evictor_share == bond_amount, 0);
+    assert!(dao_share == 500, 0);
+    assert!(evictor_share == 500, 1);
 }
 
 #[test]
 fun test_calculate_bond_split_on_evict_zero() {
-    let evictor_share = proposal_fee_manager::calculate_bond_split_on_evict(0);
-    assert!(evictor_share == 0, 0);
+    let (dao_share, evictor_share) = proposal_fee_manager::calculate_bond_split_on_evict(0);
+    assert!(dao_share == 0, 0);
+    assert!(evictor_share == 0, 1);
 }
 
 #[test]
 fun test_calculate_bond_split_on_evict_large_amount() {
     let bond_amount = 1_000_000_000; // 1 SUI
-    let evictor_share = proposal_fee_manager::calculate_bond_split_on_evict(bond_amount);
+    let (dao_share, evictor_share) = proposal_fee_manager::calculate_bond_split_on_evict(bond_amount);
 
-    assert!(evictor_share == bond_amount, 0);
+    assert!(dao_share == 500_000_000, 0);
+    assert!(evictor_share == 500_000_000, 1);
+    assert!(dao_share + evictor_share == bond_amount, 2);
 }
 
 #[test]
@@ -767,11 +771,12 @@ fun test_full_evict_flow() {
         scenario.ctx(),
     );
 
-    let evictor_bond = proposal_fee_manager::calculate_bond_split_on_evict(bond_amount);
+    let (dao_bond, evictor_bond) = proposal_fee_manager::calculate_bond_split_on_evict(bond_amount);
 
-    // Verify: Proposer gets full priority fee, Evictor gets full bond
+    // Verify: Proposer gets full priority fee, split bond 50/50 between DAO and evictor
     assert!(priority_refund.value() == 1000, 0);
-    assert!(evictor_bond == 2000, 1);
+    assert!(dao_bond == 1000, 1);
+    assert!(evictor_bond == 1000, 2);
 
     destroy(priority_refund);
     end(scenario, manager, clock);

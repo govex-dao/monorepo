@@ -178,7 +178,6 @@ fun test_extract_max_single_proposal() {
         5000,
         string::utf8(b"Proposal 1"),
         &clock,
-        ts::ctx(&mut scenario),
     );
 
     let _ = priority_queue::insert(&mut queue, proposal, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
@@ -218,7 +217,6 @@ fun test_extract_max_multiple_proposals() {
         1000,
         string::utf8(b"Low fee"),
         &clock,
-        ts::ctx(&mut scenario),
     );
     let p2 = priority_queue::new_test_queued_proposal<SUI>(
         dao_id,
@@ -226,7 +224,6 @@ fun test_extract_max_multiple_proposals() {
         5000,
         string::utf8(b"High fee"),
         &clock,
-        ts::ctx(&mut scenario),
     );
     let p3 = priority_queue::new_test_queued_proposal<SUI>(
         dao_id,
@@ -234,7 +231,6 @@ fun test_extract_max_multiple_proposals() {
         3000,
         string::utf8(b"Mid fee"),
         &clock,
-        ts::ctx(&mut scenario),
     );
 
     let _ = priority_queue::insert(&mut queue, p1, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
@@ -274,7 +270,6 @@ fun test_extract_max_tie_breaking_by_timestamp() {
         5000,
         string::utf8(b"First"),
         &clock,
-        ts::ctx(&mut scenario),
     );
     // Insert p1 while clock is at 1000
     let _ = priority_queue::insert(&mut queue, p1, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));
@@ -287,7 +282,6 @@ fun test_extract_max_tie_breaking_by_timestamp() {
         5000,
         string::utf8(b"Second"),
         &clock,
-        ts::ctx(&mut scenario),
     );
     // Insert p2 while clock is at 2000
     let _ = priority_queue::insert(&mut queue, p2, &mut fee_manager, &mut account, &clock, ts::ctx(&mut scenario));

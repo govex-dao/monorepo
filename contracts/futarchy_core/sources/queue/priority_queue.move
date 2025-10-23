@@ -1647,14 +1647,19 @@ public fun new_test_queued_proposal<StableCoin>(
     fee: u64,
     title: String,
     clock: &Clock,
+    ctx: &mut TxContext,
 ): QueuedProposal<StableCoin> {
     use std::string;
+    use sui::coin;
 
     let timestamp = clock.timestamp_ms();
     let priority_score = create_priority_score(fee, timestamp);
 
+    // Create a minimal bond for testing (1 unit)
+    let test_bond = coin::mint_for_testing<StableCoin>(1, ctx);
+
     QueuedProposal {
-        bond: option::none(),
+        bond: option::some(test_bond),
         proposal_id: @0x0.to_id(), // Will be set during insert
         dao_id,
         proposer,

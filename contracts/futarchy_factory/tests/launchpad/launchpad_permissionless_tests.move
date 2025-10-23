@@ -192,11 +192,13 @@ fun test_permissionless_completion_after_delay() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<TEST_ASSET, TEST_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<TEST_STABLE>(20_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Advance past deadline and settle
@@ -296,11 +298,13 @@ fun test_permissionless_completion_requires_settlement() {
     {
         let mut raise = ts::take_shared<launchpad::Raise<TEST_ASSET, TEST_STABLE>>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let contribution = coin::mint_for_testing<TEST_STABLE>(20_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
-        launchpad::contribute(&mut raise, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
+        launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Advance past deadline + 24 hours but DON'T settle

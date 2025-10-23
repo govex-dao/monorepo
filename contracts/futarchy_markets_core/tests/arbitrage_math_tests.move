@@ -7,7 +7,7 @@
 /// 2. TAB Constants & Bounds (build_tab_constants, upper_bound_b)
 /// 3. Core Arbitrage Math (x_required_for_b, profit_at_b)
 /// 4. Optimization Algorithm (optimal_b_search)
-/// 5. Pruning & Early Exit (prune_dominated, early_exit_check)
+/// 5. Early Exit & Invariants (early_exit_check, dominance invariance)
 /// 6. Full Integration (compute_optimal_*)
 /// 7. Edge Cases & Overflow Protection
 /// 8. Mathematical Invariants
@@ -414,12 +414,12 @@ fun test_two_phase_search_precision() {
 }
 
 // ============================================================================
-// SECTION 5: PRUNING & EARLY EXIT
+// SECTION 5: EARLY EXIT & INVARIANTS
 // ============================================================================
 
 #[test]
-/// Test prune_dominated removes correct pools
-fun test_prune_dominated_correctness() {
+/// Test multiple pools correctness
+fun test_multiple_pools_correctness() {
     let mut scenario = ts::begin(ADMIN);
 
     // Test that algorithm can handle 3 pools without crashing
@@ -442,7 +442,6 @@ fun test_prune_dominated_correctness() {
         ts::ctx(&mut scenario),
     );
 
-    // Pruning should remove dominated pools if any
     // Test that algorithm completes efficiently with multiple pools
     let (_amount, _profit, _direction) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         &spot_pool,
@@ -451,17 +450,14 @@ fun test_prune_dominated_correctness() {
         0,
     );
 
-    // If pruning works, algorithm should complete without crashing
-    // (Direct verification would require exposing prune_dominated)
-
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
     ts::end(scenario);
 }
 
 #[test]
-/// Test pruning invariance: dominated pool doesn't change optimal result
-fun test_pruning_dominated_invariance() {
+/// Test dominance invariance: economically irrelevant pool doesn't change optimal result
+fun test_dominance_invariance() {
     let mut scenario = ts::begin(ADMIN);
 
     // Create spot pool
@@ -486,7 +482,7 @@ fun test_pruning_dominated_invariance() {
         ts::ctx(&mut scenario),
     );
 
-    // Pool C is dominated (expensive across all ratios - low asset, high stable)
+    // Pool C is economically irrelevant (never selected by max_i due to poor economics)
     let pool_c = conditional_amm::create_pool_for_testing(
         50_000,
         700_000,
@@ -534,7 +530,7 @@ fun test_pruning_dominated_invariance() {
         0,
     );
 
-    // Pruning invariance: dominated pool should not affect result
+    // Dominance invariance: max_i naturally ignores economically irrelevant pools
     assert!(is_stc_abc == is_stc_ab, 0); // Same direction
     assert!(prof_abc == prof_ab, 1); // Same profit
     assert!(amt_abc == amt_ab, 2); // Same amount
@@ -1067,7 +1063,7 @@ fun test_max_conditionals() {
         ts::ctx(&mut scenario),
     );
 
-    // Should complete without hitting gas limits (with pruning)
+    // Should complete without hitting gas limits
     let (_amount, _profit, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         &spot_pool,
         &conditional_pools,

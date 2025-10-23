@@ -115,7 +115,7 @@ public struct ProposalReserved has copy, drop {
 public fun activate_proposal_from_queue<AssetType, StableType>(
     account: &mut Account,
     queue: &mut ProposalQueue<StableType>,
-    proposal_fee_manager: &mut ProposalFeeManager,
+    proposal_fee_manager: &mut ProposalFeeManager<StableType>,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>, // Added: For marking liquidity movement
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,
@@ -289,7 +289,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
     escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    fee_manager: &mut ProposalFeeManager,
+    fee_manager: &mut ProposalFeeManager<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -313,7 +313,7 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
     escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    fee_manager: &mut ProposalFeeManager,
+    fee_manager: &mut ProposalFeeManager<StableType>,
     _is_early_resolution: bool,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -481,7 +481,7 @@ public entry fun try_early_resolve<AssetType, StableType>(
     escrow: &mut futarchy_markets_primitives::coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    fee_manager: &mut ProposalFeeManager,
+    fee_manager: &mut ProposalFeeManager<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -595,7 +595,7 @@ public entry fun try_early_resolve<AssetType, StableType>(
 public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     account: &mut Account,
     queue: &mut ProposalQueue<StableType>,
-    proposal_fee_manager: &mut ProposalFeeManager,
+    proposal_fee_manager: &mut ProposalFeeManager<StableType>,
     current_market: &MarketState,
     premarket_threshold_ms: u64,
     clock: &Clock,

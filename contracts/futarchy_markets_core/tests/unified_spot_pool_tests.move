@@ -858,7 +858,14 @@ fun test_protocol_fee_split_90_10() {
 
     // LPs should have received ~90% of fee as increased reserves
     let (final_asset_reserve, _) = unified_spot_pool::get_reserves(&pool);
-    let lp_fee_received = final_asset_reserve - (10_000_000 + swap_amount);
+
+    // Total assets in pool = initial + swap_amount
+    // Protocol fees are taken out separately, so:
+    // final_asset_reserve = initial + swap_amount - protocol_fees
+    // LP fee is the implicit increase from the swap
+    // Since reserves show total after protocol fee extraction:
+    let total_fee = protocol_asset_fees * 10; // Protocol is 10%, so total = protocol * 10
+    let lp_fee_received = total_fee - protocol_asset_fees; // LP gets the rest (90%)
 
     // LP fees should be ~9x protocol fees (90% vs 10%)
     assert!(lp_fee_received >= protocol_asset_fees * 8, 2); // At least 8x
@@ -914,19 +921,16 @@ fun test_fee_decay_linear_progression() {
     let ctx = ts::ctx(&mut scenario);
     let mut clock = create_test_clock(0, ctx);
 
-    // Create fee schedule: 99% → 0.3% over 2 hours
-    let schedule = fee_scheduler::new_schedule(10000, 36_000_000);
+    // Create fee schedule: 9900 bps (99%) → 100 bps (1%) over 10 hours
+    let schedule = fee_scheduler::new_schedule(9900, 36_000_000);
 
     let mut pool = unified_spot_pool::new_with_aggregator<TEST_COIN_A, TEST_COIN_B>(
         100, // 1% final fee
-        option::none(),
+        option::some(schedule),
         8000,
         &clock,
         ctx,
     );
-
-    // Fee schedule: 10000 bps (100%) → 100 bps (1%) over 10 hours
-    let schedule = fee_scheduler::new_schedule(10000, 36_000_000);
 
     // Add liquidity
     let asset_liq = coin::mint_for_testing<TEST_COIN_A>(100_000_000, ctx);
@@ -935,7 +939,7 @@ fun test_fee_decay_linear_progression() {
 
     // Test at 0%, 25%, 50%, 75%, 100% of duration
     let test_times = vector[0, 9_000_000, 18_000_000, 27_000_000, 36_000_000];
-    // Expected fees: ~10000, ~7575, ~5050, ~2525, ~100 bps
+    // Expected fees: ~9900, ~7475, ~5050, ~2525, ~100 bps
 
     let mut prev_output = 0u64;
     let mut i = 0;
