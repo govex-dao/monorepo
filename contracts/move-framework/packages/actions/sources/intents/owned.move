@@ -9,7 +9,6 @@ module account_actions::owned_intents;
 use account_actions::transfer as acc_transfer;
 use account_actions::vault;
 use account_actions::version;
-use account_actions::vesting;
 use account_protocol::account::{Account, Auth};
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
@@ -41,8 +40,6 @@ public struct WithdrawAndTransferToVaultIntent() has copy, drop;
 public struct WithdrawObjectsAndTransferIntent() has copy, drop;
 /// Intent Witness defining the intent to withdraw and transfer multiple coins.
 public struct WithdrawCoinsAndTransferIntent() has copy, drop;
-/// Intent Witness defining the intent to withdraw a coin and create a vesting.
-public struct WithdrawAndVestIntent() has copy, drop;
 
 // === Public functions ===
 
@@ -201,91 +198,6 @@ public fun execute_withdraw_coin_and_transfer<Outcome: store, CoinType>(
     );
 }
 
-/// Creates a WithdrawAndVestIntent and adds it to an Account.
-public fun request_withdraw_and_vest<Config: store, Outcome: store, CoinType>(
-    auth: Auth,
-    account: &mut Account,
-    params: Params,
-    outcome: Outcome,
-    recipients: vector<address>,
-    amounts: vector<u64>,
-    start_timestamp: u64,
-    end_timestamp: u64,
-    ctx: &mut TxContext,
-) {
-    account.verify(auth);
-    params.assert_single_execution();
-
-    // Calculate total amount needed
-    let mut total_amount = 0u64;
-    let mut i = 0;
-    let len = amounts.length();
-    while (i < len) {
-        total_amount = total_amount + *amounts.borrow(i);
-        i = i + 1;
-    };
-
-    intent_interface::build_intent!(
-        account,
-        params,
-        outcome,
-        b"".to_string(),
-        version::current(),
-        WithdrawAndVestIntent(),
-        ctx,
-        |intent, iw| {
-            owned::new_withdraw_coin<_, _>(
-                intent,
-                account,
-                type_name_to_string<CoinType>(),
-                total_amount,
-                iw,
-            );
-            // Note: This template uses simplified vesting parameters
-            // For custom rate limiting, call vesting::new_vesting() directly
-            vesting::new_vesting<_, CoinType, _>(
-                intent,
-                account,
-                recipients,
-                amounts,
-                start_timestamp,
-                end_timestamp,
-                option::none(),      // cliff_time: none
-                1,                   // max_beneficiaries: 1 (single beneficiary per vesting)
-                0,                   // max_per_withdrawal: 0 (no limit - template simplification)
-                0,                   // min_interval_ms: 0 (no interval - template simplification)
-                false,               // is_transferable: false
-                false,               // is_cancelable: false
-                option::none(),      // metadata: none
-                iw,
-            );
-        },
-    );
-}
-
-/// Executes a WithdrawAndVestIntent, withdraws a coin and creates a vesting.
-public fun execute_withdraw_and_vest<Config: store, Outcome: store, CoinType>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account,
-    receiving: Receiving<Coin<CoinType>>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    account.process_intent!(
-        executable,
-        version::current(),
-        WithdrawAndVestIntent(),
-        |executable, iw| {
-            let coin = owned::do_withdraw_coin<_, CoinType, _>(
-                executable,
-                account,
-                receiving,
-                iw,
-            );
-            vesting::do_vesting<Config, Outcome, CoinType, _>(executable, account, coin, clock, iw, ctx);
-        },
-    );
-}
 
 // === Private functions ===
 
