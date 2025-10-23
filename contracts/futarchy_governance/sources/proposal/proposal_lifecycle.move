@@ -157,9 +157,6 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     let auth3 = priority_queue::create_mutation_auth();
     let mut bond = priority_queue::extract_bond(auth3, &mut queued_proposal);
 
-    // Get config values from account
-    let config = account.config();
-
     // Extract proposal data fields
     let title = *priority_queue::get_title(&data);
     let metadata = *priority_queue::get_metadata(&data);
@@ -169,7 +166,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     // Split bond on activation: 50% activator, 50% DAO
     // Activator = ctx.sender() (person calling advance_proposal_state)
     if (bond.is_some()) {
-        let bond_coin = bond.extract();
+        let mut bond_coin = bond.extract();
         let bond_amount = coin::value(&bond_coin);
 
         let (activator_share, dao_share) = proposal_fee_manager::calculate_bond_split_on_activate(bond_amount);
@@ -210,6 +207,9 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     let proposer_fee_paid = fee_escrow.value();
 
     // Intent specs are now stored in proposals, no need to check intent keys
+
+    // Get config values from account (after vault deposits to avoid borrow conflicts)
+    let config = account.config();
 
     // Read conditional liquidity ratio from DAO config
     let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(
@@ -645,7 +645,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     // Split bond on activation: 50% activator, 50% DAO
     // Activator = ctx.sender() (person calling reserve_next_proposal)
     if (bond.is_some()) {
-        let bond_coin = bond.extract();
+        let mut bond_coin = bond.extract();
         let bond_amount = coin::value(&bond_coin);
 
         let (activator_share, dao_share) = proposal_fee_manager::calculate_bond_split_on_activate(bond_amount);
@@ -832,7 +832,7 @@ public entry fun advance_proposal_state<AssetType, StableType>(
 public fun run_complete_proposal_lifecycle<AssetType, StableType>(
     account: &mut Account,
     queue: &mut ProposalQueue<StableType>,
-    proposal_fee_manager: &mut ProposalFeeManager,
+    proposal_fee_manager: &mut ProposalFeeManager<StableType>,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,

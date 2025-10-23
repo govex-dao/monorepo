@@ -9,6 +9,7 @@ use futarchy_factory::factory;
 use futarchy_factory::launchpad;
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
+use std::string::String;
 use sui::clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
@@ -172,6 +173,8 @@ fun test_basic_launchpad_creation() {
             allowed_caps,
             false, // allow_early_completion
             b"Test Launchpad".to_string(),
+            vector::empty<String>(), // metadata_keys
+            vector::empty<String>(), // metadata_values
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -226,6 +229,8 @@ fun test_launchpad_with_unallowed_stable() {
             allowed_caps,
             false,
             b"Test Launchpad".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -272,6 +277,8 @@ fun test_launchpad_contribution() {
             allowed_caps,
             false,
             b"Test Launchpad".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -353,6 +360,8 @@ fun test_settlement_and_successful_raise() {
             allowed_caps,
             false,
             b"Settlement test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -506,6 +515,8 @@ fun test_pro_rata_allocation_logic() {
             allowed_caps,
             false,
             b"Pro rata test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -653,6 +664,8 @@ fun test_failed_raise_settlement() {
             allowed_caps,
             false,
             b"Fail test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -746,6 +759,8 @@ fun test_claim_tokens_successful_raise() {
             allowed_caps,
             false,
             b"Claim test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -872,6 +887,8 @@ fun test_claim_refund_failed_raise() {
             allowed_caps,
             false,
             b"Refund test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -982,6 +999,8 @@ fun test_batch_claim_tokens() {
             allowed_caps,
             false,
             b"Batch claim test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -1031,12 +1050,14 @@ fun test_batch_claim_tokens() {
     ts::next_tx(&mut scenario, bob);
     {
         let mut raise = ts::take_shared<launchpad::Raise<TEST_ASSET_REGULAR_3, TEST_STABLE_REGULAR>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let contribution = coin::mint_for_testing<TEST_STABLE_REGULAR>(15_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
         launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     ts::next_tx(&mut scenario, charlie);
@@ -1082,22 +1103,24 @@ fun test_batch_claim_tokens() {
     ts::next_tx(&mut scenario, cranker);
     {
         let mut raise = ts::take_shared<launchpad::Raise<TEST_ASSET_REGULAR_3, TEST_STABLE_REGULAR>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
 
         let mut contributors = vector::empty<address>();
         vector::push_back(&mut contributors, alice);
         vector::push_back(&mut contributors, bob);
         vector::push_back(&mut contributors, charlie);
 
-        launchpad::batch_claim_tokens_for(&mut raise, contributors, &clock, ts::ctx(&mut scenario));
+        launchpad::batch_claim_tokens_for(&mut raise, &factory, contributors, &clock, ts::ctx(&mut scenario));
 
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
-    // Verify cranker received rewards (0.1 SUI per claim * 3)
+    // Verify cranker received rewards (0.05 SUI per claim * 3)
     ts::next_tx(&mut scenario, cranker);
     {
         let reward = ts::take_from_sender<Coin<SUI>>(&scenario);
-        assert!(reward.value() == 300_000_000, 0); // 3 * 0.1 SUI
+        assert!(reward.value() == 150_000_000, 0); // 3 * 0.05 SUI
         ts::return_to_sender(&scenario, reward);
     };
 
@@ -1136,6 +1159,8 @@ fun test_early_raise_completion() {
             allowed_caps,
             true, // allow early completion
             b"Early end test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -1241,6 +1266,8 @@ fun test_raised_stables_in_dao_vault() {
             allowed_caps,
             false,
             b"Vault test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),

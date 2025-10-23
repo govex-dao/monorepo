@@ -9,6 +9,7 @@ use futarchy_factory::factory;
 use futarchy_factory::launchpad;
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
+use std::string::String;
 use sui::clock;
 use sui::coin::{Self, Coin, TreasuryCap};
 use sui::sui::SUI;
@@ -154,6 +155,8 @@ fun test_cleanup_failed_raise_returns_treasury_cap() {
             allowed_caps,
             false,
             b"Cleanup test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -249,6 +252,8 @@ fun test_cleanup_failed_raise_cleans_dao_resources() {
             allowed_caps,
             false,
             b"DAO cleanup test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -339,6 +344,8 @@ fun test_cleanup_cannot_run_on_successful_raise() {
             allowed_caps,
             false,
             b"Success test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),

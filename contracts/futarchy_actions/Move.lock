@@ -2,10 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "EC8B23780ED61DC7A07DC765519EA3E4223829980FBBB5212A7E287FAF9DE5A4"
-deps_digest = "D7FB1F2E1A893B9A0E80A392473710373DE5791D3AC8F6D898803754B2ADAE6B"
+manifest_digest = "CB072A47E8B1C5EFA7A393964D4836C9D7733080DA70D86B968158DCADC171DB"
+deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },

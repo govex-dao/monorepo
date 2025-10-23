@@ -271,7 +271,7 @@ public fun deposit<Config: store, CoinType: drop>(
 /// 1. Only approved types can be deposited
 /// 2. Deposits increase DAO assets, never decrease
 /// 3. Creates balance entry on first deposit if needed
-public fun deposit_approved<Config: store, CoinType: drop>(
+public fun deposit_approved<Config: store, CoinType>(
     account: &mut Account,
     name: String,
     coin: Coin<CoinType>,
@@ -516,12 +516,12 @@ public fun size(vault: &Vault): u64 {
 }
 
 /// Returns true if the coin type exists in the vault.
-public fun coin_type_exists<CoinType: drop>(vault: &Vault): bool {
+public fun coin_type_exists<CoinType>(vault: &Vault): bool {
     vault.bag.contains(type_name::with_defining_ids<CoinType>())
 }
 
 /// Returns the value of the coin type in the vault.
-public fun coin_type_value<CoinType: drop>(vault: &Vault): u64 {
+public fun coin_type_value<CoinType>(vault: &Vault): u64 {
     vault.bag.borrow<TypeName, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).value()
 }
 

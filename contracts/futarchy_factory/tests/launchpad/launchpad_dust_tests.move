@@ -10,6 +10,7 @@ use futarchy_factory::factory;
 use futarchy_factory::launchpad;
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
+use std::string::String;
 use sui::clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
@@ -156,6 +157,8 @@ fun test_sweep_dust_after_claim_period() {
             allowed_caps,
             false,
             b"Dust sweep test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -205,12 +208,14 @@ fun test_sweep_dust_after_claim_period() {
     ts::next_tx(&mut scenario, contributor2);
     {
         let mut raise = ts::take_shared<launchpad::Raise<DUST_TOKEN, DUST_STABLE>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let contribution = coin::mint_for_testing<DUST_STABLE>(5_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
         launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Settle and complete
@@ -316,6 +321,8 @@ fun test_sweep_dust_fails_before_claim_period() {
             allowed_caps,
             false,
             b"Early sweep test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),

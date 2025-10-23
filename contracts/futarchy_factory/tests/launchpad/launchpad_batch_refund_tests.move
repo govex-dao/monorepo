@@ -9,6 +9,7 @@ use futarchy_factory::factory;
 use futarchy_factory::launchpad;
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
+use std::string::String;
 use sui::clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
@@ -157,6 +158,8 @@ fun test_batch_refund_for_failed_raise() {
             allowed_caps,
             false,
             b"Batch refund test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -206,12 +209,14 @@ fun test_batch_refund_for_failed_raise() {
     ts::next_tx(&mut scenario, bob);
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let contribution = coin::mint_for_testing<REFUND_STABLE>(15_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
         launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     ts::next_tx(&mut scenario, charlie);
@@ -236,6 +241,7 @@ fun test_batch_refund_for_failed_raise() {
     ts::next_tx(&mut scenario, cranker);
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
 
         let mut contributors = vector::empty<address>();
         vector::push_back(&mut contributors, alice);
@@ -248,6 +254,7 @@ fun test_batch_refund_for_failed_raise() {
         assert!(launchpad::state(&raise) == 2, 0); // STATE_FAILED
 
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Verify cranker received rewards (0.1 SUI per refund * 3 = 3 separate coins)
@@ -318,6 +325,8 @@ fun test_batch_refund_skips_already_claimed() {
             allowed_caps,
             false,
             b"Skip already claimed test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -367,12 +376,14 @@ fun test_batch_refund_skips_already_claimed() {
     ts::next_tx(&mut scenario, bob);
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let contribution = coin::mint_for_testing<REFUND_STABLE>(15_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
         launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     ts::next_tx(&mut scenario, charlie);
@@ -406,6 +417,7 @@ fun test_batch_refund_skips_already_claimed() {
     ts::next_tx(&mut scenario, cranker);
     {
         let mut raise = ts::take_shared<launchpad::Raise<REFUND_TOKEN, REFUND_STABLE>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
 
         let mut contributors = vector::empty<address>();
         vector::push_back(&mut contributors, alice); // Already claimed
@@ -415,6 +427,7 @@ fun test_batch_refund_skips_already_claimed() {
         launchpad::batch_claim_refund_for(&mut raise, &factory, contributors, &clock, ts::ctx(&mut scenario));
 
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Verify cranker received rewards for only 2 refunds (Bob and Charlie)

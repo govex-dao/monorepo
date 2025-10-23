@@ -26,7 +26,6 @@ use account_protocol::{
 use futarchy_core::{futarchy_config::FutarchyOutcome, version};
 use sui::bcs;
 use std::type_name;
-use std::bcs::from_bytes;
 use fun intent_interface::process_intent as Account.process_intent;
 
 // === Errors ===
@@ -58,7 +57,7 @@ public struct MigrateConfigAction has drop, store {
 // === Public Constructors ===
 
 /// Create a new MigrateConfigAction
-public fun new_migrate_config_action<NewConfig: store>(
+public fun new_migrate_config_action<NewConfig: store + drop>(
     new_config: NewConfig,
 ): MigrateConfigAction {
     MigrateConfigAction {
@@ -113,7 +112,7 @@ public fun destroy_migrate_config_action(action: MigrateConfigAction) {
 /// - New config type must be different from old
 /// - Transformation logic must preserve critical data
 /// - Single execution only (irreversible)
-public fun request_migrate_config<OldConfig: store, NewConfig: store>(
+public fun request_migrate_config<OldConfig: store, NewConfig: store + drop>(
     account: &mut Account,
     params: Params,
     outcome: FutarchyOutcome,
@@ -181,10 +180,15 @@ public fun request_migrate_config<OldConfig: store, NewConfig: store>(
 /// - Old config validated before destruction
 /// - Atomic operation (aborts on any failure)
 /// - Single execution enforced by intent system
-public fun execute_migrate_config<OldConfig: store, NewConfig: store>(
-    executable: &mut Executable<FutarchyOutcome>,
-    account: &mut Account,
+public macro fun execute_migrate_config<$OldConfig: store + drop, $NewConfig: store + drop>(
+    $executable: &mut Executable<FutarchyOutcome>,
+    $account: &mut Account,
+    $deserialize_new_config: |vector<u8>| -> $NewConfig,
 ) {
+    // Bind macro parameters to local variables for use in paths
+    let executable = $executable;
+    let account = $account;
+
     // Process intent with proper witness validation
     account.process_intent!(
         executable,
@@ -222,13 +226,15 @@ public fun execute_migrate_config<OldConfig: store, NewConfig: store>(
             // TypeName is serialized as ASCII string struct - need to deserialize the whole thing
             // For now, skip type checking since we can't easily deserialize TypeName
             // let expected_new_type: type_name::TypeName = ...;
-            // assert!(expected_new_type == type_name::get<NewConfig>(), EConfigTypeMismatch);
+            // assert!(expected_new_type == type_name::get<$NewConfig>(), EConfigTypeMismatch);
 
-            // Deserialize the new config data
-            let new_config: NewConfig = from_bytes(new_config_bytes);
+            // Deserialize the new config using the provided deserialization function
+            // The caller must provide a function that knows how to deserialize NewConfig from bytes
+            // Example: For FutarchyConfig, pass futarchy_config::from_bytes
+            let new_config: $NewConfig = $deserialize_new_config(new_config_bytes);
 
             // Call account_protocol migrate_config to swap the config DF
-            let old_config: OldConfig = account_protocol::account::migrate_config<OldConfig, NewConfig>(
+            let old_config: $OldConfig = account_protocol::account::migrate_config<$OldConfig, $NewConfig>(
                 account,
                 new_config,
                 version::current(),

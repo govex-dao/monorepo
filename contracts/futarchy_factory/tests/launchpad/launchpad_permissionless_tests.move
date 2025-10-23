@@ -9,6 +9,7 @@ use futarchy_factory::factory;
 use futarchy_factory::launchpad;
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
+use std::string::String;
 use sui::clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
@@ -155,6 +156,8 @@ fun test_permissionless_completion_after_delay() {
             allowed_caps,
             false,
             b"Permissionless completion test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -261,6 +264,8 @@ fun test_permissionless_completion_requires_settlement() {
             allowed_caps,
             false,
             b"Test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),

@@ -57,7 +57,7 @@ public fun begin_execution<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
     fee_manager: &mut ProposalFeeManager<StableType>,
-    fee_coin: Coin<sui::sui::SUI>,
+    fee_coin: Coin<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Executable<FutarchyOutcome>, String) {

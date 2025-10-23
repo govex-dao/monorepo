@@ -154,6 +154,10 @@ public struct RaiseCreated has copy, drop {
     tokens_for_sale: u64,
     deadline_ms: u64,
     description: String,
+    // Generic metadata (parallel vectors for indexing)
+    // Common keys: website, twitter, discord, github, whitepaper, legal_docs, project_plan, team_info
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
 }
 
 public struct ContributionAdded has copy, drop {
@@ -361,6 +365,9 @@ public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     allowed_caps: vector<u64>,
     allow_early_completion: bool,
     description: String,
+    // Generic metadata (parallel vectors, emitted in event for indexing)
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
     launchpad_fee: Coin<sui::sui::SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -377,6 +384,10 @@ public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     assert!(description.length() <= 1000, EInvalidStateForAction);
     assert!(coin::total_supply(&treasury_cap) == 0, ESupplyNotZero);
     assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
+
+    // Validate metadata vectors
+    assert!(metadata_keys.length() == metadata_values.length(), EInvalidStateForAction);
+    assert!(metadata_keys.length() <= 20, EInvalidStateForAction); // Max 20 metadata entries
 
     if (option::is_some(&max_raise_amount)) {
         assert!(*option::borrow(&max_raise_amount) >= min_raise_amount, EInvalidMaxRaise);
@@ -401,6 +412,8 @@ public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
         allowed_caps,
         allow_early_completion,
         description,
+        metadata_keys,
+        metadata_values,
         clock,
         ctx,
     );
@@ -1137,6 +1150,8 @@ fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     allowed_caps: vector<u64>,
     allow_early_completion: bool,
     description: String,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -1196,6 +1211,8 @@ fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
         tokens_for_sale,
         deadline_ms: raise.deadline_ms,
         description: raise.description,
+        metadata_keys,
+        metadata_values,
     });
 
     let creator_cap = CreatorCap {

@@ -9,6 +9,7 @@ use futarchy_factory::factory;
 use futarchy_factory::launchpad;
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
+use std::string::String;
 use sui::clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
@@ -153,6 +154,8 @@ fun test_set_admin_trust_score() {
             allowed_caps,
             false,
             b"Admin test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -191,7 +194,6 @@ fun test_set_admin_trust_score() {
         ts::return_to_sender(&scenario, validator_cap);
         ts::return_shared(raise);
         ts::return_shared(factory);
-        ts::return_shared(factory);
     };
 
     ts::end(scenario);
@@ -229,6 +231,8 @@ fun test_create_raise_empty_caps_error() {
             allowed_caps,
             false,
             b"Empty caps test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -276,6 +280,8 @@ fun test_create_raise_unsorted_caps_error() {
             allowed_caps,
             false,
             b"Unsorted caps test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -322,6 +328,8 @@ fun test_create_raise_last_cap_not_unlimited() {
             allowed_caps,
             false,
             b"No unlimited cap test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -367,6 +375,8 @@ fun test_create_raise_invalid_max_raise() {
             allowed_caps,
             false,
             b"Invalid max raise test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -413,6 +423,8 @@ fun test_max_raise_caps_settlement() {
             allowed_caps,
             false,
             b"Max raise capping test".to_string(),
+            vector::empty<String>(),
+            vector::empty<String>(),
             payment,
             &clock,
             ts::ctx(&mut scenario),
@@ -462,12 +474,14 @@ fun test_max_raise_caps_settlement() {
     ts::next_tx(&mut scenario, bob);
     {
         let mut raise = ts::take_shared<launchpad::Raise<ADMIN_TOKEN, ADMIN_STABLE>>(&scenario);
+        let factory = ts::take_shared<factory::Factory>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let contribution = coin::mint_for_testing<ADMIN_STABLE>(20_000_000_000, ts::ctx(&mut scenario));
         let crank_fee = create_payment(100_000_000, &mut scenario);
         launchpad::contribute(&mut raise, &factory, contribution, launchpad::unlimited_cap(), crank_fee, &clock, ts::ctx(&mut scenario));
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(factory);
     };
 
     // Settle
