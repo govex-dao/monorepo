@@ -25,6 +25,7 @@ use futarchy_core::version;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
 };
+use futarchy_governance_actions::intent_janitor;
 use futarchy_markets_core::proposal::{Self, Proposal};
 use futarchy_markets_primitives::market_state::MarketState;
 
@@ -139,7 +140,11 @@ public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
 
     // Store the intent in the account
     let key_copy = intent_key;
+    let expiration_time = clock.timestamp_ms() + 3_600_000; // Same as above
     account::insert_intent(account, intent, version::current(), witness());
+
+    // Register the intent with the janitor for tracking and cleanup
+    intent_janitor::register_intent(account, intent_key, expiration_time, ctx);
 
     key_copy
 }

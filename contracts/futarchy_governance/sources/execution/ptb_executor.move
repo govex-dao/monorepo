@@ -17,7 +17,7 @@ use account_protocol::{
     executable::{Self, Executable},
     intents,
 };
-use futarchy_governance::intent_janitor;
+use futarchy_governance_actions::intent_janitor;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     proposal_fee_manager::{Self, ProposalFeeManager},
