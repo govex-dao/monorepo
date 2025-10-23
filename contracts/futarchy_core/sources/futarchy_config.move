@@ -870,6 +870,7 @@ public fun new_with_package_registry(
     account::new(
         config,
         deps,
+        registry,
         version::current(),
         ConfigWitness {},
         ctx,
@@ -891,6 +892,7 @@ public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Accoun
     account::new(
         config,
         deps,
+        registry,
         version::current(),
         ConfigWitness {},
         ctx,

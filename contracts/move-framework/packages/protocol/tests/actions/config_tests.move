@@ -47,7 +47,7 @@ fun start(): (Scenario, PackageRegistry, Account, Clock, PackageAdminCap) {
         &extensions,
         vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()],
     );
-    let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
+    let account = account::new(Config {}, deps, &extensions, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     (scenario, extensions, account, clock, cap)
@@ -68,10 +68,11 @@ fun test_edit_config_metadata() {
     let (scenario, extensions, mut account, clock, cap) = start();
     assert!(account.metadata().size() == 0);
 
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     config::edit_metadata<Config>(
         auth,
         &mut account,
+        &extensions,
         vector[b"name".to_string()],
         vector[b"New Name".to_string()],
     );
@@ -86,7 +87,7 @@ fun test_update_extensions_to_latest() {
     assert!(account.deps().get_by_name(b"AccountProtocol".to_string()).version() == 1);
     extensions.update_for_testing(&cap, b"AccountProtocol".to_string(), @0x3, 2);
 
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     config::update_extensions_to_latest<Config>(
         auth,
         &mut account,

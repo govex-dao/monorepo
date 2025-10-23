@@ -29,6 +29,7 @@ const ENotExtension: u64 = 3;
 const EAccountProtocolMissing: u64 = 4;
 const EDepsNotSameLength: u64 = 5;
 const EAccountConfigMissing: u64 = 6;
+const ERegistryMismatch: u64 = 7;
 
 // === Structs ===
 
@@ -169,9 +170,26 @@ public fun inner_mut(deps: &mut Deps): &mut vector<Dep> {
 
 // === View functions ===
 
-/// Checks if a package is a dependency.
-public fun check(deps: &Deps, version_witness: VersionWitness) {
-    assert!(deps.contains_addr(version_witness.package_addr()), ENotDep);
+/// Checks if a package is a dependency or in the global PackageRegistry whitelist.
+/// This allows all whitelisted packages to work automatically for all accounts,
+/// while individual accounts can still add custom packages to their deps.
+///
+/// Validates that the registry passed matches the registry_id to prevent malicious
+/// registries from bypassing the whitelist.
+public fun check(deps: &Deps, version_witness: VersionWitness, registry: &PackageRegistry, registry_id: ID) {
+    // SECURITY: Validate registry matches stored ID to prevent fake registries
+    assert!(registry_id == sui::object::id(registry), ERegistryMismatch);
+
+    let addr = version_witness.package_addr();
+
+    // First check if it's in the account's custom deps list
+    if (deps.contains_addr(addr)) return;
+
+    // Then check if it's in the global whitelist (any version is acceptable)
+    if (registry.contains_package_addr(addr)) return;
+
+    // Not found in either - abort
+    abort ENotDep
 }
 
 public fun unverified_allowed(deps: &Deps): bool {
@@ -255,6 +273,9 @@ public fun contains_addr(deps: &Deps, addr: address): bool {
 // === Test only ===
 
 #[test_only]
+use sui::test_utils::destroy;
+
+#[test_only]
 public fun new_for_testing(): Deps {
     Deps {
         inner: vector[
@@ -300,7 +321,11 @@ fun test_new_and_getters() {
     // assertions
     let deps = new_for_testing();
     let witness = version_witness::new_for_testing(@account_protocol);
-    deps.check(witness);
+    // For test: create a dummy registry - actual validation skipped in test mode
+    let registry = package_registry::new_for_testing();
+    let registry_id = sui::object::id(&registry);
+    deps.check(witness, &registry, registry_id);
+    destroy(registry);
     // deps getters
     assert!(deps.length() == 3);
     assert!(deps.contains_name(b"AccountProtocol".to_string()));
@@ -320,7 +345,10 @@ fun test_new_and_getters() {
 fun test_error_assert_is_dep() {
     let deps = new_for_testing();
     let witness = version_witness::new_for_testing(@0xDEAD);
-    deps.check(witness);
+    let registry = package_registry::new_for_testing();
+    let registry_id = sui::object::id(&registry);
+    deps.check(witness, &registry, registry_id);
+    destroy(registry);
 }
 
 #[test, expected_failure(abort_code = EDepNotFound)]

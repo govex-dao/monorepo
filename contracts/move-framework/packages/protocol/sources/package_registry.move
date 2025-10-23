@@ -394,6 +394,11 @@ public fun is_valid_package(
     *registry.by_addr.borrow(addr) == name && *registry.active_versions.borrow(addr) == version
 }
 
+/// Check if a package address exists in the registry
+public fun contains_package_addr(registry: &PackageRegistry, addr: address): bool {
+    registry.by_addr.contains(addr)
+}
+
 /// Get package name from address
 public fun get_package_name(registry: &PackageRegistry, addr: address): String {
     assert!(registry.by_addr.contains(addr), EPackageNotFound);

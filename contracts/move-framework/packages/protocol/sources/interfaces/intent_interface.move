@@ -56,6 +56,7 @@ use std::string::String;
 /// Creates an intent with actions and adds it to the account.
 public macro fun build_intent<$Config: store, $Outcome, $IW: drop>(
     $account: &mut Account,
+    $registry: &account_protocol::package_registry::PackageRegistry,
     $params: Params,
     $outcome: $Outcome,
     $managed_name: String,
@@ -66,6 +67,7 @@ public macro fun build_intent<$Config: store, $Outcome, $IW: drop>(
 ) {
     let mut intent = account::create_intent(
         $account,
+        $registry,
         $params,
         $outcome,
         $managed_name,
@@ -76,7 +78,7 @@ public macro fun build_intent<$Config: store, $Outcome, $IW: drop>(
 
     $new_actions(&mut intent, $intent_witness);
 
-    account::insert_intent($account, intent, $version_witness, $intent_witness);
+    account::insert_intent($account, $registry, intent, $version_witness, $intent_witness);
 }
 
 /// Example implementation:
@@ -103,6 +105,7 @@ public macro fun build_intent<$Config: store, $Outcome, $IW: drop>(
 /// Executes the actions from the executable intent.
 public macro fun process_intent<$Config: store, $Outcome: store, $IW: drop>(
     $account: &Account,
+    $registry: &account_protocol::package_registry::PackageRegistry,
     $executable: &mut Executable<$Outcome>,
     $version_witness: VersionWitness,
     $intent_witness: $IW,
@@ -110,10 +113,11 @@ public macro fun process_intent<$Config: store, $Outcome: store, $IW: drop>(
 ): _ {
     let account = $account;
     let executable = $executable;
+    let registry = $registry;
     // let version_witness = $version_witness;
     // let intent_witness = $intent_witness;
     // ensures the package address is a dependency for this account
-    account.deps().check($version_witness);
+    account.deps().check($version_witness, registry, account.registry_id());
     // ensures the right account is passed
     executable.intent().assert_is_account(account.addr());
     // ensures the intent is created by the same package that creates the action

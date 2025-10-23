@@ -313,7 +313,7 @@ fun test_error_assert_is_dep() {
         vector[1, 1],
     );
     let witness = version_witness::new_for_testing(@0xDEAD);
-    deps.check(witness);
+    deps.check(witness, &extensions, object::id(&extensions));
 
     destroy(cap);
     destroy(pkg_cap);
