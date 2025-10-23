@@ -3,14 +3,14 @@
 
 module futarchy_factory::launchpad;
 
+use account_actions::init_actions;
 use account_protocol::package_registry::PackageRegistry;
 use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::priority_queue::ProposalQueue;
 use futarchy_core::version;
 use futarchy_factory::factory;
-use futarchy_factory::init_actions;
-use futarchy_factory::init_framework_actions;
+use futarchy_factory::init_actions as launchpad_init_actions;
 use futarchy_markets_core::fee;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_one_shot_utils::constants;
@@ -307,7 +307,7 @@ public fun stage_launchpad_init_intent<RaiseToken, StableCoin>(
 
     {
         let account_ref: &mut Account = df::borrow_mut(&mut raise.id, DaoAccountKey {});
-        init_actions::stage_init_intent(account_ref, &raise_id, staged_index, &spec, clock, ctx);
+        launchpad_init_actions::stage_init_intent(account_ref, &raise_id, staged_index, &spec, clock, ctx);
     };
 
     vector::push_back(&mut raise.staged_init_specs, spec);
@@ -333,7 +333,7 @@ public entry fun unstage_last_launchpad_init_intent<RaiseToken, StableCoin>(
 
     {
         let account_ref: &mut Account = df::borrow_mut(&mut raise.id, DaoAccountKey {});
-        init_actions::cancel_init_intent(account_ref, &raise_id, staged_index, ctx);
+        launchpad_init_actions::cancel_init_intent(account_ref, &raise_id, staged_index, ctx);
     };
 
     let _removed = vector::pop_back(&mut raise.staged_init_specs);
@@ -630,16 +630,15 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
 
     // Deposit treasury cap
     let treasury_cap = raise.treasury_cap.extract();
-    init_framework_actions::init_lock_treasury_cap(&mut account, treasury_cap);
+    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, treasury_cap);
 
     // Deposit metadata if exists
     if (df::exists_(&raise.id, CoinMetadataKey {})) {
         let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
-        init_framework_actions::init_store_object(
+        init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
             &mut account,
             DaoMetadataKey {},
             metadata,
-            ctx,
         );
     };
 
@@ -660,7 +659,12 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
 
     // Deposit raised funds to DAO treasury
     let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
-    init_framework_actions::init_vault_deposit(&mut account, raised_funds, ctx);
+    init_actions::init_vault_deposit<FutarchyConfig, StableCoin>(
+        &mut account,
+        string::utf8(b"treasury"),
+        raised_funds,
+        ctx,
+    );
 
     raise.state = STATE_SUCCESSFUL;
 
@@ -1021,7 +1025,7 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
             let raise_id = object::id(raise);
             {
                 let account_ref: &mut Account = df::borrow_mut(&mut raise.id, DaoAccountKey {});
-                init_actions::cleanup_init_intents(account_ref, &raise_id, &raise.staged_init_specs, ctx);
+                launchpad_init_actions::cleanup_init_intents(account_ref, &raise_id, &raise.staged_init_specs, ctx);
             };
             raise.staged_init_specs = vector::empty();
         };
@@ -1089,7 +1093,12 @@ public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
     let remaining_stable_balance = raise.stable_coin_vault.value();
     if (remaining_stable_balance > 0) {
         let dust_stable = coin::from_balance(raise.stable_coin_vault.split(remaining_stable_balance), ctx);
-        init_framework_actions::init_vault_deposit(dao_account, dust_stable, ctx);
+        init_actions::init_vault_deposit<FutarchyConfig, StableCoin>(
+            dao_account,
+            string::utf8(b"treasury"),
+            dust_stable,
+            ctx,
+        );
     };
 
     event::emit(DustSwept {
@@ -1344,16 +1353,15 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
 
     // Deposit treasury cap
     let treasury_cap = raise.treasury_cap.extract();
-    init_framework_actions::init_lock_treasury_cap(&mut account, treasury_cap);
+    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, treasury_cap);
 
     // Deposit metadata if exists
     if (df::exists_(&raise.id, CoinMetadataKey {})) {
         let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
-        init_framework_actions::init_store_object(
+        init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
             &mut account,
             DaoMetadataKey {},
             metadata,
-            ctx,
         );
     };
 
@@ -1374,7 +1382,12 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
 
     // Deposit raised funds to DAO treasury
     let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
-    init_framework_actions::init_vault_deposit(&mut account, raised_funds, ctx);
+    init_actions::init_vault_deposit<FutarchyConfig, StableCoin>(
+        &mut account,
+        string::utf8(b"treasury"),
+        raised_funds,
+        ctx,
+    );
 
     raise.state = STATE_SUCCESSFUL;
 
