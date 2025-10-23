@@ -1031,8 +1031,6 @@ public(package) fun remove_liquidity_for_quantum_split_with_buckets<AssetType, S
     (asset_balance, stable_balance)
 }
 
-/// Remove liquidity for quantum split (deprecated - use remove_liquidity_for_quantum_split_with_buckets)
-/// Kept for backward compatibility
 public(package) fun remove_liquidity_for_quantum_split<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_amount: u64,
@@ -1086,8 +1084,6 @@ public(package) fun add_liquidity_from_quantum_redeem_with_buckets<AssetType, St
     // The crank's transition_to_withdraw_only() handles moving lp_transitioning → lp_withdraw_only
 }
 
-/// Add liquidity back from quantum redeem (deprecated - use add_liquidity_from_quantum_redeem_with_buckets)
-/// Kept for backward compatibility
 public(package) fun add_liquidity_from_quantum_redeem<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset: Balance<AssetType>,

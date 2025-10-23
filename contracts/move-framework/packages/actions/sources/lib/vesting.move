@@ -751,8 +751,6 @@ public fun next_vest_time<CoinType>(
     )
 }
 
-// NOTE: Expiry management removed - doesn't make sense for beneficiary to set their own expiry
-
 /// Proposes to cancel a vesting
 public fun new_cancel_vesting<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
@@ -824,9 +822,6 @@ public fun delete_cancel_vesting_action(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, automatically cleaned up
 }
-
-// === Private Functions ===
-// (Removed compute_vested - now using stream_utils::calculate_linear_vested)
 
 // === Test Functions ===
 

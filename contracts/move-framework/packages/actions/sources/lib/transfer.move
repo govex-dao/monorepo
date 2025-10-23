@@ -21,7 +21,6 @@ use account_protocol::{
 };
 
 // === Use Fun Aliases ===
-// Removed - add_typed_action is now called directly
 
 // === Errors ===
 

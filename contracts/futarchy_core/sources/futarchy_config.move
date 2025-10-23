@@ -193,7 +193,6 @@ public struct FutarchyConfig has copy, drop, store {
 }
 
 /// Dynamic state stored on Account via dynamic fields
-/// This is not part of the config itself but tracked separately
 public struct DaoState has store {
     operational_state: u8,
     active_proposals: u64,
@@ -261,9 +260,6 @@ public fun new_dao_state(): DaoState {
     }
 }
 
-// REMOVED: new_slash_distribution - legacy code, not used
-// REMOVED: SlashDistribution struct and getters - legacy code, not used
-
 // === Getters for FutarchyConfig ===
 
 public fun asset_type(config: &FutarchyConfig): &String {
@@ -317,8 +313,6 @@ public fun early_resolve_config(config: &FutarchyConfig): &EarlyResolveConfig {
 public fun refund_quota_on_eviction(config: &FutarchyConfig): bool {
     config.refund_quota_on_eviction
 }
-
-// REMOVED: Getters for SlashDistribution - legacy code, not used
 
 // === Getters for DaoState ===
 
@@ -485,8 +479,6 @@ public fun with_dao_score(config: FutarchyConfig, dao_score: u64): FutarchyConfi
     }
 }
 
-// REMOVED: with_slash_distribution - legacy code, not used
-
 /// Builder function: Set optimistic intent challenge enabled
 ///
 /// If true: Optimistic actions require challenge period (DAO can challenge)
@@ -622,7 +614,6 @@ public fun spot_amm_fee_bps(config: &FutarchyConfig): u64 {
     dao_config::spot_amm_fee_bps(dao_config::trading_params(&config.config))
 }
 
-// Deprecated: use conditional_amm_fee_bps instead
 public fun amm_total_fee_bps(config: &FutarchyConfig): u64 {
     dao_config::conditional_amm_fee_bps(dao_config::trading_params(&config.config))
 }
@@ -837,8 +828,6 @@ public fun set_early_resolve_config(
 public fun set_refund_quota_on_eviction(config: &mut FutarchyConfig, refund: bool) {
     config.refund_quota_on_eviction = refund;
 }
-
-// REMOVED: update_slash_distribution - legacy code, not used
 
 /// Set proposal enablement state
 ///

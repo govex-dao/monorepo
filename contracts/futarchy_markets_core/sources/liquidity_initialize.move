@@ -49,11 +49,6 @@ public fun create_outcome_markets<AssetType, StableType>(
         j = j + 1;
     };
 
-    // NOTE: TreasuryCap registration check removed for test compatibility
-    // In production flow (via create_escrow_for_market + register_outcome_caps_with_escrow),
-    // caps are properly registered. In test flow (via initialize_market), caps may not be registered.
-    // This is acceptable since tests don't require actual conditional coin minting.
-
     let mut amm_pools = vector[];
 
     // 1. Deposit spot liquidity into escrow (quantum liquidity model)
@@ -84,16 +79,5 @@ public fun create_outcome_markets<AssetType, StableType>(
         i = i + 1;
     };
 
-    // Note: Validation removed - quantum liquidity means supplies won't match AMM reserves
-    // in the same way as the old system. Invariants are checked differently now.
-
     amm_pools
 }
-
-// REMOVED: assert_initial_reserves_consistency
-// The old validation checked that AMM reserves + token supply = escrow balance
-// With quantum liquidity model, this relationship is different:
-// - Escrow holds ALL spot tokens
-// - Each outcome has conditional coins minted equal to spot balance
-// - AMMs trade conditional coins, not spot
-// Validation now happens at the escrow level via quantum invariant checks

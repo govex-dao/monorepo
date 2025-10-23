@@ -66,7 +66,6 @@ public fun increment_action_idx<Outcome: store>(executable: &mut Executable<Outc
 }
 
 // === Helper Functions ===
-// (ExecutionContext removed - PTBs handle object flow naturally)
 
 // === Package functions ===
 
@@ -136,14 +135,6 @@ fun test_new_executable() {
     test_destroy(clock);
 }
 
-// Test removed: next_action function no longer exists
-// Actions are now accessed via action specs and deserialized on demand
-
-// Test removed: contains_action function no longer exists
-// Actions are now stored as serialized bytes and checked via type names
-
-// Test removed: contains_action function no longer exists
-// Actions are now stored as serialized bytes and checked via type names
 
 #[test]
 fun test_destroy_executable() {

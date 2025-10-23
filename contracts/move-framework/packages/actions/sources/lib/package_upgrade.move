@@ -37,7 +37,6 @@ use account_actions::{
 };
 
 // === Use Fun Aliases ===
-// Removed - add_typed_action is now called directly
 
 // === Error ===
 
@@ -230,8 +229,6 @@ public struct UpgradeIndex has store {
     packages_info: VecMap<String, address>,
 }
 
-/// DEPRECATED: Old intent-based action structs (DO NOT USE - use digest-based flow instead)
-/// These are kept only for the restrict action which still works
 public struct RestrictAction has drop, store {
     // name of the package
     name: String,

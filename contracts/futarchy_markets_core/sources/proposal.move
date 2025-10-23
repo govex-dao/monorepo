@@ -485,10 +485,6 @@ public fun initialize_market<AssetType, StableType>(
     (actual_proposal_id, market_state_id, STATE_REVIEW)
 }
 
-// The create function has been removed as it's not used in production.
-// All proposals are created through initialize_market which properly handles proposal IDs
-// generated from the priority queue.
-
 /// Create a PREMARKET proposal without market/escrow/liquidity.
 /// This reserves the proposal "as next" without consuming DAO/proposer liquidity.
 #[allow(lint(share_owned))]
@@ -855,8 +851,6 @@ public fun initialize_market_fields<AssetType, StableType>(
     // Use option::fill to replace None with Some value
     option::fill(&mut proposal.market_state_id, market_state_id);
     option::fill(&mut proposal.escrow_id, escrow_id);
-    // amm_pools removed - now stored in MarketState
-    // LP caps no longer needed - using conditional tokens
     option::fill(&mut proposal.timing.market_initialized_at, initialized_at);
     option::fill(&mut proposal.liquidity_provider, liquidity_provider);
     proposal.state = STATE_REVIEW; // Advance state to REVIEW
@@ -998,9 +992,6 @@ public fun calculate_current_winner<AssetType, StableType>(
 
     (winner_idx, winner_twap, spread)
 }
-
-// Early resolve functions removed to avoid circular dependencies.
-// Callers should use early_resolve::update_metrics() and early_resolve::check_eligibility() directly.
 
 // === Private Functions ===
 
@@ -1279,7 +1270,6 @@ public fun get_market_init_params<AssetType, StableType>(proposal: &Proposal<Ass
 /// Advances the proposal state based on elapsed time
 /// Transitions from REVIEW to TRADING when review period ends
 /// Returns true if state was changed
-/// NOTE: spot_pool parameter removed - registration happens in proposal_lifecycle
 public fun advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
@@ -1373,7 +1363,6 @@ public fun set_winning_outcome<AssetType, StableType>(
 
 /// Finalize the proposal with the winning outcome computed on-chain
 /// This combines computing the winner from TWAP, setting the winning outcome and updating state atomically
-/// @deprecated Use proposal_lifecycle::finalize_proposal_market instead - this version lacks critical intent cleanup
 #[test_only]
 public fun finalize_proposal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
@@ -1532,11 +1521,9 @@ public fun make_cancel_witness<AssetType, StableType>(
     let addr = object::uid_to_address(&proposal.id);
     let mut spec_opt = take_intent_spec_for_outcome(proposal, outcome_index);
     if (option::is_some(&spec_opt)) {
-        // Reset action count for this outcome now that the spec has been removed
         let action_count_slot =
             vector::borrow_mut(&mut proposal.outcome_data.actions_per_outcome, outcome_index);
         *action_count_slot = 0;
-        // Spec exists, create witness
         option::destroy_some(spec_opt);
         option::some(CancelWitness {
             proposal: addr,

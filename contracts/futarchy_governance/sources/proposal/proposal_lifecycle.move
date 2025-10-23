@@ -392,10 +392,6 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
         i = i + 1;
     };
 
-    // --- REMOVED: REGISTRY PRUNING ---
-    // Proposal reservation system deleted (second-order proposals)
-    // --- END REMOVED SECTION ---
-
     // --- BEGIN OUTCOME CREATOR FEE REFUNDS & REWARDS ---
     // Economic model per user requirement:
     // - Outcome 0 wins: DAO keeps all fees (reject/no action taken)
@@ -741,21 +737,6 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         timestamp: clock.timestamp_ms(),
     });
 }
-
-/// REMOVED: initialize_reserved_premarket_to_review
-///
-/// With TreasuryCap-based conditional coins, market initialization requires knowing
-/// the specific conditional coin types (which come from the registry).
-///
-/// Users must build a PTB that:
-/// 1. escrow = proposal::create_escrow_for_market(proposal, clock)
-/// 2. proposal::register_outcome_caps_with_escrow(proposal, escrow, 0, <Coin0Asset>, <Coin0Stable>)
-/// 3. proposal::register_outcome_caps_with_escrow(proposal, escrow, 1, <Coin1Asset>, <Coin1Stable>)
-///    ... repeat for N outcomes
-/// 4. proposal::initialize_market_with_escrow(proposal, escrow, asset_liquidity, stable_liquidity, clock)
-/// 5. proposal_lifecycle::finalize_premarket_initialization(queue, proposal)
-///
-/// The frontend/SDK must track which conditional coin types were used for each proposal.
 
 /// Finalize premarket initialization by clearing the reservation
 /// Call this after proposal::initialize_market_with_escrow() in the same PTB

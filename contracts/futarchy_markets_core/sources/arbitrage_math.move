@@ -756,8 +756,6 @@ fun early_exit_check_cond_to_spot(
 /// Uses u256 for exact comparison (no precision loss)
 ///
 /// Returns true if a × b <= c × d
-///
-/// BUG FIX: Removed all special cases - u256 handles zeros correctly!
 fun safe_cross_product_le(a: u128, b: u128, c: u128, d: u128): bool {
     // u256 multiplication handles all cases correctly, including zeros
     // No special cases needed - simpler and correct

@@ -111,11 +111,6 @@ public struct SecurityConfig has copy, drop, store {
     require_deadman_council: bool, // If true, all councils must support dead-man switch
 }
 
-/// Storage configuration for DAO files
-public struct StorageConfig has copy, drop, store {
-    // REMOVED: allow_walrus_blobs - Walrus functionality moved to v3_futarchy_legal
-}
-
 /// Conditional coin metadata configuration for proposals
 public struct ConditionalCoinConfig has copy, drop, store {
     use_outcome_index: bool, // If true, append outcome index to name
@@ -155,7 +150,6 @@ public struct DaoConfig has copy, drop, store {
     governance_config: GovernanceConfig,
     metadata_config: MetadataConfig,
     security_config: SecurityConfig,
-    storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
     sponsorship_config: SponsorshipConfig,
@@ -302,11 +296,6 @@ public fun new_security_config(
     }
 }
 
-/// Create a new storage configuration
-public fun new_storage_config(): StorageConfig {
-    StorageConfig {}
-}
-
 /// Create conditional coin config
 public fun new_conditional_coin_config(
     use_outcome_index: bool,
@@ -398,7 +387,6 @@ public fun new_dao_config(
     governance_config: GovernanceConfig,
     metadata_config: MetadataConfig,
     security_config: SecurityConfig,
-    storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
     sponsorship_config: SponsorshipConfig,
@@ -409,7 +397,6 @@ public fun new_dao_config(
         governance_config,
         metadata_config,
         security_config,
-        storage_config,
         conditional_coin_config,
         quota_config,
         sponsorship_config,
@@ -479,8 +466,6 @@ public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_
 
 public fun queue_entry_bond(gov: &GovernanceConfig): u64 { gov.queue_entry_bond }
 
-// REMOVED: proposal_recreation_window_ms and max_proposal_chain_depth (second-order proposals deleted)
-
 public fun queue_fullness_multiplier_bps(gov: &GovernanceConfig): u64 {
     gov.queue_fullness_multiplier_bps
 }
@@ -522,15 +507,6 @@ public fun deadman_enabled(sec: &SecurityConfig): bool { sec.deadman_enabled }
 public fun recovery_liveness_ms(sec: &SecurityConfig): u64 { sec.recovery_liveness_ms }
 
 public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_deadman_council }
-
-// Storage config getters
-public fun storage_config(config: &DaoConfig): &StorageConfig { &config.storage_config }
-
-public fun storage_config_mut(config: &mut DaoConfig): &mut StorageConfig {
-    &mut config.storage_config
-}
-
-// REMOVED: allow_walrus_blobs getter - Walrus functionality moved to v3_futarchy_legal
 
 // Conditional coin config getters
 public fun conditional_coin_config(config: &DaoConfig): &ConditionalCoinConfig {
@@ -786,8 +762,6 @@ public(package) fun set_queue_entry_bond(gov: &mut GovernanceConfig, amount: u64
     gov.queue_entry_bond = amount;
 }
 
-// REMOVED: Setters for proposal_recreation_window_ms and max_proposal_chain_depth
-
 public(package) fun set_queue_fullness_multiplier_bps(gov: &mut GovernanceConfig, points: u64) {
     assert!(points <= constants::max_fee_bps(), EInvalidFee);
     gov.queue_fullness_multiplier_bps = points;
@@ -845,9 +819,6 @@ public(package) fun set_recovery_liveness_ms(sec: &mut SecurityConfig, ms: u64) 
 public(package) fun set_require_deadman_council(sec: &mut SecurityConfig, val: bool) {
     sec.require_deadman_council = val;
 }
-
-// Storage config direct setters
-// REMOVED: set_allow_walrus_blobs - Walrus functionality moved to v3_futarchy_legal
 
 // Conditional coin config direct setters
 
@@ -943,7 +914,6 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
-        storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         sponsorship_config: config.sponsorship_config,
@@ -958,7 +928,6 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
-        storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         sponsorship_config: config.sponsorship_config,
@@ -973,7 +942,6 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         governance_config: new_gov,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
-        storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         sponsorship_config: config.sponsorship_config,
@@ -988,7 +956,6 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         governance_config: config.governance_config,
         metadata_config: new_meta,
         security_config: config.security_config,
-        storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         sponsorship_config: config.sponsorship_config,
@@ -1003,27 +970,12 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: new_sec,
-        storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         sponsorship_config: config.sponsorship_config,
     }
 }
 
-/// Update storage configuration (returns new config)
-public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig): DaoConfig {
-    DaoConfig {
-        trading_params: config.trading_params,
-        twap_config: config.twap_config,
-        governance_config: config.governance_config,
-        metadata_config: config.metadata_config,
-        security_config: config.security_config,
-        storage_config: new_storage,
-        conditional_coin_config: config.conditional_coin_config,
-        quota_config: config.quota_config,
-        sponsorship_config: config.sponsorship_config,
-    }
-}
 
 /// Update conditional coin configuration (returns new config)
 public fun update_conditional_coin_config(
@@ -1036,7 +988,6 @@ public fun update_conditional_coin_config(
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
-        storage_config: config.storage_config,
         conditional_coin_config: new_coin_config,
         quota_config: config.quota_config,
         sponsorship_config: config.sponsorship_config,
@@ -1051,7 +1002,6 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
-        storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: new_quota,
         sponsorship_config: config.sponsorship_config,
@@ -1066,7 +1016,6 @@ public fun update_sponsorship_config(config: &DaoConfig, new_sponsorship: Sponso
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
-        storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         sponsorship_config: new_sponsorship,
@@ -1125,11 +1074,6 @@ public fun default_security_config(): SecurityConfig {
     }
 }
 
-/// Get default storage configuration
-public fun default_storage_config(): StorageConfig {
-    StorageConfig {}
-}
-
 /// Get default conditional coin configuration (dynamic mode - derives from base token)
 public fun default_conditional_coin_config(): ConditionalCoinConfig {
     ConditionalCoinConfig {
@@ -1157,4 +1101,3 @@ public fun default_sponsorship_config(): SponsorshipConfig {
         default_sponsor_quota_amount: 1, // 1 sponsorship per period by default
     }
 }
-

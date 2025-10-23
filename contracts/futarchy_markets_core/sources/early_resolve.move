@@ -123,14 +123,13 @@ public fun update_metrics<AssetType, StableType>(
         });
     };
 
-    // Emit MetricsUpdated event (simplified - no flip count or revenue tracking)
     event::emit(MetricsUpdated {
         proposal_id,
         current_winner: market_state::get_current_winner_index(market_state),
-        flip_count: 0, // Removed exponential decay tracking
-        total_trades: 0, // Removed trade tracking
-        total_fees: 0, // Removed revenue tracking
-        eligible_for_early_resolve: false, // Computed in check_eligibility
+        flip_count: 0,
+        total_trades: 0,
+        total_fees: 0,
+        eligible_for_early_resolve: false,
         timestamp: current_time_ms,
     });
 }
@@ -251,8 +250,6 @@ public fun time_until_eligible<AssetType, StableType>(
 }
 
 // === Getter Functions ===
-// Note: These are now redundant wrappers around market_state functions
-// Could be removed in favor of calling market_state functions directly
 
 /// Get current winner index from market state
 public fun current_winner_from_state(market_state: &MarketState): u64 {

@@ -51,7 +51,6 @@ public struct TwapConfigUpdate has drop {}
 public struct GovernanceUpdate has drop {}
 /// Update metadata table
 public struct MetadataTableUpdate has drop {}
-// REMOVED: SlashDistributionUpdate - legacy code, not used
 /// Update queue parameters
 public struct QueueParamsUpdate has drop {}
 /// Update early resolve configuration
@@ -70,7 +69,6 @@ const EInvalidParameter: u64 = 2;
 const EEmptyString: u64 = 3;
 const EMismatchedKeyValueLength: u64 = 4;
 const EInvalidConfigType: u64 = 5;
-// REMOVED: EInvalidSlashDistribution - legacy code, not used
 const EWrongAction: u64 = 7;
 const EUnsupportedActionVersion: u64 = 8;
 const ENotActive: u64 = 9; // DAO must be in ACTIVE state for this operation
@@ -135,15 +133,6 @@ public struct GovernanceSettingsChanged has copy, drop {
     account_id: ID,
     timestamp: u64,
 }
-
-// REMOVED: SlashDistributionChanged event - legacy code, not used
-
-/// Emitted when storage config is updated
-/// REMOVED: StorageConfigChanged event - Walrus functionality moved to v3_futarchy_legal
-// public struct StorageConfigChanged has copy, drop {
-//     account_id: ID,
-//     timestamp: u64,
-// }
 
 /// Emitted when conditional metadata config is updated
 public struct ConditionalMetadataChanged has copy, drop {
@@ -243,12 +232,6 @@ public struct QueueParamsUpdateAction has store, drop, copy {
     max_proposer_funded: Option<u64>,
     max_queue_size: Option<u64>,
     fee_escalation_basis_points: Option<u64>,
-}
-
-/// Storage configuration update action
-/// REMOVED: Action deprecated - Walrus functionality moved to v3_futarchy_legal
-public struct StorageConfigUpdateAction has store, drop, copy {
-    // REMOVED: allow_walrus_blobs field
 }
 
 /// Conditional metadata configuration update action
@@ -989,25 +972,6 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
-/// Execute a slash distribution update action
-// REMOVED: do_update_slash_distribution - legacy code, not used
-
-/// Execute a storage config update action
-/// REMOVED: Function deprecated - Walrus functionality moved to v3_futarchy_legal
-/// StorageConfig now has no fields, so this action is a no-op
-public fun do_update_storage_config<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    _account: &mut Account,
-    _version: VersionWitness,
-    _intent_witness: IW,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Just increment action index and do nothing
-    // StorageConfig is now empty (Walrus moved to v3_futarchy_legal)
-    executable::increment_action_idx(executable);
-}
-
 /// Update conditional metadata configuration
 /// This controls how conditional token metadata is derived during proposal creation
 public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
@@ -1656,12 +1620,6 @@ public fun new_queue_params_update_action(
     };
     validate_queue_params_update(&action);
     action
-}
-
-/// Create a storage config update action
-/// REMOVED: Function deprecated - Walrus functionality moved to v3_futarchy_legal
-public fun new_storage_config_update_action(): StorageConfigUpdateAction {
-    StorageConfigUpdateAction {}
 }
 
 /// Create a conditional metadata update action

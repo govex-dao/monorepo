@@ -149,5 +149,4 @@ public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
 // - Transfers: account_actions::vault_intents
 // - Config: futarchy::config_intents
 // - Liquidity: futarchy::liquidity_intents
-// - Dissolution: REMOVED (moved to v3_dissolution)
 // - Streaming: futarchy::stream_intents

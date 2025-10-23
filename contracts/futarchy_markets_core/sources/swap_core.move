@@ -248,18 +248,6 @@ public fun swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, Sta
     )
 }
 
-// DELETED: swap_stable_to_asset_entry
-// DELETED: swap_multiple_asset_to_stable_entry
-// DELETED: swap_multiple_stable_to_asset_entry
-// DELETED: swap_stable_to_asset_with_registry_2
-// All old entry functions removed - use swap_clean.move instead
-//
-// Users should use the 4 clean entry functions in swap_clean.move:
-// - swap_spot_stable_to_asset (with auto-arb)
-// - swap_spot_asset_to_stable (with auto-arb)
-// - swap_conditional_stable_to_asset (with auto-arb)
-// - swap_conditional_asset_to_stable (with auto-arb)
-
 // === CONDITIONAL TRADER CONSTRAINTS ===
 //
 // Conditional traders CANNOT perform cross-market arbitrage without complete sets.

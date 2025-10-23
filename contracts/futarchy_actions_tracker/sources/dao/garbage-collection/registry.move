@@ -18,51 +18,13 @@ use futarchy_actions::liquidity_actions;
 use futarchy_actions::quota_actions;
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 use futarchy_governance_actions::protocol_admin_actions;
-// REMOVED: futarchy_lifecycle::dissolution_actions moved to v3_dissolution
 use futarchy_oracle::oracle_actions;
-// REMOVED: futarchy_stream_actions - use vault streams instead
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.
 /// Each function delegates to the appropriate module's delete function.
 
-// === DAO File Actions ===
-// REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
-// public fun delete_dao_file_create_registry(expired: &mut Expired) {
-//     dao_file_actions::delete_create_registry(expired);
-// }
-//
-// public fun delete_dao_file_create_root_document(expired: &mut Expired) {
-//     dao_file_actions::delete_create_root_document(expired);
-// }
-//
-// public fun delete_dao_file_delete_document(expired: &mut Expired) {
-//     dao_file_actions::delete_delete_document(expired);
-// }
-//
-// public fun delete_dao_file_add_chunk(expired: &mut Expired) {
-//     dao_file_actions::delete_add_chunk(expired);
-// }
-//
-// public fun delete_dao_file_update(expired: &mut Expired) {
-//     dao_file_actions::delete_update_chunk(expired);
-// }
-//
-// public fun delete_dao_file_remove(expired: &mut Expired) {
-//     dao_file_actions::delete_remove_chunk(expired);
-// }
-//
-// public fun delete_dao_file_set_chunk_immutable(expired: &mut Expired) {
-//     dao_file_actions::delete_set_chunk_immutable(expired);
-// }
-//
-// public fun delete_dao_file_set_document_immutable(expired: &mut Expired) {
-//     dao_file_actions::delete_set_document_immutable(expired);
-// }
-//
-// public fun delete_dao_file_set_registry_immutable(expired: &mut Expired) {
-//     dao_file_actions::delete_set_registry_immutable(expired);
-// }
+
 
 // === Config Actions ===
 public fun delete_config_update(expired: &mut Expired) {
@@ -81,55 +43,8 @@ public fun delete_governance_update(expired: &mut Expired) {
     config_actions::delete_governance_update<FutarchyConfig>(expired);
 }
 
-// REMOVED: delete_slash_distribution - underlying function was removed as legacy code
-// public fun delete_slash_distribution(expired: &mut Expired) {
-//     config_actions::delete_slash_distribution_update<FutarchyConfig>(expired);
-// }
 
-// === Security Council Actions ===
-// These are stub implementations since council/policy actions are not yet implemented
-public fun delete_create_council(_expired: &mut Expired) {
-    // Stub: Council actions module not yet implemented
-}
 
-public fun delete_update_council_membership(_expired: &mut Expired) {
-    // Stub: Council actions module not yet implemented
-}
-
-public fun delete_approve_policy_change(_expired: &mut Expired) {
-    // Stub: Council actions module not yet implemented
-}
-
-// === Policy Actions ===
-public fun delete_set_policy(_expired: &mut Expired) {
-    // Stub: Policy actions module not yet implemented
-}
-
-public fun delete_remove_policy(_expired: &mut Expired) {
-    // Stub: Policy actions module not yet implemented
-}
-
-public fun delete_register_council(_expired: &mut Expired) {
-    // Stub: Council actions module not yet implemented
-}
-
-public fun delete_set_object_policy(_expired: &mut Expired) {
-    // Stub: Policy actions module not yet implemented
-}
-
-public fun delete_remove_object_policy(_expired: &mut Expired) {
-    // Stub: Policy actions module not yet implemented
-}
-
-// === Vault/Custody Actions ===
-// REMOVED: custody_actions deleted, add/remove coin type actions deleted
-public fun delete_add_coin_type<CoinType>(_expired: &mut Expired) {
-    // Stub: Coin type management actions not yet implemented
-}
-
-public fun delete_remove_coin_type<CoinType>(_expired: &mut Expired) {
-    // Stub: Coin type management actions not yet implemented
-}
 
 // === Liquidity Actions ===
 public fun delete_add_liquidity<AssetType, StableType>(expired: &mut Expired) {
@@ -152,23 +67,6 @@ public fun delete_update_pool_params(expired: &mut Expired) {
     liquidity_actions::delete_update_pool_params(expired);
 }
 
-// === Dissolution Actions ===
-// REMOVED: Moved to v3_dissolution package
-// public fun delete_initiate_dissolution(expired: &mut Expired) {
-//     dissolution_actions::delete_initiate_dissolution(expired);
-// }
-//
-// public fun delete_batch_distribute(expired: &mut Expired) {
-//     dissolution_actions::delete_batch_distribute(expired);
-// }
-//
-// public fun delete_finalize_dissolution(expired: &mut Expired) {
-//     dissolution_actions::delete_finalize_dissolution(expired);
-// }
-//
-// public fun delete_cancel_dissolution(expired: &mut Expired) {
-//     dissolution_actions::delete_cancel_dissolution(expired);
-// }
 
 // === Package Upgrade Actions ===
 public fun delete_upgrade_commit(expired: &mut Expired) {
@@ -241,39 +139,11 @@ public fun delete_return_cap<Cap>(expired: &mut Expired) {
     access_control::delete_return<Cap>(expired);
 }
 
-// === Stream/Payment Actions ===
-// REMOVED: Stream actions migrated to vault streams
-// Use vault::delete_cancel_stream for stream cleanup
-//
-// public fun delete_create_payment<CoinType>(expired: &mut Expired) {
-//     vault::delete_cancel_stream(expired);
-// }
-//
-// For vault streams, use:
-// - vault::delete_cancel_stream(expired)
-// - vault::delete_toggle_stream_pause(expired)
-// - vault::delete_toggle_stream_freeze(expired)
-
-// === Governance Actions ===
-// REMOVED: Second-order proposals and reservation system deleted
-
-// === Oracle Actions ===
-// NOTE: ConditionalMint and TieredMint have been replaced by PriceBasedMintGrant shared object
-// ReadOraclePrice action has drop, no cleanup needed
-
 // === Memo Actions ===
 public fun delete_memo(expired: &mut Expired) {
     memo::delete_memo(expired);
 }
 
-// === Platform Fee Actions ===
-// REMOVED: Deprecated platform fee collection system deleted
-
-// === Walrus Renewal Actions ===
-// REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
-// public fun delete_walrus_renewal(expired: &mut Expired) {
-//     walrus_renewal::delete_walrus_renewal(expired);
-// }
 
 // === Quota Actions ===
 public fun delete_set_quotas(expired: &mut Expired) {

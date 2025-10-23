@@ -495,8 +495,6 @@ public fun get_recovery_fee(fee_manager: &FeeManager): u64 {
     fee_manager.recovery_fee
 }
 
-// Monthly fee system has been removed - replaced with per-execution fees
-
 // === AMM Fees ===
 
 // Structure to store stable coin balance information

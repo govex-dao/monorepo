@@ -48,13 +48,6 @@ const EWalrusBlobsNotAllowed: u64 = 9;
 
 // === Helper Functions ===
 
-/// Check if Walrus blobs are allowed for this DAO
-fun assert_walrus_blobs_allowed(account: &Account<FutarchyConfig>) {
-    let config = account::config<FutarchyConfig>(account);
-    let dao_cfg = futarchy_config::dao_config(config);
-    let storage_cfg = dao_config::storage_config(dao_cfg);
-    assert!(dao_config::allow_walrus_blobs(storage_cfg), EWalrusBlobsNotAllowed);
-}
 
 // === Witness Types ===
 
@@ -306,9 +299,6 @@ public fun do_add_chunk<Outcome: store, IW: drop>(
     let immutable_from = bcs::peel_option_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Check if Walrus blobs are allowed
-    assert_walrus_blobs_allowed(account);
-
     executable::increment_action_idx(executable);
 
     // Return hot potato - caller must provide Walrus Blob
@@ -377,9 +367,6 @@ public fun do_add_sunset_chunk<Outcome: store, IW: drop>(
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Check if Walrus blobs are allowed
-    assert_walrus_blobs_allowed(account);
-
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
@@ -447,9 +434,6 @@ public fun do_add_sunrise_chunk<Outcome: store, IW: drop>(
     let effective_from_ms = bcs::peel_u64(&mut reader);
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Check if Walrus blobs are allowed
-    assert_walrus_blobs_allowed(account);
 
     executable::increment_action_idx(executable);
 
@@ -520,9 +504,6 @@ public fun do_add_temporary_chunk<Outcome: store, IW: drop>(
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Check if Walrus blobs are allowed
-    assert_walrus_blobs_allowed(account);
-
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
@@ -589,9 +570,6 @@ public fun do_add_chunk_with_scheduled_immutability<Outcome: store, IW: drop>(
     let expected_sequence = bcs::peel_u64(&mut reader);
     let immutable_from_ms = bcs::peel_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Check if Walrus blobs are allowed
-    assert_walrus_blobs_allowed(account);
 
     executable::increment_action_idx(executable);
 
@@ -662,9 +640,6 @@ public fun do_update_chunk<Outcome: store, IW: drop>(
     let expected_sequence = bcs::peel_u64(&mut reader);
     let chunk_id = object::id_from_address(bcs::peel_address(&mut reader));
     bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Check if Walrus blobs are allowed
-    assert_walrus_blobs_allowed(account);
 
     executable::increment_action_idx(executable);
 

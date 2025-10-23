@@ -36,7 +36,6 @@ use fun dynamic_field::remove as UID.df_remove;
 // === Errors ===
 
 const EIntentNotFound: u64 = 0;
-// REMOVED: EObjectAlreadyLocked and EObjectNotLocked - no locking in new design
 const ENoExecutionTime: u64 = 3;
 const EExecutionTimesNotAscending: u64 = 4;
 const EActionsNotEmpty: u64 = 5;
@@ -245,8 +244,6 @@ public fun new_params_with_rand_key(
     (params, key)
 }
 
-// REMOVED: Old add_action function without types - use add_typed_action instead
-
 /// Add a typed action with pre-serialized bytes (serialize-then-destroy pattern)
 /// Callers must serialize the action and then explicitly destroy it
 public fun add_typed_action<Outcome, T: drop, IW: drop>(
@@ -326,8 +323,6 @@ public fun params_expiration_time(params: &Params): u64 {
 public fun length(intents: &Intents): u64 {
     intents.inner.length()
 }
-
-// REMOVED: locked() getter - no longer tracking locked objects
 
 public fun contains(intents: &Intents, key: String): bool {
     intents.inner.contains(key)
@@ -515,10 +510,6 @@ public(package) fun pop_front_execution_time<Outcome>(
 ): u64 {
     intent.execution_times.remove(0)
 }
-
-// REMOVED: lock and unlock functions - no locking needed in the new design
-// Conflicts between intents are natural in DAO governance where multiple proposals
-// can compete for the same resources
 
 /// Removes an intent being executed if the execution_time is reached
 /// Outcome must be validated in AccountMultisig to be destroyed
@@ -782,7 +773,6 @@ fun test_empty_intents() {
     let intents = empty(ctx);
     
     assert_eq(length(&intents), 0);
-    // No longer checking locked() - removed in new design
     assert!(!contains(&intents, b"test_key".to_string()));
     
     destroy(intents);
@@ -884,10 +874,6 @@ fun test_remove_nonexistent_intent() {
     destroy(removed_intent);
     destroy(intents);
 }
-
-// REMOVED: test_lock_and_unlock_object - no locking in new design
-// REMOVED: test_lock_already_locked_object - no locking in new design  
-// REMOVED: test_unlock_not_locked_object - no locking in new design
 
 #[test]
 fun test_pop_front_execution_time() {

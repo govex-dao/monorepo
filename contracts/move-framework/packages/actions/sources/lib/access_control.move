@@ -36,7 +36,6 @@ use account_protocol::{
 use account_actions::version;
 
 // === Use Fun Aliases ===
-// Removed - add_typed_action is now called directly
 
 // === Errors ===
 

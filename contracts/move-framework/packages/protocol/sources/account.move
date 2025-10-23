@@ -911,8 +911,6 @@ public(package) fun track_object_removal<Config: store>(account: &mut Account, _
     };
 }
 
-// REMOVED: lock_object and unlock_object - no locking in new design
-// Conflicts between intents are natural in DAO governance
 
 //**************************************************************************************************//
 // Tests                                                                                            //
@@ -1238,10 +1236,6 @@ fun test_assert_is_config_module_correct_witness() {
     destroy(account);
 }
 
-// REMOVED: test_assert_config_module_wrong_witness_package_address
-// REMOVED: test_assert_config_module_wrong_witness_module
-// Both tests used TestWitness2 which is in the same module as TestConfig, so they can't test cross-module validation
-// Would need to define TestWitness2 in a separate module to properly test this
 
 // === Test Helper Functions ===
 

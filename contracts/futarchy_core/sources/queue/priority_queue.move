@@ -949,7 +949,6 @@ public fun try_activate_next<StableCoin>(
 /// - 100%: 22.5x base (10x * 1.5^2)
 ///
 /// Note: Occupancy is calculated relative to max_proposer_funded (the queue capacity).
-/// DEPRECATED: This version doesn't use config. Use calculate_min_fee_with_config instead.
 public fun calculate_min_fee<StableCoin>(queue: &ProposalQueue<StableCoin>): u64 {
     // Use default multiplier for backwards compatibility
     let default_multiplier_bps = 5000; // 50%
@@ -1057,10 +1056,6 @@ public fun would_accept_proposal<StableCoin>(
 
     false
 }
-
-// REMOVED: slash_and_distribute_fee - replaced by new split logic using constants
-// Old system: Used SlashDistribution config for custom splits
-// New system: 90% refund to proposer, 10% to protocol (from constants)
 
 /// Mark a proposal as active after extraction from queue
 /// Sets is_proposal_live to true

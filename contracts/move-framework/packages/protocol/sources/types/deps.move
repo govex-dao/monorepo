@@ -69,24 +69,6 @@ public fun new(
         registry.is_valid_package(names[0], addresses[0], versions[0]),
         EAccountProtocolMissing,
     );
-    // ✅ FIXED: Removed fragile negative assertion for position 1 (AccountConfig)
-    //
-    // DESIGN RATIONALE:
-    // Position 1 must contain an AccountConfig implementation, but config names vary
-    // (FutarchyConfig, MultiSigConfig, CustomConfig, etc.). We cannot use exact string
-    // matching like we do for AccountProtocol.
-    //
-    // OLD APPROACH (FRAGILE):
-    //   assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
-    //   Problem: Breaks if legitimate packages contain "AccountActions" in their name
-    //
-    // NEW APPROACH (TYPE-SAFE):
-    //   - Rely on Move's type system for validation
-    //   - Account<Config> construction requires a valid Config type parameter
-    //   - Extensions whitelist validates package authenticity via is_extension()
-    //   - String validation at Deps level is redundant and error-prone
-    //
-    // Type safety is enforced at compile time, not runtime string matching.
     assert!(names.length() >= 2, EAccountConfigMissing);
 
     let mut inner = vector<Dep>[];
@@ -152,11 +134,7 @@ public fun new_inner(
         names.length() == addresses.length() && addresses.length() == versions.length(),
         EDepsNotSameLength,
     );
-    // AccountProtocol is mandatory and cannot be removed
     assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
-    // ✅ FIXED: Removed fragile negative assertion for position 1 (AccountConfig)
-    // See detailed rationale in new() function above - type safety is enforced by
-    // Move's type system (Account<Config>) rather than runtime string matching.
     assert!(names.length() >= 2, EAccountConfigMissing);
 
     let mut inner = vector<Dep>[];

@@ -16,25 +16,13 @@ use sui::tx_context::TxContext;
 /// Drain an `Expired` bag by invoking all futarchy delete hooks.
 /// This handles all non-generic and common generic actions.
 fun drain_all(expired: &mut Expired) {
-    // DAO File Actions
-    // REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
-    // gc_registry::delete_dao_file_create_registry(expired);
-    // gc_registry::delete_dao_file_create_root_document(expired);
-    // gc_registry::delete_dao_file_delete_document(expired);
-    // gc_registry::delete_dao_file_add_chunk(expired);
-    // gc_registry::delete_dao_file_update(expired);
-    // gc_registry::delete_dao_file_remove(expired);
-    // gc_registry::delete_dao_file_set_chunk_immutable(expired);
-    // gc_registry::delete_dao_file_set_document_immutable(expired);
-    // gc_registry::delete_dao_file_set_registry_immutable(expired);
+
 
     // Config Actions
     gc_registry::delete_config_update(expired);
     gc_registry::delete_trading_params(expired);
     gc_registry::delete_metadata_update(expired);
     gc_registry::delete_governance_update(expired);
-    // REMOVED: delete_slash_distribution - underlying function was removed as legacy code
-    // gc_registry::delete_slash_distribution(expired);
 
     // Security Council
     gc_registry::delete_create_council(expired);
@@ -44,12 +32,6 @@ fun drain_all(expired: &mut Expired) {
     // Policy Actions
     gc_registry::delete_set_policy(expired);
     gc_registry::delete_remove_policy(expired);
-
-    // Dissolution Actions (MOVED TO V3 - commented out)
-    // gc_registry::delete_initiate_dissolution(expired);
-    // gc_registry::delete_batch_distribute(expired);
-    // gc_registry::delete_finalize_dissolution(expired);
-    // gc_registry::delete_cancel_dissolution(expired);
 
     // Package Upgrade
     gc_registry::delete_upgrade_commit(expired);
@@ -63,29 +45,11 @@ fun drain_all(expired: &mut Expired) {
     // Liquidity (non-generic)
     gc_registry::delete_update_pool_params(expired);
 
-    // Stream/Payment Actions (non-generic)
-    // REMOVED: Stream actions moved to v3_streams package
-    // gc_registry::delete_update_payment_recipient(expired);
-    // gc_registry::delete_add_withdrawer(expired);
-    // gc_registry::delete_remove_withdrawers(expired);
-    // gc_registry::delete_toggle_payment(expired);
-    // gc_registry::delete_challenge_withdrawals(expired);
-    // gc_registry::delete_cancel_challenged_withdrawals(expired);
-
-    // REMOVED: Governance Actions (second-order proposals deleted)
-
     // Note: Oracle price reading actions have drop ability, don't need cleanup
     // Only mint actions (which are generic) need cleanup
 
     // Memo Actions
     gc_registry::delete_memo(expired);
-
-    // REMOVED: Platform Fee Actions (deprecated system deleted)
-
-    // Walrus Renewal Actions
-    // REMOVED: futarchy_legal_actions moved to v3_futarchy_legal
-    // gc_registry::delete_walrus_renewal(expired);
-
 
     // Quota Actions
     gc_registry::delete_set_quotas(expired);

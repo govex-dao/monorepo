@@ -40,7 +40,6 @@ use account_protocol::{
 use account_actions::{version, stream_utils};
 
 // === Use Fun Aliases ===
-// Removed - add_typed_action is now called directly
 
 // === Errors ===
 
@@ -1422,5 +1421,3 @@ public fun stream_next_vest_time(
         current_time
     )
 }
-
-// NOTE: Expiry management removed - doesn't make sense for beneficiary to set their own expiry

@@ -168,9 +168,6 @@ public fun take_activator_reward<StableType>(
     }
 }
 
-// REMOVED: slash_proposal_fee_with_distribution - replaced by split_priority_fee_with_penalty
-// Old system used SlashDistribution config, new system uses constants for consistent behavior
-
 /// Gets the current protocol revenue
 public fun protocol_revenue<StableType>(manager: &ProposalFeeManager<StableType>): u64 {
     manager.protocol_revenue.value()
@@ -184,8 +181,6 @@ public fun withdraw_protocol_revenue<StableType>(
 ): Coin<StableType> {
     coin::from_balance(manager.protocol_revenue.split(amount), ctx)
 }
-
-// Debt tracking system removed - replaced with per-execution fees
 
 /// Called by the priority queue when a proposal is cancelled.
 /// Removes the pending fee from the manager and returns it as a Coin.
@@ -309,7 +304,6 @@ public fun deposit_revenue<StableType>(manager: &mut ProposalFeeManager<StableTy
 /// Refund fees to outcome creators whose outcome won
 /// This is called after a proposal is finalized and the winning outcome is determined
 /// Refunds are paid from protocol revenue
-/// DEPRECATED: Use proposal fee escrow instead for per-proposal tracking
 public fun refund_outcome_creator_fees<StableType>(
     manager: &mut ProposalFeeManager<StableType>,
     outcome_creator: address,

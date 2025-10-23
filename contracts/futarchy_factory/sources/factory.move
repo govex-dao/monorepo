@@ -399,13 +399,10 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         governance_config,
         metadata_config,
         security_config,
-        dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_sponsorship_config(),
     );
-
-    // REMOVED: SlashDistribution creation - legacy code, not used
 
     // --- Phase 1: Create all objects in memory (no sharing) ---
 
@@ -666,14 +663,10 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         governance_config,
         metadata_config,
         security_config,
-        dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_sponsorship_config(),
     );
-
-    // Create slash distribution with default values
-    // REMOVED: SlashDistribution creation - legacy code, not used
 
     // --- Phase 1: Create all objects in memory (no sharing) ---
 
@@ -888,13 +881,10 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         governance_config,
         metadata_config,
         security_config,
-        dao_config::default_storage_config(),
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_sponsorship_config(),
     );
-
-    // REMOVED: SlashDistribution creation - legacy code, not used
 
     // Create the futarchy config with safe default
     let mut config = futarchy_config::new<AssetType, StableType>(

@@ -11,7 +11,6 @@
 /// - Cancelable or immutable grants
 /// - Emergency freeze control
 ///
-/// REMOVED: Vesting, strike prices, pause/unpause, repeatability
 module futarchy_oracle::oracle_actions;
 
 use std::string::String;
