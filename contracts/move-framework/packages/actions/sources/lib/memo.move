@@ -54,7 +54,7 @@ public fun memo(): Memo { Memo {} }
 // === Structs ===
 
 /// Action to emit a text memo with optional reference to an object
-public struct EmitMemoAction has store {
+public struct EmitMemoAction has store, drop {
     /// The message to emit
     memo: String,
     /// Optional reference to what this memo is about

@@ -181,13 +181,13 @@ deploy_and_verify() {
     fi
 }
 
-# Package list in deployment order (14 packages total)
+# Package list in deployment order (13 packages total)
 declare -a PACKAGES=(
     # Move Framework packages (2)
     "AccountProtocol:/Users/admin/monorepo/contracts/move-framework/packages/protocol:account_protocol"
     "AccountActions:/Users/admin/monorepo/contracts/move-framework/packages/actions:account_actions"
 
-    # Futarchy packages (12)
+    # Futarchy packages (11)
     "futarchy_types:/Users/admin/monorepo/contracts/futarchy_types:futarchy_types"
     "futarchy_one_shot_utils:/Users/admin/monorepo/contracts/futarchy_one_shot_utils:futarchy_one_shot_utils"
     "futarchy_core:/Users/admin/monorepo/contracts/futarchy_core:futarchy_core"
@@ -198,7 +198,6 @@ declare -a PACKAGES=(
     "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
     "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
     "futarchy_governance_actions:/Users/admin/monorepo/contracts/futarchy_governance_actions:futarchy_governance_actions"
-    "futarchy_actions_tracker:/Users/admin/monorepo/contracts/futarchy_actions_tracker:futarchy_actions_tracker"
     "futarchy_governance:/Users/admin/monorepo/contracts/futarchy_governance:futarchy_governance"
 )
 

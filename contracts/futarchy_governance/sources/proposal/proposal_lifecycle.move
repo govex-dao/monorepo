@@ -12,7 +12,6 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_core::priority_queue::{Self, ProposalQueue, QueuedProposal};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use futarchy_core::version;
-use futarchy_actions_tracker::gc_janitor;
 use futarchy_governance_actions::governance_intents;
 use futarchy_markets_primitives::coin_escrow;
 use futarchy_markets_primitives::conditional_amm;

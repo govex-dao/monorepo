@@ -879,3 +879,66 @@ public fun do_emergency_unfreeze_grant<AssetType, StableType, Outcome: store, IW
     emergency_unfreeze(grant, clock);
     executable::increment_action_idx(executable);
 }
+
+// === Garbage Collection ===
+
+/// Delete create oracle grant action from expired intent
+public fun delete_create_oracle_grant<AssetType, StableType>(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    let mut reader = bcs::new(action_data);
+
+    // Deserialize tier specs
+    let tier_spec_count = bcs::peel_vec_length(&mut reader);
+    let mut i = 0;
+    while (i < tier_spec_count) {
+        reader.peel_u128(); // price_threshold
+        reader.peel_bool(); // is_above
+
+        // Deserialize recipients for this tier
+        let recipient_count = bcs::peel_vec_length(&mut reader);
+        let mut j = 0;
+        while (j < recipient_count) {
+            reader.peel_address(); // recipient
+            reader.peel_u64(); // amount
+            j = j + 1;
+        };
+
+        reader.peel_vec_u8(); // tier_description
+        i = i + 1;
+    };
+
+    reader.peel_u64(); // launchpad_multiplier
+    reader.peel_u64(); // earliest_execution_offset_ms
+    reader.peel_u64(); // expiry_years
+    reader.peel_bool(); // cancelable
+    reader.peel_vec_u8(); // description
+    let _ = reader.into_remainder_bytes();
+}
+
+/// Delete cancel grant action from expired intent
+public fun delete_cancel_grant(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    let mut reader = bcs::new(action_data);
+    reader.peel_address(); // grant_id as ID
+    let _ = reader.into_remainder_bytes();
+}
+
+/// Delete emergency freeze grant action from expired intent
+public fun delete_emergency_freeze_grant(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    let mut reader = bcs::new(action_data);
+    reader.peel_address(); // grant_id as ID
+    let _ = reader.into_remainder_bytes();
+}
+
+/// Delete emergency unfreeze grant action from expired intent
+public fun delete_emergency_unfreeze_grant(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    let mut reader = bcs::new(action_data);
+    reader.peel_address(); // grant_id as ID
+    let _ = reader.into_remainder_bytes();
+}
