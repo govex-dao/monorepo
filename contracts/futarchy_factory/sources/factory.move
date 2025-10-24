@@ -251,7 +251,8 @@ public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
     optimistic_intent_challenge_enabled: Option<bool>,
-    treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: TreasuryCap<AssetType>,
+    metadata_cap: MetadataCap<AssetType>,
     init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -279,13 +280,15 @@ public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
         _agreement_difficulties,
         optimistic_intent_challenge_enabled,
         treasury_cap,
+        metadata_cap,
         init_specs,
         clock,
         ctx,
     );
 }
 
-/// Internal function to create a DAO with Extensions and optional TreasuryCap
+/// Internal function to create a DAO with Extensions
+/// REQUIRES both TreasuryCap and MetadataCap for the AssetType
 ///
 /// optimistic_intent_challenge_enabled:
 ///   - none(): Use default (true - 10-day challenge period)
@@ -313,7 +316,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
     optimistic_intent_challenge_enabled: Option<bool>,
-    mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: TreasuryCap<AssetType>,
+    metadata_cap: MetadataCap<AssetType>,
     init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -471,28 +475,23 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     );
     vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
 
-    // If treasury cap provided, lock it using Move framework's currency module
-    if (treasury_cap.is_some()) {
-        let cap = treasury_cap.extract();
-        // Use Move framework's currency::lock_cap for proper treasury cap storage
-        // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
-            &account,
-            registry,
-            version::current(),
-            futarchy_config::authenticate(&account, ctx),
-        );
-        currency::lock_cap(
-            auth,
-            &mut account,
-            registry,
-            cap,
-            option::none(), // No MetadataCap - DAO creation without metadata control
-            option::none(), // No max supply limit for now
-        );
-    };
-    // Destroy the empty option
-    treasury_cap.destroy_none();
+    // Lock treasury cap and metadata cap using Move framework's currency module
+    // This ensures atomic borrowing and proper permissions management
+    // MetadataCap enables DAO governance over coin metadata
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
+        &account,
+        registry,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+    currency::lock_cap(
+        auth,
+        &mut account,
+        registry,
+        treasury_cap,
+        option::some(metadata_cap), // Store MetadataCap for DAO governance
+        option::none(), // No max supply limit for now
+    );
 
     let account_object_id = object::id(&account);
     let specs_len = vector::length(&init_specs);
@@ -561,7 +560,8 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     max_outcomes: u64,
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
-    mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: TreasuryCap<AssetType>,
+    metadata_cap: MetadataCap<AssetType>,
     init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -707,28 +707,23 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
     };
 
-    // If treasury cap provided, lock it using Move framework's currency module
-    if (treasury_cap.is_some()) {
-        let cap = treasury_cap.extract();
-        // Use Move framework's currency::lock_cap for proper treasury cap storage
-        // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
-            &account,
-            registry,
-            version::current(),
-            futarchy_config::authenticate(&account, ctx),
-        );
-        currency::lock_cap(
-            auth,
-            &mut account,
-            registry,
-            cap,
-            option::none(), // No MetadataCap - DAO creation without metadata control
-            option::none(), // No max supply limit for now
-        );
-    };
-    // Destroy the empty option
-    treasury_cap.destroy_none();
+    // Lock treasury cap and metadata cap using Move framework's currency module
+    // This ensures atomic borrowing and proper permissions management
+    // MetadataCap enables DAO governance over coin metadata
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
+        &account,
+        registry,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+    currency::lock_cap(
+        auth,
+        &mut account,
+        registry,
+        treasury_cap,
+        option::some(metadata_cap), // Store MetadataCap for DAO governance
+        option::none(), // No max supply limit for now
+    );
 
     let account_object_id = object::id(&account);
     let specs_len = vector::length(&init_specs);
@@ -781,6 +776,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
 // Removed create_dao_for_init - not needed, use create_dao_unshared
 
 /// Create DAO and return it without sharing (for init actions)
+/// REQUIRES both TreasuryCap and MetadataCap for the AssetType
 ///
 /// optimistic_intent_challenge_enabled:
 ///   - none(): Use default (true - 10-day challenge period)
@@ -791,7 +787,8 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     optimistic_intent_challenge_enabled: Option<bool>,
-    mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: TreasuryCap<AssetType>,
+    metadata_cap: MetadataCap<AssetType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Account, UnifiedSpotPool<AssetType, StableType>) {
@@ -859,26 +856,22 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         ctx,
     );
 
-    // Setup treasury cap if provided
-    if (treasury_cap.is_some()) {
-        let cap = treasury_cap.extract();
-        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
-            &account,
-            registry,
-            version::current(),
-            futarchy_config::authenticate(&account, ctx),
-        );
-        currency::lock_cap(
-            auth,
-            &mut account,
-            registry,
-            cap,
-            option::none(), // No MetadataCap - DAO creation without metadata control
-            option::none(), // max_supply
-        );
-    };
-    // Destroy the empty option
-    treasury_cap.destroy_none();
+    // Lock treasury cap and metadata cap
+    // MetadataCap enables DAO governance over coin metadata
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
+        &account,
+        registry,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+    currency::lock_cap(
+        auth,
+        &mut account,
+        registry,
+        treasury_cap,
+        option::some(metadata_cap), // Store MetadataCap for DAO governance
+        option::none(), // max_supply
+    );
 
     // Update factory state
     factory.dao_count = factory.dao_count + 1;
@@ -1102,6 +1095,7 @@ public fun create_factory(ctx: &mut TxContext) {
 
 #[test_only]
 /// Create a DAO for testing without Extensions
+/// REQUIRES TreasuryCap and MetadataCap
 public entry fun create_dao_test<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
     fee_manager: &mut FeeManager,
@@ -1122,6 +1116,8 @@ public entry fun create_dao_test<AssetType: drop, StableType: drop>(
     max_outcomes: u64,
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
+    treasury_cap: TreasuryCap<AssetType>,
+    metadata_cap: MetadataCap<AssetType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -1152,9 +1148,14 @@ public entry fun create_dao_test<AssetType: drop, StableType: drop>(
         max_outcomes,
         _agreement_lines,
         _agreement_difficulties,
-        option::none(),
+        // Note: Test function requires actual TreasuryCap and MetadataCap
+        // These should be created in the test setup
+        treasury_cap,
+        metadata_cap,
         vector::empty(),
         clock,
         ctx,
     );
 }
+
+// Note: Tests calling create_dao_test must now provide TreasuryCap + MetadataCap

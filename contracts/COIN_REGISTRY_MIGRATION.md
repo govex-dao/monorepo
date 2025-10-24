@@ -38,9 +38,11 @@ This migration uses new Sui `CoinRegistry` APIs that require a newer Sui version
 ## Key Changes
 
 ### 1. Factory/Launchpad (futarchy_factory)
-- `create_raise` now **requires** `MetadataCap<RaiseToken>` parameter
-- Validates both `RaiseToken` and `StableCoin` exist in Sui's `CoinRegistry`
+- **Factory**: `create_dao_with_init_specs` now **REQUIRES** both `TreasuryCap<AssetType>` AND `MetadataCap<AssetType>`
+- **Launchpad**: `create_raise` now **REQUIRES** `MetadataCap<RaiseToken>` parameter
+- Validates coins exist in Sui's `CoinRegistry`
 - Stores `MetadataCap` in Account for DAO governance control
+- **Rationale**: All DAOs must have governance control over their coin metadata
 
 ### 2. Currency Actions (move-framework/actions)
 - `lock_cap` accepts `Option<MetadataCap<CoinType>>`
@@ -95,7 +97,9 @@ All existing tests using `CoinMetadata` need updates:
 
 ## Breaking Changes
 
-- **API**: All functions accepting `CoinMetadata<T>` now require `Currency<T>` + `MetadataCap<T>`
+- **Factory API**: `create_dao_with_init_specs` now REQUIRES both `TreasuryCap` AND `MetadataCap` (no longer optional)
+- **Launchpad API**: `create_raise` REQUIRES `MetadataCap<RaiseToken>`
+- **Currency API**: All functions accepting `CoinMetadata<T>` now require `Currency<T>` + `MetadataCap<T>`
 - **Validation**: Coins must be registered in Sui's global `CoinRegistry`
 - **Storage**: DAOs store `MetadataCap<T>` (not `CoinMetadata<T>`) in Account
 - **Tests**: All test code using old pattern must be rewritten
