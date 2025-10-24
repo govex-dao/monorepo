@@ -13,6 +13,7 @@ use account_protocol::account::Account;
 use account_protocol::package_registry::PackageRegistry;
 use std::string;
 use sui::coin::{Coin, TreasuryCap};
+use sui::coin_registry::MetadataCap;
 use sui::tx_context::TxContext;
 
 // === Vault Actions ===
@@ -33,8 +34,9 @@ public fun init_lock_treasury_cap<Config: store, CoinType>(
     account: &mut Account,
     registry: &PackageRegistry,
     cap: TreasuryCap<CoinType>,
+    metadata_cap: Option<MetadataCap<CoinType>>,
 ) {
-    currency::do_lock_cap_unshared(account, registry, cap);
+    currency::do_lock_cap_unshared(account, registry, cap, metadata_cap);
 }
 
 public fun init_mint<Config: store, CoinType>(

@@ -6,9 +6,9 @@
 /// Allows proposal creators to acquire coin pairs without requiring two transactions
 module futarchy_one_shot_utils::coin_registry;
 
-use futarchy_one_shot_utils::coin_validation;
 use sui::clock::Clock;
-use sui::coin::{TreasuryCap, CoinMetadata, Coin};
+use sui::coin::{TreasuryCap, Coin};
+use sui::coin_registry::{Self, CoinRegistry as SuiCoinRegistry, MetadataCap};
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
@@ -19,6 +19,8 @@ const EInsufficientFee: u64 = 1;
 const ERegistryNotEmpty: u64 = 2;
 const ERegistryFull: u64 = 3;
 const EFeeExceedsMaximum: u64 = 4;
+const ECoinNotInSuiRegistry: u64 = 5;
+const ESupplyNotZero: u64 = 6;
 
 // === Constants ===
 const MAX_COIN_SETS: u64 = 100_000;
@@ -30,10 +32,11 @@ const MAX_FEE: u64 = 10_000_000_000;
 // === Structs ===
 
 /// A single coin set ready for use as conditional tokens
-/// Contains both TreasuryCap and CoinMetadata for one coin type
+/// Contains TreasuryCap and MetadataCap for one coin type
+/// The coin must already be registered in Sui's CoinRegistry
 public struct CoinSet<phantom T> has store {
     treasury_cap: TreasuryCap<T>,
-    metadata: CoinMetadata<T>,
+    metadata_cap: MetadataCap<T>,
     owner: address, // Who deposited this set and gets paid
     fee: u64, // Fee in SUI to acquire this set
 }
@@ -92,15 +95,20 @@ public fun destroy_empty_registry(registry: CoinRegistry) {
 // === Deposit Functions ===
 
 /// Deposit a coin set into the registry
+/// The coin MUST already be registered in Sui's CoinRegistry
 /// Validates that the coin meets all requirements for conditional tokens
 public fun deposit_coin_set<T>(
     registry: &mut CoinRegistry,
+    sui_coin_registry: &SuiCoinRegistry,
     treasury_cap: TreasuryCap<T>,
-    metadata: CoinMetadata<T>,
+    metadata_cap: MetadataCap<T>,
     fee: u64,
     clock: &Clock,
     ctx: &TxContext,
 ) {
+    // CRITICAL: Verify coin is registered in Sui's global CoinRegistry
+    assert!(coin_registry::exists<T>(sui_coin_registry), ECoinNotInSuiRegistry);
+
     // Check registry not full
     assert!(registry.total_sets < MAX_COIN_SETS, ERegistryFull);
 
@@ -110,8 +118,8 @@ public fun deposit_coin_set<T>(
     // making them economically unusable and permanently occupying registry slots
     assert!(fee <= MAX_FEE, EFeeExceedsMaximum);
 
-    // Validate coin meets requirements
-    coin_validation::validate_conditional_coin(&treasury_cap, &metadata);
+    // Validate TreasuryCap (zero supply)
+    assert!(treasury_cap.total_supply() == 0, ESupplyNotZero);
 
     let cap_id = object::id(&treasury_cap);
     let owner = ctx.sender();
@@ -119,7 +127,7 @@ public fun deposit_coin_set<T>(
     // Create coin set
     let coin_set = CoinSet {
         treasury_cap,
-        metadata,
+        metadata_cap,
         owner,
         fee,
     };
@@ -141,13 +149,14 @@ public fun deposit_coin_set<T>(
 /// Deposit a coin set via entry function (transfers ownership)
 public entry fun deposit_coin_set_entry<T>(
     registry: &mut CoinRegistry,
+    sui_coin_registry: &SuiCoinRegistry,
     treasury_cap: TreasuryCap<T>,
-    metadata: CoinMetadata<T>,
+    metadata_cap: MetadataCap<T>,
     fee: u64,
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    deposit_coin_set(registry, treasury_cap, metadata, fee, clock, ctx);
+    deposit_coin_set(registry, sui_coin_registry, treasury_cap, metadata_cap, fee, clock, ctx);
 }
 
 // === Take Functions ===
@@ -194,9 +203,9 @@ public fun take_coin_set<T>(
     });
 
     // Return caps to sender (they become owned objects)
-    let CoinSet { treasury_cap, metadata, owner: _, fee: _ } = coin_set;
+    let CoinSet { treasury_cap, metadata_cap, owner: _, fee: _ } = coin_set;
     transfer::public_transfer(treasury_cap, ctx.sender());
-    transfer::public_transfer(metadata, ctx.sender());
+    transfer::public_transfer(metadata_cap, ctx.sender());
 
     // Return remaining payment for next take
     fee_payment

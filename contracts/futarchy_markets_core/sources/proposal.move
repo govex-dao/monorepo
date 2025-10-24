@@ -7,7 +7,7 @@ use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::liquidity_initialize;
 use futarchy_markets_primitives::market_state;
-use futarchy_one_shot_utils::coin_validation;
+use futarchy_markets_core::conditional_coin_utils;
 use std::ascii::String as AsciiString;
 use std::string::{Self, String};
 use std::type_name;
@@ -16,7 +16,8 @@ use std::type_name::TypeName;
 use std::vector;
 use sui::balance::{Balance};
 use sui::clock::Clock;
-use sui::coin::{Coin, TreasuryCap, CoinMetadata};
+use sui::coin::{Coin, TreasuryCap};
+use sui::coin_registry::{Self, CoinRegistry, Currency, MetadataCap};
 use sui::event;
 use sui::bag::{Self, Bag};
 use futarchy_types::init_action_specs::{Self as action_specs, InitActionSpecs};
@@ -45,6 +46,10 @@ const EInvalidConditionalCoinCount: u64 = 15;
 const EConditionalCoinAlreadySet: u64 = 16;
 const ENotLiquidityProvider: u64 = 17;
 const EAlreadySponsored: u64 = 18;
+const EAssetNotInRegistry: u64 = 19;
+const EStableNotInRegistry: u64 = 20;
+const EInvalidAssetCurrency: u64 = 21;
+const EInvalidStableCurrency: u64 = 22;
 
 // === Constants ===
 
@@ -126,7 +131,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
 
     // Conditional coin capabilities (stored dynamically per outcome)
     conditional_treasury_caps: Bag,  // Stores TreasuryCap<ConditionalCoinType> per outcome
-    conditional_metadata: Bag,        // Stores CoinMetadata<ConditionalCoinType> per outcome
+    conditional_metadata_caps: Bag,  // Stores MetadataCap<ConditionalCoinType> per outcome
 
     // Proposal content
     title: String,
@@ -410,7 +415,7 @@ public fun initialize_market<AssetType, StableType>(
         escrow_id: option::some(escrow_id),
         market_state_id: option::some(market_state_id),
         conditional_treasury_caps: bag::new(ctx),
-        conditional_metadata: bag::new(ctx),
+        conditional_metadata_caps: bag::new(ctx),
         title,
         details: initial_outcome_details,
         metadata,
@@ -536,7 +541,7 @@ public fun new_premarket<AssetType, StableType>(
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
-        conditional_metadata: bag::new(ctx),
+        conditional_metadata_caps: bag::new(ctx),
         title,
         details: outcome_details,
         metadata,
@@ -1674,7 +1679,7 @@ public fun new_for_testing<AssetType, StableType>(
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
-        conditional_metadata: bag::new(ctx),
+        conditional_metadata_caps: bag::new(ctx),
         title,
         details: outcome_details,
         metadata,
@@ -1746,21 +1751,61 @@ public fun id_address<AssetType, StableType>(proposal: &Proposal<AssetType, Stab
 
 // === Conditional Coin Management ===
 
-/// Add a conditional coin treasury cap and metadata to proposal
+/// Add a conditional coin treasury cap and metadata cap to proposal
 /// Must be called once per outcome per side (asset/stable)
-/// The coin will be validated and its metadata updated according to DAO config
+/// The conditional coin must already be registered in Sui's CoinRegistry
+/// Its Currency metadata will be updated according to DAO config
 public fun add_conditional_coin<AssetType, StableType, ConditionalCoinType>(
     proposal: &mut Proposal<AssetType, StableType>,
+    coin_registry: &CoinRegistry,
+    asset_currency: &Currency<AssetType>,
+    stable_currency: &Currency<StableType>,
+    conditional_currency: &mut Currency<ConditionalCoinType>,
     outcome_index: u64,
     is_asset: bool,  // true for asset-conditional, false for stable-conditional
-    mut treasury_cap: TreasuryCap<ConditionalCoinType>,
-    mut metadata: CoinMetadata<ConditionalCoinType>,
+    treasury_cap: TreasuryCap<ConditionalCoinType>,
+    metadata_cap: MetadataCap<ConditionalCoinType>,
     coin_config: &ConditionalCoinConfig,
-    asset_type_name: &String,  // Name of AssetType (e.g., "SUI")
-    stable_type_name: &String, // Name of StableType (e.g., "USDC")
 ) {
     assert!(proposal.state == STATE_PREMARKET, EInvalidState);
     assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
+
+    // Verify base coins exist in registry
+    assert!(coin_registry::exists<AssetType>(coin_registry), EAssetNotInRegistry);
+    assert!(coin_registry::exists<StableType>(coin_registry), EStableNotInRegistry);
+
+    // Verify conditional coin exists in registry
+    assert!(coin_registry::exists<ConditionalCoinType>(coin_registry), 23); // EConditionalNotInRegistry
+
+    // Read and validate asset metadata ONCE
+    // Validates Currency is legitimate (not fake) by ensuring name/symbol are non-empty
+    let (asset_name, asset_symbol, asset_icon) = {
+        let name = coin_registry::name(asset_currency);
+        let symbol = coin_registry::symbol(asset_currency);
+        let icon = coin_registry::icon_url(asset_currency);
+
+        // Validate non-empty (proves Currency is populated, not fake)
+        assert!(
+            !string::is_empty(&name) && !string::is_empty(&symbol),
+            EInvalidAssetCurrency
+        );
+
+        (name, symbol, icon)
+    };
+
+    // Read and validate stable metadata ONCE
+    let (stable_name, stable_symbol, stable_icon) = {
+        let name = coin_registry::name(stable_currency);
+        let symbol = coin_registry::symbol(stable_currency);
+        let icon = coin_registry::icon_url(stable_currency);
+
+        assert!(
+            !string::is_empty(&name) && !string::is_empty(&symbol),
+            EInvalidStableCurrency
+        );
+
+        (name, symbol, icon)
+    };
 
     // Create key for this conditional coin
     let key = ConditionalCoinKey { outcome_index, is_asset };
@@ -1768,96 +1813,35 @@ public fun add_conditional_coin<AssetType, StableType, ConditionalCoinType>(
     // Check not already set
     assert!(!bag::contains(&proposal.conditional_treasury_caps, key), EConditionalCoinAlreadySet);
 
-    // Validate coin meets requirements
-    coin_validation::validate_conditional_coin(&treasury_cap, &metadata);
+    // Validate coin meets requirements (zero supply)
+    conditional_coin_utils::assert_zero_supply(&treasury_cap);
 
-    // Update metadata with DAO naming pattern: c_<outcome>_<ASSET|STABLE>
-    update_conditional_coin_metadata(
-        &mut metadata,
-        coin_config,
-        outcome_index,
-        if (is_asset) { asset_type_name } else { stable_type_name },
-    );
+    // Update Currency metadata using already-validated values from CoinRegistry
+    if (is_asset) {
+        conditional_coin_utils::update_conditional_currency(
+            conditional_currency,
+            &metadata_cap,
+            coin_config,
+            outcome_index,
+            &asset_name,
+            &asset_symbol,
+            &asset_icon,
+        );
+    } else {
+        conditional_coin_utils::update_conditional_currency(
+            conditional_currency,
+            &metadata_cap,
+            coin_config,
+            outcome_index,
+            &stable_name,
+            &stable_symbol,
+            &stable_icon,
+        );
+    };
 
     // Store in bags
     bag::add(&mut proposal.conditional_treasury_caps, key, treasury_cap);
-    bag::add(&mut proposal.conditional_metadata, key, metadata);
-}
-
-/// Update conditional coin metadata with DAO naming pattern
-/// Pattern: c_<outcome_index>_<ASSET_NAME>
-fun update_conditional_coin_metadata<ConditionalCoinType>(
-    metadata: &mut CoinMetadata<ConditionalCoinType>,
-    coin_config: &ConditionalCoinConfig,
-    outcome_index: u64,
-    base_coin_name: &String,
-) {
-    use std::ascii;
-    use sui::url;
-
-    // Build name: prefix + outcome_index + _ + base_coin_name
-    let mut name_bytes = vector::empty<u8>();
-
-    // Add prefix (e.g., "c_") if configured
-    let prefix_opt = dao_config::coin_name_prefix(coin_config);
-    if (prefix_opt.is_some()) {
-        let prefix = prefix_opt.destroy_some();
-        let prefix_bytes = ascii::as_bytes(&prefix);
-        let mut i = 0;
-        while (i < prefix_bytes.length()) {
-            name_bytes.push_back(*prefix_bytes.borrow(i));
-            i = i + 1;
-        };
-    } else {
-        prefix_opt.destroy_none();
-    };
-
-    // Add outcome index if configured
-    if (dao_config::use_outcome_index(coin_config)) {
-        // Convert outcome_index to string
-        let index_str = u64_to_ascii(outcome_index);
-        let index_bytes = ascii::as_bytes(&index_str);
-        let mut i = 0;
-        while (i < index_bytes.length()) {
-            name_bytes.push_back(*index_bytes.borrow(i));
-            i = i + 1;
-        };
-        name_bytes.push_back(95u8); // '_' character
-    };
-
-    // Add base coin name
-    {
-        let base_bytes = string::as_bytes(base_coin_name);
-        let mut i = 0;
-        while (i < base_bytes.length()) {
-            name_bytes.push_back(*base_bytes.borrow(i));
-            i = i + 1;
-        };
-    };
-
-    // Update metadata (need to use coin::update_* functions if available)
-    // For now, just validate - actual metadata update requires special capabilities
-    // This will be handled when we integrate with coin framework properly
-}
-
-/// Helper: Convert u64 to ASCII string
-fun u64_to_ascii(mut num: u64): AsciiString {
-    use std::ascii;
-
-    if (num == 0) {
-        return ascii::string(b"0")
-    };
-
-    let mut digits = vector::empty<u8>();
-    while (num > 0) {
-        let digit = ((num % 10) as u8) + 48; // ASCII '0' = 48
-        vector::push_back(&mut digits, digit);
-        num = num / 10;
-    };
-
-    // Reverse digits
-    vector::reverse(&mut digits);
-    ascii::string(digits)
+    bag::add(&mut proposal.conditional_metadata_caps, key, metadata_cap);
 }
 
 // === LP Preferences Dynamic Field Management ===
@@ -2055,7 +2039,7 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
         escrow_id: _,
         market_state_id: _,
         conditional_treasury_caps,
-        conditional_metadata,
+        conditional_metadata_caps,
         title: _,
         details: _,
         metadata: _,
@@ -2097,7 +2081,7 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
 
     // Destroy bags (must be empty for testing)
     bag::destroy_empty(conditional_treasury_caps);
-    bag::destroy_empty(conditional_metadata);
+    bag::destroy_empty(conditional_metadata_caps);
     fee_escrow.destroy_zero();
 
     object::delete(id);

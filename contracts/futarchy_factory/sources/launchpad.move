@@ -21,7 +21,8 @@ use std::type_name;
 use std::vector;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
-use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
+use sui::coin::{Self, Coin, TreasuryCap};
+use sui::coin_registry::{Self, CoinRegistry, MetadataCap};
 use sui::dynamic_field as df;
 use sui::event;
 use sui::object::{Self, UID, ID};
@@ -63,6 +64,8 @@ const EInvalidCrankFee: u64 = 134;
 const EBatchSizeTooLarge: u64 = 135;
 const EEmptyBatch: u64 = 136;
 const ENoProtocolFeesToSweep: u64 = 137;
+const ERaiseTokenNotInRegistry: u64 = 140;
+const EStableCoinNotInRegistry: u64 = 141;
 
 // === Constants ===
 const STATE_FUNDING: u8 = 0;
@@ -90,7 +93,6 @@ public struct DaoAccountKey has copy, drop, store {}
 public struct DaoQueueKey has copy, drop, store {}
 public struct DaoPoolKey has copy, drop, store {}
 public struct DaoMetadataKey has copy, drop, store {}
-public struct CoinMetadataKey has copy, drop, store {}
 public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     id: UID,
     creator: address,
@@ -109,6 +111,7 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
 
     staged_init_specs: vector<InitActionSpecs>,
     treasury_cap: Option<TreasuryCap<RaiseToken>>,
+    metadata_cap: Option<MetadataCap<RaiseToken>>,
 
     allowed_caps: vector<u64>,
     cap_sums: vector<u64>,
@@ -352,11 +355,15 @@ public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
 }
 
 /// Create a pro-rata raise with max cap levels
+/// REQUIREMENTS:
+/// - RaiseToken MUST be registered in Sui's CoinRegistry
+/// - MetadataCap MUST be provided to allow DAO to update coin metadata
 public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     factory: &factory::Factory,
     fee_manager: &mut fee::FeeManager,
+    coin_registry: &CoinRegistry,
     treasury_cap: TreasuryCap<RaiseToken>,
-    coin_metadata: Option<CoinMetadata<RaiseToken>>,
+    metadata_cap: MetadataCap<RaiseToken>,
     affiliate_id: String,
     tokens_for_sale: u64,
     min_raise_amount: u64,
@@ -376,6 +383,11 @@ public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
 
     // Collect launchpad creation fee
     fee::deposit_launchpad_creation_payment(fee_manager, launchpad_fee, clock, ctx);
+
+    // CRITICAL: Enforce RaiseToken and StableCoin MUST be in Sui's CoinRegistry
+    // This ensures metadata can be read and updated via Currency objects
+    assert!(coin_registry::exists<RaiseToken>(coin_registry), ERaiseTokenNotInRegistry);
+    assert!(coin_registry::exists<StableCoin>(coin_registry), EStableCoinNotInRegistry);
 
     assert!(min_raise_amount > 0, EInvalidStateForAction);
     assert!(tokens_for_sale > 0, EInvalidStateForAction);
@@ -403,7 +415,7 @@ public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
 
     init_raise<RaiseToken, StableCoin>(
         treasury_cap,
-        coin_metadata,
+        metadata_cap,
         affiliate_id,
         tokens_for_sale,
         min_raise_amount,
@@ -628,20 +640,15 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     let mut account: Account = df::remove(&mut raise.id, DaoAccountKey {});
     let mut spot_pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
 
-    // Deposit treasury cap
+    // Deposit treasury cap and metadata cap
     let treasury_cap = raise.treasury_cap.extract();
-    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, registry, treasury_cap);
-
-    // Deposit metadata if exists
-    if (df::exists_(&raise.id, CoinMetadataKey {})) {
-        let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
-        init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
-            &mut account,
-            registry,
-            DaoMetadataKey {},
-            metadata,
-        );
-    };
+    let metadata_cap = raise.metadata_cap.extract();
+    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(
+        &mut account,
+        registry,
+        treasury_cap,
+        option::some(metadata_cap)
+    );
 
     // Set launchpad initial price
     assert!(raise.tokens_for_sale_amount > 0, EInvalidStateForAction);
@@ -1056,11 +1063,6 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
             timestamp: clock.timestamp_ms(),
         });
     };
-
-    if (df::exists_(&raise.id, CoinMetadataKey {})) {
-        let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
-        sui_transfer::public_transfer(metadata, raise.creator);
-    };
 }
 
 /// Sweep remaining dust after claim period
@@ -1150,7 +1152,7 @@ public entry fun sweep_protocol_fees<RaiseToken, StableCoin>(
 
 fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     mut treasury_cap: TreasuryCap<RaiseToken>,
-    coin_metadata: Option<CoinMetadata<RaiseToken>>,
+    metadata_cap: MetadataCap<RaiseToken>,
     affiliate_id: String,
     tokens_for_sale: u64,
     min_raise_amount: u64,
@@ -1183,6 +1185,7 @@ fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
         description,
         staged_init_specs: vector::empty(),
         treasury_cap: option::some(treasury_cap),
+        metadata_cap: option::some(metadata_cap),
         allowed_caps,
         cap_sums: vector::empty(),
         settlement_done: false,
@@ -1199,12 +1202,6 @@ fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     while (i < cap_count) {
         vector::push_back(&mut raise.cap_sums, 0);
         i = i + 1;
-    };
-
-    if (coin_metadata.is_some()) {
-        df::add(&mut raise.id, CoinMetadataKey {}, coin_metadata.destroy_some());
-    } else {
-        coin_metadata.destroy_none();
     };
 
     let raise_id = object::id(&raise);
@@ -1349,20 +1346,15 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
     let mut account: Account = df::remove(&mut raise.id, DaoAccountKey {});
     let mut spot_pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
 
-    // Deposit treasury cap
+    // Deposit treasury cap and metadata cap
     let treasury_cap = raise.treasury_cap.extract();
-    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, registry, treasury_cap);
-
-    // Deposit metadata if exists
-    if (df::exists_(&raise.id, CoinMetadataKey {})) {
-        let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
-        init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
-            &mut account,
-            registry,
-            DaoMetadataKey {},
-            metadata,
-        );
-    };
+    let metadata_cap = raise.metadata_cap.extract();
+    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(
+        &mut account,
+        registry,
+        treasury_cap,
+        option::some(metadata_cap)
+    );
 
     // Set launchpad initial price
     assert!(raise.tokens_for_sale_amount > 0, EInvalidStateForAction);

@@ -487,6 +487,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
             &mut account,
             registry,
             cap,
+            option::none(), // No MetadataCap - DAO creation without metadata control
             option::none(), // No max supply limit for now
         );
     };
@@ -722,6 +723,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
             &mut account,
             registry,
             cap,
+            option::none(), // No MetadataCap - DAO creation without metadata control
             option::none(), // No max supply limit for now
         );
     };
@@ -871,6 +873,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
             &mut account,
             registry,
             cap,
+            option::none(), // No MetadataCap - DAO creation without metadata control
             option::none(), // max_supply
         );
     };

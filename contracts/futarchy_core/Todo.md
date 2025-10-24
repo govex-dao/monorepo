@@ -495,9 +495,171 @@ I cut this. It requires more code and is possibly and attack vector, as its poss
 
 The whole system uses intents + actions.
 
-This AMM feature required stacking a batch of intents with logic between them in the happy path of proposal creation and finalization, (the other intents are executed at third step: execution). That feels so weird. To ship this I would want to spend a month sorting out the abstractions and patterns. 
+This AMM feature required stacking a batch of intents with logic between them in the happy path of proposal creation and finalization, (the other intents are executed at third step: execution).  That feels so weird and if an intent fails in early stages for whatever reason could brick the whole proposal. To ship this I would want to spend a month sorting out the abstractions and patterns. 
 
 My thoughts:
 - Seems like it should be a general multiverse finance intent system (not just for DAO asset and stable, but any coin or object) or
 - Or require pre-approved meta-intents,
-- Or maybe intents should not be something thats just executed but should also aware of current proposal stage or coupled to it?
+- Or maybe intents should not be something thats just executed but should also aware of current proposal stage or coupled to it, with different intnets allowed a different proposal stages?
+
+> well maybe meta intnets are the solution ngl\
+\
+\
+withdraw x\
+\
+becomes \
+\
+read balance\
+\
+if amount >= x \
+with draw x\
+\
+if amount < \
+\
+set some shared proposal state to failed\
+\
+all down stream inents read shared state before they execute 
+
+I am building a base layer protocol\
+should solve general problem not 1 problem\
+\
+amm buy backs / fund raising\
+remoing proposal race conditional ( transfer somone conditional coins as payment??? before its finalized??)\
+condtional M&A\
+conditional nft auctions ??? v
+
+You're Building Infrastructure, Not an App
+
+  If you're solving:
+  - ✅ AMM buy-backs / fundraising
+  - ✅ Removing proposal race conditions
+  - ✅ Conditional M&A
+  - ✅ Conditional NFT auctions
+  - ✅ Any multi-step conditional DeFi primitive
+
+  You NEED meta-intents. This is the right abstraction layer.
+
+  ---
+  The Realization:
+
+  You're not building "futarchy governance tool."
+
+  You're building "Sui's conditional execution primitive for multi-party agreements."
+
+  That's a base layer protocol. Meta-intents are your core innovation.
+
+  ---
+  What Meta-Intents Enable:
+
+  1. Conditional M&A
+
+  Acquire Company X if:
+    ✓ Due diligence passes
+    ✓ Valuation < $10M
+    ✓ Treasury has sufficient USDC
+    ✓ Token holders approve (futarchy market)
+
+  Meta-Intent:
+    read treasury_balance
+    read market_valuation
+    read due_diligence_results
+    read futarchy_outcome
+    
+    if all_conditions_met:
+      transfer funds
+      acquire equity_tokens
+      emit AcquisitionComplete
+    else:
+      refund escrow
+      emit AcquisitionCancelled
+
+  2. Conditional NFT Auctions
+
+  List NFT for auction if:
+    ✓ Floor price >= 10 SOL
+    ✓ Market liquidity > 100 SOL
+    ✓ Collection is verified
+    ✓ DAO approves listing
+
+  Meta-Intent:
+    read collection_floor_price
+    read pool_liquidity
+    read verification_status
+    read dao_vote_outcome
+
+    if should_list:
+      create_auction(nft, reserve_price)
+    else:
+      return_nft_to_vault
+      set_flag("listing_conditions_not_met")
+
+  3. Removing Race Conditions
+
+  Problem: User wants to transfer conditional tokens before finalization
+    → Recipient might receive worthless tokens if proposal loses
+
+  Meta-Intent Solution:
+    read proposal_state
+    if state == FINALIZED:
+      read winning_outcome
+      if my_outcome == winning_outcome:
+        transfer tokens  // Will be redeemable
+      else:
+        cancel_transfer  // Would be worthless
+        refund_gas
+    else:
+      escrow_transfer  // Execute after finalization
+      store_pending_transfer(from, to, amount, proposal_id)
+
+  4. Fundraising with Contingencies
+
+  Raise capital if:
+    ✓ Market cap > $5M
+    ✓ Revenue > $100k/month
+    ✓ Valuation agreed via prediction market
+    ✓ Lead investor commits
+
+  Meta-Intent:
+    read market_cap
+    read revenue_oracle
+    read prediction_market_price
+    read lead_investor_commitment
+
+    if all_metrics_met:
+      mint tokens to investors
+      transfer funds to treasury
+      emit FundraisingSuccess
+    else:
+      refund commitments
+      emit FundraisingFailed {
+        failed_conditions: [...]
+      }
+
+  ---
+  The Pattern: Multi-Party Conditional Agreements
+
+  All these use cases share:
+
+  1. Multiple conditions (read from various sources)
+  2. Branching logic (if/else based on conditions)
+  3. Atomic outcomes (all-or-nothing, but gracefully)
+  4. No bricking (failed conditions ≠ failed proposals)
+
+
+
+  -------
+  these meta intents need to have like sub intents and logic at each proposal stage
+
+    Meta-Intents = Hierarchical conditional workflows with:
+  - ✅ Stage-based execution
+  - ✅ Nested sub-intents (arbitrary depth)
+  - ✅ Conditional branching (if/else at every level)
+  - ✅ Shared context (data flow between stages)
+  - ✅ Soft failures (no aborts, only flags)
+  - ✅ Fault tolerance (upstream failures don't brick downstream)
+
+   You already have the infrastructure (intent whitelist).
+
+  Just extend it to meta-intent templates. ✅
+
+  shared same registry just check meta intent structure and individual constituent intents

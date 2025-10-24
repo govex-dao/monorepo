@@ -18,7 +18,8 @@ use account_protocol::package_registry::PackageRegistry;
 use std::ascii;
 use std::string::String;
 use std::type_name;
-use sui::coin::{Coin, CoinMetadata};
+use sui::coin::Coin;
+use sui::coin_registry::Currency;
 use sui::transfer::Receiving;
 
 // === Imports ===
@@ -39,12 +40,13 @@ const ECannotUpdateDescription: u64 = 5;
 const ECannotUpdateIcon: u64 = 6;
 const EMintDisabled: u64 = 7;
 const EBurnDisabled: u64 = 8;
+const ENoMetadataCap: u64 = 9;
 
 // === Structs ===
 
 /// Intent Witness defining the intent to disable one or more permissions.
 public struct DisableRulesIntent() has copy, drop;
-/// Intent Witness defining the intent to update the CoinMetadata associated with a locked TreasuryCap.
+/// Intent Witness defining the intent to update the Currency in CoinRegistry using MetadataCap.
 public struct UpdateMetadataIntent() has copy, drop;
 /// Intent Witness defining the intent to transfer a minted coin.
 public struct MintAndTransferIntent() has copy, drop;
@@ -121,14 +123,17 @@ public fun request_update_metadata<Config: store, Outcome: store, CoinType>(
     registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
-    md_symbol: Option<ascii::String>,
+    md_symbol: Option<String>,
     md_name: Option<String>,
     md_description: Option<String>,
-    md_icon_url: Option<ascii::String>,
+    md_icon_url: Option<String>,
     ctx: &mut TxContext,
 ) {
     account.verify(auth);
     params.assert_single_execution();
+
+    // Verify MetadataCap exists (required for updating Currency in CoinRegistry)
+    assert!(currency::has_metadata_cap<CoinType>(account), ENoMetadataCap);
 
     let rules = currency::borrow_rules<CoinType>(account, registry);
     if (!rules.can_update_symbol()) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
@@ -156,12 +161,12 @@ public fun request_update_metadata<Config: store, Outcome: store, CoinType>(
     );
 }
 
-/// Executes an UpdateMetadataIntent, updates the CoinMetadata.
+/// Executes an UpdateMetadataIntent, updates the Currency in CoinRegistry.
 public fun execute_update_metadata<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
     registry: &PackageRegistry,
-    metadata: &mut CoinMetadata<CoinType>,
+    currency: &mut Currency<CoinType>,
 ) {
     account.process_intent!(
         registry,
@@ -172,7 +177,7 @@ public fun execute_update_metadata<Config: store, Outcome: store, CoinType>(
             executable,
             account,
             registry,
-            metadata,
+            currency,
             version::current(),
             iw,
         ),

@@ -18,7 +18,8 @@ use std::{
 
 };
 use sui::{
-    coin::{Self, Coin, TreasuryCap, CoinMetadata},
+    coin::{Self, Coin, TreasuryCap},
+    coin_registry::{Self, MetadataCap, Currency},
     url::{Self, Url},
     bcs,
     object,
@@ -50,6 +51,7 @@ const ECannotUpdateDescription: u64 = 6;
 const ECannotUpdateIcon: u64 = 7;
 const EMaxSupply: u64 = 8;
 const EUnsupportedActionVersion: u64 = 9;
+const ENoMetadataCap: u64 = 10;
 
 // === Action Type Markers ===
 
@@ -74,6 +76,8 @@ public fun currency_update(): CurrencyUpdate { CurrencyUpdate {} }
 
 /// Dynamic Object Field key for the TreasuryCap.
 public struct TreasuryCapKey<phantom CoinType>() has copy, drop, store;
+/// Dynamic Object Field key for the MetadataCap.
+public struct MetadataCapKey<phantom CoinType>() has copy, drop, store;
 /// Dynamic Field key for the CurrencyRules.
 public struct CurrencyRulesKey<phantom CoinType>() has copy, drop, store;
 /// Dynamic Field wrapper restricting access to a TreasuryCap, permissions are disabled forever if set.
@@ -110,22 +114,23 @@ public struct MintAction<phantom CoinType> has store, drop {
 public struct BurnAction<phantom CoinType> has store, drop {
     amount: u64,
 }
-/// Action updating a CoinMetadata object using a locked TreasuryCap.
+/// Action updating a Currency object in CoinRegistry using MetadataCap.
 public struct UpdateAction<phantom CoinType> has store, drop {
-    symbol: Option<ascii::String>,
+    symbol: Option<String>,
     name: Option<String>,
     description: Option<String>,
-    icon_url: Option<ascii::String>,
+    icon_url: Option<String>,
 }
 
 // === Public functions ===
 
-/// Authenticated users can lock a TreasuryCap.
+/// Authenticated users can lock a TreasuryCap and optionally MetadataCap.
 public fun lock_cap<CoinType>(
     auth: Auth,
     account: &mut Account,
     registry: &PackageRegistry,
     treasury_cap: TreasuryCap<CoinType>,
+    metadata_cap: Option<MetadataCap<CoinType>>,
     max_supply: Option<u64>,
 ) {
     account.verify(auth);
@@ -143,16 +148,24 @@ public fun lock_cap<CoinType>(
     };
     account.add_managed_data(registry, CurrencyRulesKey<CoinType>(), rules, version::current());
     account.add_managed_asset(registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+
+    // Store MetadataCap if provided
+    if (metadata_cap.is_some()) {
+        account.add_managed_asset(registry, MetadataCapKey<CoinType>(), metadata_cap.destroy_some(), version::current());
+    } else {
+        metadata_cap.destroy_none();
+    };
 }
 
-/// Lock treasury cap during initialization - works on unshared Accounts
+/// Lock treasury cap and optionally metadata cap during initialization - works on unshared Accounts
 /// This function is for use during account creation, before the account is shared.
 /// SAFETY: This function MUST only be called on unshared Accounts.
 /// Calling this on a shared Account bypasses Auth checks.
-public(package) fun do_lock_cap_unshared< CoinType>(
+public(package) fun do_lock_cap_unshared<CoinType>(
     account: &mut Account,
     registry: &PackageRegistry,
     treasury_cap: TreasuryCap<CoinType>,
+    metadata_cap: Option<MetadataCap<CoinType>>,
 ) {
     // SAFETY REQUIREMENT: Account must be unshared
     // Default rules with no max supply
@@ -169,6 +182,13 @@ public(package) fun do_lock_cap_unshared< CoinType>(
     };
     account.add_managed_data(registry, CurrencyRulesKey<CoinType>(), rules, version::current());
     account.add_managed_asset(registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+
+    // Store MetadataCap if provided
+    if (metadata_cap.is_some()) {
+        account.add_managed_asset(registry, MetadataCapKey<CoinType>(), metadata_cap.destroy_some(), version::current());
+    } else {
+        metadata_cap.destroy_none();
+    };
 }
 
 /// Mint coins during initialization - works on unshared Accounts
@@ -231,6 +251,13 @@ public fun has_cap<CoinType>(
     account: &Account
 ): bool {
     account.has_managed_asset(TreasuryCapKey<CoinType>())
+}
+
+/// Checks if a MetadataCap exists for a given coin type.
+public fun has_metadata_cap<CoinType>(
+    account: &Account
+): bool {
+    account.has_managed_asset(MetadataCapKey<CoinType>())
 }
 
 /// Borrows a mutable reference to the TreasuryCap for a given coin type.
@@ -303,18 +330,18 @@ public fun can_update_icon<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_update_icon
 }
 
-/// Read metadata from a CoinMetadata object
+/// Read metadata from Currency in CoinRegistry
 /// Simple helper to extract all metadata fields in one call
 /// Returns: (decimals, symbol, name, description, icon_url)
-public fun read_coin_metadata<CoinType>(
-    metadata: &CoinMetadata<CoinType>,
-): (u8, ascii::String, String, String, ascii::String) {
+public fun read_currency_metadata<CoinType>(
+    currency: &Currency<CoinType>,
+): (u8, String, String, String, String) {
     (
-        metadata.get_decimals(),
-        metadata.get_symbol(),
-        metadata.get_name(),
-        metadata.get_description(),
-        metadata.get_icon_url().extract().inner_url()
+        coin_registry::decimals(currency),
+        coin_registry::symbol(currency),
+        coin_registry::name(currency),
+        coin_registry::description(currency),
+        coin_registry::icon_url(currency)
     )
 }
 
@@ -435,10 +462,10 @@ public fun delete_disable<CoinType>(expired: &mut Expired) {
 /// Creates an UpdateAction and adds it to an intent.
 public fun new_update<Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
-    symbol: Option<ascii::String>,
+    symbol: Option<String>,
     name: Option<String>,
     description: Option<String>,
-    icon_url: Option<ascii::String>,
+    icon_url: Option<String>,
     intent_witness: IW,
 ) {
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
@@ -457,12 +484,12 @@ public fun new_update<Outcome, CoinType, IW: drop>(
     );
 }
 
-/// Processes an UpdateAction, updates the CoinMetadata.
+/// Processes an UpdateAction, updates the Currency in CoinRegistry.
 public fun do_update<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
     registry: &PackageRegistry,
-    metadata: &mut CoinMetadata<CoinType>,
+    currency: &mut Currency<CoinType>,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -487,7 +514,7 @@ public fun do_update<Outcome: store, CoinType, IW: drop>(
 
     // Deserialize Option fields
     let symbol = if (bcs::peel_bool(&mut reader)) {
-        option::some(bcs::peel_vec_u8(&mut reader).to_ascii_string())
+        option::some(bcs::peel_vec_u8(&mut reader).to_string())
     } else {
         option::none()
     };
@@ -505,7 +532,7 @@ public fun do_update<Outcome: store, CoinType, IW: drop>(
     };
 
     let icon_url = if (bcs::peel_bool(&mut reader)) {
-        option::some(bcs::peel_vec_u8(&mut reader).to_ascii_string())
+        option::some(bcs::peel_vec_u8(&mut reader).to_string())
     } else {
         option::none()
     };
@@ -521,15 +548,37 @@ public fun do_update<Outcome: store, CoinType, IW: drop>(
     if (!rules_mut.can_update_description) assert!(description.is_none(), ECannotUpdateDescription);
     if (!rules_mut.can_update_icon) assert!(icon_url.is_none(), ECannotUpdateIcon);
 
-    let (default_symbol, default_name, default_description, default_icon_url) =
-        (metadata.get_symbol(), metadata.get_name(), metadata.get_description(), metadata.get_icon_url().extract().inner_url());
-    let cap: &TreasuryCap<CoinType> =
-        account.borrow_managed_asset(registry, TreasuryCapKey<CoinType>(), version_witness);
+    // Verify MetadataCap exists (required for updating Currency in CoinRegistry)
+    assert!(account.has_managed_asset(MetadataCapKey<CoinType>()), ENoMetadataCap);
 
-    cap.update_symbol(metadata, symbol.get_with_default(default_symbol));
-    cap.update_name(metadata, name.get_with_default(default_name));
-    cap.update_description(metadata, description.get_with_default(default_description));
-    cap.update_icon_url(metadata, icon_url.get_with_default(default_icon_url));
+    // Get MetadataCap from account
+    let metadata_cap: &MetadataCap<CoinType> =
+        account.borrow_managed_asset(registry, MetadataCapKey<CoinType>(), version_witness);
+
+    // Update Currency using MetadataCap
+    if (symbol.is_some()) {
+        coin_registry::set_symbol(currency, metadata_cap, symbol.destroy_some());
+    } else {
+        symbol.destroy_none();
+    };
+
+    if (name.is_some()) {
+        coin_registry::set_name(currency, metadata_cap, name.destroy_some());
+    } else {
+        name.destroy_none();
+    };
+
+    if (description.is_some()) {
+        coin_registry::set_description(currency, metadata_cap, description.destroy_some());
+    } else {
+        description.destroy_none();
+    };
+
+    if (icon_url.is_some()) {
+        coin_registry::set_icon_url(currency, metadata_cap, icon_url.destroy_some());
+    } else {
+        icon_url.destroy_none();
+    };
 
     // Increment action index
     executable::increment_action_idx(executable);
