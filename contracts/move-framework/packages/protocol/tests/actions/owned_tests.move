@@ -167,7 +167,7 @@ fun test_merge_and_split_2_coins() {
 
     scenario.next_tx(OWNER);
     let receiving_to_split = ts::most_recent_receiving_ticket<Coin<SUI>>(&object::id(&account));
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     let split_coin_ids = owned::merge_and_split<Config, SUI>(
         auth,
         &mut account,
@@ -201,7 +201,7 @@ fun test_merge_2_coins_and_split() {
     let id1 = keep_coin(account_address, 60, &mut scenario);
     let id2 = keep_coin(account_address, 40, &mut scenario);
 
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     let merge_coin_id = owned::merge_and_split<Config, SUI>(
         auth,
         &mut account,
@@ -221,10 +221,6 @@ fun test_merge_2_coins_and_split() {
     end(scenario, extensions, account, clock);
 }
 
-// REMOVED: test_error_do_withdraw_wrong_object - new API doesn't validate specific object IDs, only type and amount
-// REMOVED: test_error_merge_locked_coins - no locking in new design
-// Conflicts are natural and resolved at execution time
-
 // sanity checks as these are tested in AccountProtocol tests
 
 #[test, expected_failure(abort_code = intents::EWrongAccount)]
@@ -232,7 +228,7 @@ fun test_error_do_withdraw_from_wrong_account() {
     let (mut scenario, extensions, mut account, clock) = start();
 
     let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string()]);
-    let mut account2 = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
+    let mut account2 = account::new(Config {}, deps, &extensions, version::current(), Witness(), scenario.ctx());
     let key = b"dummy".to_string();
 
     let id = send_coin(account.addr(), 5, &mut scenario);
@@ -265,14 +261,11 @@ fun test_error_do_withdraw_from_wrong_account() {
     end(scenario, extensions, account, clock);
 }
 
-// REMOVED: test_error_do_withdraw_from_wrong_constructor_witness
-// Witness is validated at intent creation time, not execution time
-
 #[test, expected_failure(abort_code = intents::EWrongAccount)]
 fun test_error_delete_withdraw_from_wrong_account() {
     let (mut scenario, extensions, mut account, mut clock) = start();
     let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string()]);
-    let mut account2 = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
+    let mut account2 = account::new(Config {}, deps, &extensions, version::current(), Witness(), scenario.ctx());
 
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();

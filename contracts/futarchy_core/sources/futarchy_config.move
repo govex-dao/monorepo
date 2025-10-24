@@ -652,15 +652,16 @@ public fun state_terminated(): u8 {
 
 public fun internal_config_mut(
     account: &mut Account,
+    registry: &PackageRegistry,
     version: account_protocol::version_witness::VersionWitness,
 ): &mut FutarchyConfig {
-    account::config_mut<FutarchyConfig, ConfigWitness>(account, version, ConfigWitness {})
+    account::config_mut<FutarchyConfig, ConfigWitness>(account, registry, version, ConfigWitness {})
 }
 
 /// Get mutable access to the DaoState stored as a dynamic field on the Account
 /// This requires access to the Account object, not just the FutarchyConfig
-public fun state_mut_from_account(account: &mut Account): &mut DaoState {
-    account::borrow_managed_data_mut(account, DaoStateKey {}, version::current())
+public fun state_mut_from_account(account: &mut Account, registry: &PackageRegistry): &mut DaoState {
+    account::borrow_managed_data_mut(account, registry, DaoStateKey {}, version::current())
 }
 
 /// Witness for internal config operations
@@ -755,10 +756,11 @@ public fun set_max_actions_per_outcome(config: &mut FutarchyConfig, max: u64) {
     dao_config::set_max_actions_per_outcome(gov_cfg, max);
 }
 
-public fun set_queue_entry_bond(config: &mut FutarchyConfig, amount: u64) {
-    let gov_cfg = dao_config::governance_config_mut(&mut config.config);
-    dao_config::set_queue_entry_bond(gov_cfg, amount);
-}
+// Removed: queue_entry_bond field no longer exists in GovernanceConfig
+// public fun set_queue_entry_bond(config: &mut FutarchyConfig, amount: u64) {
+//     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
+//     dao_config::set_queue_entry_bond(gov_cfg, amount);
+// }
 
 public fun set_max_intents_per_outcome(config: &mut FutarchyConfig, max: u64) {
     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
@@ -770,10 +772,11 @@ public fun set_proposal_intent_expiry_ms(config: &mut FutarchyConfig, expiry: u6
     dao_config::set_proposal_intent_expiry_ms(gov_cfg, expiry);
 }
 
-public fun set_queue_fullness_multiplier_bps(config: &mut FutarchyConfig, points: u64) {
-    let gov_cfg = dao_config::governance_config_mut(&mut config.config);
-    dao_config::set_queue_fullness_multiplier_bps(gov_cfg, points);
-}
+// Removed: queue_fullness_multiplier_bps field no longer exists in GovernanceConfig
+// public fun set_queue_fullness_multiplier_bps(config: &mut FutarchyConfig, points: u64) {
+//     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
+//     dao_config::set_queue_fullness_multiplier_bps(gov_cfg, points);
+// }
 
 public fun set_enable_premarket_reservation_lock(config: &mut FutarchyConfig, enabled: bool) {
     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
@@ -879,7 +882,7 @@ public fun new_with_package_registry(
 
 /// Test version that creates account without PackageRegistry validation
 #[test_only]
-public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Account {
+public fun new_account_test(config: FutarchyConfig, registry: &PackageRegistry, ctx: &mut TxContext): Account {
     // Create dependencies for testing without PackageRegistry
     // Must include futarchy_core because version::current() creates a VersionWitness
     // with the @futarchy_core package address
@@ -901,9 +904,10 @@ public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Accoun
 
 /// Get mutable access to internal config for test scenarios
 #[test_only]
-public fun internal_config_mut_test(account: &mut Account): &mut FutarchyConfig {
+public fun internal_config_mut_test(account: &mut Account, registry: &PackageRegistry): &mut FutarchyConfig {
     account::config_mut<FutarchyConfig, ConfigWitness>(
         account,
+        registry,
         version::current(),
         ConfigWitness {},
     )
@@ -913,9 +917,11 @@ public fun internal_config_mut_test(account: &mut Account): &mut FutarchyConfig 
 /// Create Auth for testing
 public fun new_auth_for_testing(
     account: &Account,
+    registry: &PackageRegistry,
 ): account_protocol::account::Auth {
     account::new_auth<FutarchyConfig, ConfigWitness>(
         account,
+        registry,
         version::current(),
         ConfigWitness {},
     )

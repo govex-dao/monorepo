@@ -8,6 +8,7 @@ use account_actions::version;
 use account_protocol::account::Account;
 use account_protocol::intent_interface;
 use account_protocol::intents::Params;
+use account_protocol::package_registry::PackageRegistry;
 use std::option::Option;
 use std::string::String;
 use sui::object::ID;
@@ -31,6 +32,7 @@ public struct MemoIntent() has copy, drop;
 /// - Comments on objects: memo="Looks good!", reference_id=Some(object_id)
 public fun request_emit_memo<Config: store, Outcome: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     memo_text: String,
@@ -38,6 +40,7 @@ public fun request_emit_memo<Config: store, Outcome: store>(
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"emit_memo".to_string(),

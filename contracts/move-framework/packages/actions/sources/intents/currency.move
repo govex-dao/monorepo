@@ -14,6 +14,7 @@ use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::Params;
 use account_protocol::owned;
+use account_protocol::package_registry::PackageRegistry;
 use std::ascii;
 use std::string::String;
 use std::type_name;
@@ -56,6 +57,7 @@ public struct WithdrawAndBurnIntent() has copy, drop;
 public fun request_disable_rules<Config: store, Outcome: store, CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     mint: bool,
@@ -71,6 +73,7 @@ public fun request_disable_rules<Config: store, Outcome: store, CoinType>(
     assert!(currency::has_cap<CoinType>(account), ENoLock);
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         type_name_to_string<CoinType>(),
@@ -94,14 +97,17 @@ public fun request_disable_rules<Config: store, Outcome: store, CoinType>(
 public fun execute_disable_rules<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         DisableRulesIntent(),
         |executable, iw| currency::do_disable<_, CoinType, _>(
             executable,
             account,
+            registry,
             version::current(),
             iw,
         ),
@@ -112,6 +118,7 @@ public fun execute_disable_rules<Config: store, Outcome: store, CoinType>(
 public fun request_update_metadata<Config: store, Outcome: store, CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     md_symbol: Option<ascii::String>,
@@ -123,7 +130,7 @@ public fun request_update_metadata<Config: store, Outcome: store, CoinType>(
     account.verify(auth);
     params.assert_single_execution();
 
-    let rules = currency::borrow_rules<CoinType>(account);
+    let rules = currency::borrow_rules<CoinType>(account, registry);
     if (!rules.can_update_symbol()) assert!(md_symbol.is_none(), ECannotUpdateSymbol);
     if (!rules.can_update_name()) assert!(md_name.is_none(), ECannotUpdateName);
     if (!rules.can_update_description())
@@ -131,6 +138,7 @@ public fun request_update_metadata<Config: store, Outcome: store, CoinType>(
     if (!rules.can_update_icon()) assert!(md_icon_url.is_none(), ECannotUpdateIcon);
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         type_name_to_string<CoinType>(),
@@ -152,15 +160,18 @@ public fun request_update_metadata<Config: store, Outcome: store, CoinType>(
 public fun execute_update_metadata<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     metadata: &mut CoinMetadata<CoinType>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         UpdateMetadataIntent(),
         |executable, iw| currency::do_update<_, CoinType, _>(
             executable,
             account,
+            registry,
             metadata,
             version::current(),
             iw,
@@ -172,6 +183,7 @@ public fun execute_update_metadata<Config: store, Outcome: store, CoinType>(
 public fun request_mint_and_transfer<Config: store, Outcome: store, CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     amounts: vector<u64>,
@@ -181,12 +193,13 @@ public fun request_mint_and_transfer<Config: store, Outcome: store, CoinType>(
     account.verify(auth);
     assert!(amounts.length() == recipients.length(), EAmountsRecipentsNotSameLength);
 
-    let rules = currency::borrow_rules<CoinType>(account);
+    let rules = currency::borrow_rules<CoinType>(account, registry);
     assert!(rules.can_mint(), EMintDisabled);
     let sum = amounts.fold!(0, |sum, amount| sum + amount);
     if (rules.max_supply().is_some()) assert!(sum <= *rules.max_supply().borrow(), EMaxSupply);
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         type_name_to_string<CoinType>(),
@@ -204,9 +217,11 @@ public fun request_mint_and_transfer<Config: store, Outcome: store, CoinType>(
 public fun execute_mint_and_transfer<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     ctx: &mut TxContext,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         MintAndTransferIntent(),
@@ -214,6 +229,7 @@ public fun execute_mint_and_transfer<Config: store, Outcome: store, CoinType>(
             let coin = currency::do_mint<_, CoinType, _>(
                 executable,
                 account,
+                registry,
                 version::current(),
                 iw,
                 ctx,
@@ -227,6 +243,7 @@ public fun execute_mint_and_transfer<Config: store, Outcome: store, CoinType>(
 public fun request_withdraw_and_burn<Config: store, Outcome: store, CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     coin_id: ID,
@@ -236,11 +253,12 @@ public fun request_withdraw_and_burn<Config: store, Outcome: store, CoinType>(
     account.verify(auth);
     params.assert_single_execution();
 
-    let rules = currency::borrow_rules<CoinType>(account);
+    let rules = currency::borrow_rules<CoinType>(account, registry);
     assert!(rules.can_burn(), EBurnDisabled);
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         type_name_to_string<CoinType>(),
@@ -258,9 +276,11 @@ public fun request_withdraw_and_burn<Config: store, Outcome: store, CoinType>(
 public fun execute_withdraw_and_burn<Config: store, Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<Coin<CoinType>>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         WithdrawAndBurnIntent(),
@@ -271,7 +291,7 @@ public fun execute_withdraw_and_burn<Config: store, Outcome: store, CoinType>(
                 receiving,
                 iw,
             );
-            currency::do_burn<_, CoinType, _>(executable, account, coin, version::current(), iw);
+            currency::do_burn<_, CoinType, _>(executable, account, registry, coin, version::current(), iw);
         },
     );
 }

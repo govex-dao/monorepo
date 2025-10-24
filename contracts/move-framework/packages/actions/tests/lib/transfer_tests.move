@@ -53,7 +53,7 @@ fun start(): (Scenario, PackageRegistry, Account, Clock) {
         &extensions,
         vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
     );
-    let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
+    let account = account::new(Config {}, deps, &extensions, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -87,6 +87,7 @@ fun test_transfer_basic() {
 
     // Build the intent using the intent interface
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(), // metadata
@@ -100,6 +101,7 @@ fun test_transfer_basic() {
 
     // Create executable
     let (outcome_result, mut executable) = account.create_executable<Config, Outcome, _>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -146,6 +148,7 @@ fun test_transfer_to_sender() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -159,6 +162,7 @@ fun test_transfer_to_sender() {
 
     // Create executable (OWNER is the sender)
     let (_, mut executable) = account.create_executable<Config, Outcome, _>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -205,6 +209,7 @@ fun test_multiple_transfers() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -219,6 +224,7 @@ fun test_multiple_transfers() {
     );
 
     let (_, mut executable) = account.create_executable<Config, Outcome, _>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -273,6 +279,7 @@ fun test_transfer_different_types() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -286,6 +293,7 @@ fun test_transfer_different_types() {
     );
 
     let (_, mut executable) = account.create_executable<Config, Outcome, _>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -352,6 +360,7 @@ fun test_delete_transfer_action() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -365,6 +374,7 @@ fun test_delete_transfer_action() {
 
     // Execute the intent to consume the execution time
     let (_, mut executable) = account.create_executable<Config, Outcome, _>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -401,6 +411,7 @@ fun test_transfer_mixed_with_sender() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -415,6 +426,7 @@ fun test_transfer_mixed_with_sender() {
     );
 
     let (_, mut executable) = account.create_executable<Config, Outcome, _>(
+        &extensions,
         key,
         &clock,
         version::current(),

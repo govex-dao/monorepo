@@ -30,6 +30,7 @@ use account_protocol::{
     executable::{Self, Executable},
     version_witness::VersionWitness,
     bcs_validation,
+    package_registry::PackageRegistry,
 };
 use account_actions::{
     currency,
@@ -123,6 +124,7 @@ public struct UpdateAction<phantom CoinType> has store, drop {
 public fun lock_cap<CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     treasury_cap: TreasuryCap<CoinType>,
     max_supply: Option<u64>,
 ) {
@@ -139,8 +141,8 @@ public fun lock_cap<CoinType>(
         can_update_description: true,
         can_update_icon: true,
     };
-    account.add_managed_data(CurrencyRulesKey<CoinType>(), rules, version::current());
-    account.add_managed_asset(TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+    account.add_managed_data(registry, CurrencyRulesKey<CoinType>(), rules, version::current());
+    account.add_managed_asset(registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
 }
 
 /// Lock treasury cap during initialization - works on unshared Accounts
@@ -149,6 +151,7 @@ public fun lock_cap<CoinType>(
 /// Calling this on a shared Account bypasses Auth checks.
 public(package) fun do_lock_cap_unshared< CoinType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     treasury_cap: TreasuryCap<CoinType>,
 ) {
     // SAFETY REQUIREMENT: Account must be unshared
@@ -164,8 +167,8 @@ public(package) fun do_lock_cap_unshared< CoinType>(
         can_update_description: true,
         can_update_icon: true,
     };
-    account.add_managed_data(CurrencyRulesKey<CoinType>(), rules, version::current());
-    account.add_managed_asset(TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+    account.add_managed_data(registry, CurrencyRulesKey<CoinType>(), rules, version::current());
+    account.add_managed_asset(registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
 }
 
 /// Mint coins during initialization - works on unshared Accounts
@@ -174,13 +177,14 @@ public(package) fun do_lock_cap_unshared< CoinType>(
 /// Calling this on a shared Account bypasses Auth checks.
 public(package) fun do_mint_unshared< CoinType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     amount: u64,
     recipient: address,
     ctx: &mut TxContext,
 ) {
     // SAFETY REQUIREMENT: Account must be unshared
     let rules: &mut CurrencyRules<CoinType> =
-        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
+        account.borrow_managed_data_mut(registry, CurrencyRulesKey<CoinType>(), version::current());
 
     assert!(rules.can_mint, EMintDisabled);
     if (rules.max_supply.is_some()) {
@@ -191,7 +195,7 @@ public(package) fun do_mint_unshared< CoinType>(
     rules.total_minted = rules.total_minted + amount;
 
     let cap: &mut TreasuryCap<CoinType> =
-        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
+        account.borrow_managed_asset_mut(registry, TreasuryCapKey<CoinType>(), version::current());
 
     let coin = cap.mint(amount, ctx);
     transfer::public_transfer(coin, recipient);
@@ -201,11 +205,12 @@ public(package) fun do_mint_unshared< CoinType>(
 /// Returns Coin for further use in the same transaction
 public(package) fun do_mint_to_coin_unshared< CoinType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     amount: u64,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
     let rules: &mut CurrencyRules<CoinType> =
-        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
+        account.borrow_managed_data_mut(registry, CurrencyRulesKey<CoinType>(), version::current());
 
     assert!(rules.can_mint, EMintDisabled);
     if (rules.max_supply.is_some()) {
@@ -216,7 +221,7 @@ public(package) fun do_mint_to_coin_unshared< CoinType>(
     rules.total_minted = rules.total_minted + amount;
 
     let cap: &mut TreasuryCap<CoinType> =
-        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
+        account.borrow_managed_asset_mut(registry, TreasuryCapKey<CoinType>(), version::current());
 
     cap.mint(amount, ctx)
 }
@@ -232,22 +237,24 @@ public fun has_cap<CoinType>(
 /// This is used by oracle mints and other patterns that need direct cap access
 /// to bypass object-level policies (only Account access matters).
 public fun borrow_treasury_cap_mut<CoinType>(
-    account: &mut Account
+    account: &mut Account,
+    registry: &PackageRegistry,
 ): &mut TreasuryCap<CoinType> {
-    account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current())
+    account.borrow_managed_asset_mut(registry, TreasuryCapKey<CoinType>(), version::current())
 }
 
 /// Borrows the CurrencyRules for a given coin type.
 public fun borrow_rules<CoinType>(
-    account: &Account
+    account: &Account,
+    registry: &PackageRegistry
 ): &CurrencyRules<CoinType> {
-    account.borrow_managed_data(CurrencyRulesKey<CoinType>(), version::current())
+    account.borrow_managed_data(registry, CurrencyRulesKey<CoinType>(), version::current())
 }
 
 /// Returns the total supply of a given coin type.
-public fun coin_type_supply<CoinType>(account: &Account): u64 {
+public fun coin_type_supply<CoinType>(account: &Account, registry: &PackageRegistry): u64 {
     let cap: &TreasuryCap<CoinType> =
-        account.borrow_managed_asset(TreasuryCapKey<CoinType>(), version::current());
+        account.borrow_managed_asset(registry, TreasuryCapKey<CoinType>(), version::current());
     cap.total_supply()
 }
 
@@ -314,15 +321,16 @@ public fun read_coin_metadata<CoinType>(
 /// Anyone can burn coins they own if enabled.
 public fun public_burn<Config: store, CoinType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     coin: Coin<CoinType>
 ) {
     let rules_mut: &mut CurrencyRules<CoinType> =
-        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
+        account.borrow_managed_data_mut(registry, CurrencyRulesKey<CoinType>(), version::current());
     assert!(rules_mut.can_burn, EBurnDisabled);
     rules_mut.total_burned = rules_mut.total_burned + coin.value();
 
     let cap_mut: &mut TreasuryCap<CoinType> =
-        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
+        account.borrow_managed_asset_mut(registry, TreasuryCapKey<CoinType>(), version::current());
     cap_mut.burn(coin);
 }
 
@@ -371,6 +379,7 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
 public fun do_disable<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -403,7 +412,7 @@ public fun do_disable<Outcome: store, CoinType, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     let rules_mut: &mut CurrencyRules<CoinType> =
-        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
+        account.borrow_managed_data_mut(registry, CurrencyRulesKey<CoinType>(), version_witness);
 
     // if disabled, can be true or false, it has no effect
     if (mint) rules_mut.can_mint = false;
@@ -452,6 +461,7 @@ public fun new_update<Outcome, CoinType, IW: drop>(
 public fun do_update<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     metadata: &mut CoinMetadata<CoinType>,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -504,7 +514,7 @@ public fun do_update<Outcome: store, CoinType, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     let rules_mut: &mut CurrencyRules<CoinType> =
-        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
+        account.borrow_managed_data_mut(registry, CurrencyRulesKey<CoinType>(), version_witness);
 
     if (!rules_mut.can_update_symbol) assert!(symbol.is_none(), ECannotUpdateSymbol);
     if (!rules_mut.can_update_name) assert!(name.is_none(), ECannotUpdateName);
@@ -514,7 +524,7 @@ public fun do_update<Outcome: store, CoinType, IW: drop>(
     let (default_symbol, default_name, default_description, default_icon_url) =
         (metadata.get_symbol(), metadata.get_name(), metadata.get_description(), metadata.get_icon_url().extract().inner_url());
     let cap: &TreasuryCap<CoinType> =
-        account.borrow_managed_asset(TreasuryCapKey<CoinType>(), version_witness);
+        account.borrow_managed_asset(registry, TreasuryCapKey<CoinType>(), version_witness);
 
     cap.update_symbol(metadata, symbol.get_with_default(default_symbol));
     cap.update_name(metadata, name.get_with_default(default_name));
@@ -556,6 +566,7 @@ public fun new_mint<Outcome, CoinType, IW: drop>(
 public fun do_mint<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
     _intent_witness: IW,
     ctx: &mut TxContext
@@ -583,9 +594,9 @@ public fun do_mint<Outcome: store, CoinType, IW: drop>(
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    let total_supply = currency::coin_type_supply<CoinType>(account);
+    let total_supply = currency::coin_type_supply<CoinType>(account, registry);
     let rules_mut: &mut CurrencyRules<CoinType> =
-        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
+        account.borrow_managed_data_mut(registry, CurrencyRulesKey<CoinType>(), version_witness);
 
     assert!(rules_mut.can_mint, EMintDisabled);
     if (rules_mut.max_supply.is_some()) assert!(amount + total_supply <= *rules_mut.max_supply.borrow(), EMaxSupply);
@@ -593,7 +604,7 @@ public fun do_mint<Outcome: store, CoinType, IW: drop>(
     rules_mut.total_minted = rules_mut.total_minted + amount;
 
     let cap_mut: &mut TreasuryCap<CoinType> =
-        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version_witness);
+        account.borrow_managed_asset_mut(registry, TreasuryCapKey<CoinType>(), version_witness);
 
     // Mint the coin
     let coin = cap_mut.mint(amount, ctx);
@@ -638,6 +649,7 @@ public fun new_burn<Outcome, CoinType, IW: drop>(
 public fun do_burn<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     coin: Coin<CoinType>,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -668,13 +680,13 @@ public fun do_burn<Outcome: store, CoinType, IW: drop>(
     assert!(amount == coin.value(), EWrongValue);
 
     let rules_mut: &mut CurrencyRules<CoinType> =
-        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
+        account.borrow_managed_data_mut(registry, CurrencyRulesKey<CoinType>(), version_witness);
     assert!(rules_mut.can_burn, EBurnDisabled);
 
     rules_mut.total_burned = rules_mut.total_burned + amount;
 
     let cap_mut: &mut TreasuryCap<CoinType> =
-        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version_witness);
+        account.borrow_managed_asset_mut(registry, TreasuryCapKey<CoinType>(), version_witness);
 
     // Increment action index
     executable::increment_action_idx(executable);

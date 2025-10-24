@@ -36,6 +36,7 @@ use account_protocol::{
     version_witness::VersionWitness,
     bcs_validation,
     action_validation,
+    package_registry::{Self, PackageRegistry},
 };
 use account_actions::{version, stream_utils};
 
@@ -231,12 +232,13 @@ public struct CancelStreamAction has store {
 public fun open<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     name: String,
     ctx: &mut TxContext
 ) {
     account.verify(auth);
 
-    account.add_managed_data(VaultKey(name), Vault {
+    account.add_managed_data(registry, VaultKey(name), Vault {
         bag: bag::new(ctx),
         streams: table::new(ctx),
         approved_types: vec_set::empty(),
@@ -247,13 +249,14 @@ public fun open<Config: store>(
 public fun deposit<Config: store, CoinType: drop>(
     auth: Auth,
     account: &mut Account,
-    name: String, 
-    coin: Coin<CoinType>, 
+    registry: &PackageRegistry,
+    name: String,
+    coin: Coin<CoinType>,
 ) {
     account.verify(auth);
 
-    let vault: &mut Vault = 
-        account.borrow_managed_data_mut(VaultKey(name), version::current());
+    let vault: &mut Vault =
+        account.borrow_managed_data_mut(registry, VaultKey(name), version::current());
 
     if (vault.coin_type_exists<CoinType>()) {
         let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
@@ -272,11 +275,12 @@ public fun deposit<Config: store, CoinType: drop>(
 /// 3. Creates balance entry on first deposit if needed
 public fun deposit_approved<Config: store, CoinType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     name: String,
     coin: Coin<CoinType>,
 ) {
     let vault: &mut Vault =
-        account.borrow_managed_data_mut(VaultKey(name), version::current());
+        account.borrow_managed_data_mut(registry, VaultKey(name), version::current());
 
     // Only allow deposits of approved coin types
     let type_key = type_name::with_defining_ids<CoinType>();
@@ -291,16 +295,17 @@ public fun deposit_approved<Config: store, CoinType>(
     }
 }
 
-/// Permissionless withdrawal for dissolved DAOs
-/// Anyone can withdraw proportionally if they provide valid dissolution proof
-/// This enables proportional redemption without transferring assets out of Account
+/// Permissionless withdrawal (no Auth required)
+/// Used by authorized operations like dissolution and NAV market making
+/// Safety checks are performed by the calling module before calling this
 ///
-/// Safety checks are performed by the dissolution module before calling this
-/// This function focuses on the withdrawal mechanics only
-///
-/// IMPORTANT: DO NOT call this directly - use futarchy_actions::dissolution::redeem
-public fun withdraw_for_dissolution<Config: store, CoinType: drop>(
+/// This is a privileged function - only use from modules that enforce their own safety checks
+/// Current authorized callers:
+/// - futarchy_actions::dissolution (proportional redemption)
+/// - futarchy_actions::nav_market_making (buyback/sell operations)
+public fun withdraw_permissionless<Config: store, CoinType: drop>(
     account: &mut Account,
+    registry: &PackageRegistry,
     dao_address: address,
     vault_name: String,
     amount: u64,
@@ -311,7 +316,7 @@ public fun withdraw_for_dissolution<Config: store, CoinType: drop>(
 
     // Standard vault withdrawal logic (no Auth check for dissolution)
     let vault: &mut Vault =
-        account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+        account.borrow_managed_data_mut(registry, VaultKey(vault_name), version::current());
 
     let type_key = type_name::with_defining_ids<CoinType>();
     assert!(vault.coin_type_exists<CoinType>(), EWrongCoinType);
@@ -334,12 +339,13 @@ public fun withdraw_for_dissolution<Config: store, CoinType: drop>(
 public fun approve_coin_type<Config: store, CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     name: String,
 ) {
     account.verify(auth);
 
     let vault: &mut Vault =
-        account.borrow_managed_data_mut(VaultKey(name), version::current());
+        account.borrow_managed_data_mut(registry, VaultKey(name), version::current());
 
     let type_key = type_name::with_defining_ids<CoinType>();
     if (!vault.approved_types.contains(&type_key)) {
@@ -353,12 +359,13 @@ public fun approve_coin_type<Config: store, CoinType>(
 public fun remove_approved_coin_type<Config: store, CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     name: String,
 ) {
     account.verify(auth);
 
     let vault: &mut Vault =
-        account.borrow_managed_data_mut(VaultKey(name), version::current());
+        account.borrow_managed_data_mut(registry, VaultKey(name), version::current());
 
     let type_key = type_name::with_defining_ids<CoinType>();
     if (vault.approved_types.contains(&type_key)) {
@@ -369,13 +376,14 @@ public fun remove_approved_coin_type<Config: store, CoinType>(
 /// Check if a coin type is approved for permissionless deposits
 public fun is_coin_type_approved<Config: store, CoinType>(
     account: &Account,
+    registry: &PackageRegistry,
     name: String,
 ): bool {
     if (!has_vault(account, name)) {
         return false
     };
 
-    let vault: &Vault = account.borrow_managed_data(VaultKey(name), version::current());
+    let vault: &Vault = account.borrow_managed_data(registry, VaultKey(name), version::current());
     let type_key = type_name::with_defining_ids<CoinType>();
     vault.approved_types.contains(&type_key)
 }
@@ -386,6 +394,7 @@ public fun is_coin_type_approved<Config: store, CoinType>(
 public fun spend<Config: store, CoinType: drop>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     name: String,
     amount: u64,
     ctx: &mut TxContext,
@@ -393,7 +402,7 @@ public fun spend<Config: store, CoinType: drop>(
     account.verify(auth);
 
     let vault: &mut Vault =
-        account.borrow_managed_data_mut(VaultKey(name), version::current());
+        account.borrow_managed_data_mut(registry, VaultKey(name), version::current());
 
     // Ensure coin type exists in vault
     assert!(vault.coin_type_exists<CoinType>(), EWrongCoinType);
@@ -416,13 +425,14 @@ public fun spend<Config: store, CoinType: drop>(
 /// Convenience function that combines vault existence check with balance lookup.
 public fun balance<Config: store, CoinType: drop>(
     account: &Account,
+    registry: &PackageRegistry,
     name: String,
 ): u64 {
     if (!has_vault(account, name)) {
         return 0
     };
 
-    let vault: &Vault = account.borrow_managed_data(VaultKey(name), version::current());
+    let vault: &Vault = account.borrow_managed_data(registry, VaultKey(name), version::current());
 
     if (!coin_type_exists<CoinType>(vault)) {
         return 0
@@ -444,6 +454,7 @@ public fun default_vault_name(): String {
 /// The package(package) visibility helps enforce this constraint.
 public(package) fun do_deposit_unshared< CoinType: drop>(
     account: &mut Account,
+    registry: &PackageRegistry,
     name: String,
     coin: Coin<CoinType>,
     ctx: &mut tx_context::TxContext,
@@ -461,11 +472,11 @@ public(package) fun do_deposit_unshared< CoinType: drop>(
             streams: table::new(ctx),
             approved_types: vec_set::empty(),
         };
-        account.add_managed_data(VaultKey(name), vault, version::current());
+        account.add_managed_data(registry, VaultKey(name), vault, version::current());
     };
 
     let vault: &mut Vault =
-        account.borrow_managed_data_mut(VaultKey(name), version::current());
+        account.borrow_managed_data_mut(registry, VaultKey(name), version::current());
 
     // Add coin to vault
     let coin_type_name = type_name::with_defining_ids<CoinType>();
@@ -481,12 +492,13 @@ public(package) fun do_deposit_unshared< CoinType: drop>(
 public fun close<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     name: String,
 ) {
     account.verify(auth);
 
     let Vault { bag, streams, approved_types: _ } =
-        account.remove_managed_data(VaultKey(name), version::current());
+        account.remove_managed_data(registry, VaultKey(name), version::current());
     assert!(bag.is_empty(), EVaultNotEmpty);
     assert!(streams.is_empty(), EVaultNotEmpty);
     bag.destroy_empty();
@@ -504,9 +516,10 @@ public fun has_vault(
 /// Returns a reference to the vault.
 public fun borrow_vault(
     account: &Account,
+    registry: &PackageRegistry,
     name: String
 ): &Vault {
-    account.borrow_managed_data(VaultKey(name), version::current())
+    account.borrow_managed_data(registry, VaultKey(name), version::current())
 }
 
 /// Returns the number of coin types in the vault.
@@ -584,6 +597,7 @@ public fun new_deposit<Outcome, CoinType, IW: drop>(
 public fun do_deposit<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     coin: Coin<CoinType>,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -613,7 +627,7 @@ public fun do_deposit<Config: store, Outcome: store, CoinType: drop, IW: drop>(
 
     assert!(amount == coin.value(), EIntentAmountMismatch);
 
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(name), version_witness);
     if (!vault.coin_type_exists<CoinType>()) {
         vault.bag.add(type_name::with_defining_ids<CoinType>(), coin.into_balance());
     } else {
@@ -733,6 +747,7 @@ public fun new_cancel_stream<Outcome, IW: drop>(
 public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     vault_name: String,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -765,7 +780,7 @@ public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: d
     assert!(vault_name == deserialized_vault_name, EVaultDoesNotExist);
 
     // Get vault
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version_witness);
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(vault_name), version_witness);
     assert!(vault.streams.contains(stream_id), EStreamNotFound);
 
     let stream = table::remove(&mut vault.streams, stream_id);
@@ -823,6 +838,7 @@ public fun do_cancel_stream<Config: store, Outcome: store, CoinType: drop, IW: d
 public fun do_spend<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
     _intent_witness: IW,
     ctx: &mut TxContext
@@ -851,7 +867,7 @@ public fun do_spend<Config: store, Outcome: store, CoinType: drop, IW: drop>(
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(name), version_witness);
     let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
 
     // Determine actual amount to withdraw
@@ -885,6 +901,7 @@ public fun delete_spend<CoinType>(expired: &mut Expired) {
 public fun do_approve_coin_type<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -910,7 +927,7 @@ public fun do_approve_coin_type<Config: store, Outcome: store, CoinType, IW: dro
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(name), version_witness);
 
     let type_key = type_name::with_defining_ids<CoinType>();
     if (!vault.approved_types.contains(&type_key)) {
@@ -925,6 +942,7 @@ public fun do_approve_coin_type<Config: store, Outcome: store, CoinType, IW: dro
 public fun do_remove_approved_coin_type<Config: store, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -950,7 +968,7 @@ public fun do_remove_approved_coin_type<Config: store, Outcome: store, CoinType,
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(name), version_witness);
 
     let type_key = type_name::with_defining_ids<CoinType>();
     if (vault.approved_types.contains(&type_key)) {
@@ -1002,6 +1020,7 @@ public fun delete_toggle_stream_freeze(expired: &mut Expired) {
 public fun create_stream<Config: store, CoinType: drop>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     vault_name: String,
     beneficiary: address,
     total_amount: u64,
@@ -1028,7 +1047,7 @@ public fun create_stream<Config: store, CoinType: drop>(
         EInvalidStreamParameters
     );
 
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(vault_name), version::current());
 
     // Check that vault has sufficient balance
     assert!(vault.coin_type_exists<CoinType>(), EWrongCoinType);
@@ -1081,6 +1100,7 @@ public fun create_stream<Config: store, CoinType: drop>(
 public fun cancel_stream<Config: store, CoinType: drop>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     vault_name: String,
     stream_id: ID,
     clock: &Clock,
@@ -1088,7 +1108,7 @@ public fun cancel_stream<Config: store, CoinType: drop>(
 ): (Coin<CoinType>, u64) {
     account.verify(auth);
 
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(vault_name), version::current());
     assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
 
     let stream = table::remove(&mut vault.streams, stream_id);
@@ -1141,13 +1161,14 @@ public fun cancel_stream<Config: store, CoinType: drop>(
 /// Withdraw from a stream
 public fun withdraw_from_stream<Config: store, CoinType: drop>(
     account: &mut Account,
+    registry: &PackageRegistry,
     vault_name: String,
     stream_id: ID,
     amount: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(vault_name), version::current());
     assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
 
     let stream = table::borrow_mut(&mut vault.streams, stream_id);
@@ -1222,11 +1243,12 @@ public fun withdraw_from_stream<Config: store, CoinType: drop>(
 /// Calculate how much can be claimed from a stream
 public fun calculate_claimable<Config: store>(
     account: &Account,
+    registry: &PackageRegistry,
     vault_name: String,
     stream_id: ID,
     clock: &Clock,
 ): u64 {
-    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    let vault: &Vault = account.borrow_managed_data(registry, VaultKey(vault_name), version::current());
     assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
 
     let stream = table::borrow(&vault.streams, stream_id);
@@ -1245,10 +1267,11 @@ public fun calculate_claimable<Config: store>(
 /// Get stream information
 public fun stream_info<Config: store>(
     account: &Account,
+    registry: &PackageRegistry,
     vault_name: String,
     stream_id: ID,
 ): (address, u64, u64, u64, u64, bool) {
-    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    let vault: &Vault = account.borrow_managed_data(registry, VaultKey(vault_name), version::current());
     assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
 
     let stream = table::borrow(&vault.streams, stream_id);
@@ -1265,6 +1288,7 @@ public fun stream_info<Config: store>(
 /// Check if a stream exists
 public fun has_stream(
     account: &Account,
+    registry: &PackageRegistry,
     vault_name: String,
     stream_id: ID,
 ): bool {
@@ -1272,7 +1296,7 @@ public fun has_stream(
         return false
     };
 
-    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    let vault: &Vault = account.borrow_managed_data(registry, VaultKey(vault_name), version::current());
     table::contains(&vault.streams, stream_id)
 }
 
@@ -1284,6 +1308,7 @@ public fun has_stream(
 /// the normal Auth checks that protect shared Accounts.
 public(package) fun create_stream_unshared<Config: store, CoinType: drop>(
     account: &mut Account,
+    registry: &PackageRegistry,
     vault_name: String,
     beneficiary: address,
     total_amount: u64,
@@ -1314,7 +1339,7 @@ public(package) fun create_stream_unshared<Config: store, CoinType: drop>(
     let vault_exists = account.has_managed_data(VaultKey(vault_name));
     assert!(vault_exists, EVaultDoesNotExist);
 
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+    let vault: &mut Vault = account.borrow_managed_data_mut(registry, VaultKey(vault_name), version::current());
     let coin_type_name = type_name::with_defining_ids<CoinType>();
     assert!(bag::contains(&vault.bag, coin_type_name), ECoinTypeDoesNotExist);
 

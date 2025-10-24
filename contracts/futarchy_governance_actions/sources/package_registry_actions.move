@@ -8,13 +8,14 @@ module futarchy_governance_actions::package_registry_actions;
 use std::string::String;
 use sui::bcs::{Self, BCS};
 use account_protocol::{
+    package_registry::PackageRegistry,
     account::{Self, Account},
     bcs_validation,
     executable::{Self, Executable},
     intents,
     version_witness::VersionWitness,
     action_validation,
-    package_registry::{Self, PackageRegistry, PackageAdminCap},
+    package_registry::{Self, PackageAdminCap},
 };
 
 // === Action Type Markers ===
@@ -130,7 +131,7 @@ public fun do_add_package<Outcome: store, IW: drop>(
     // Borrow PackageAdminCap
     let cap = account::borrow_managed_asset<String, PackageAdminCap>(
         account,
-        b"protocol:package_admin_cap".to_string(),
+        registry, b"protocol:package_admin_cap".to_string(),
         version_witness
     );
 
@@ -171,7 +172,7 @@ public fun do_remove_package<Outcome: store, IW: drop>(
 
     let cap = account::borrow_managed_asset<String, PackageAdminCap>(
         account,
-        b"protocol:package_admin_cap".to_string(),
+        registry, b"protocol:package_admin_cap".to_string(),
         version_witness
     );
 
@@ -205,7 +206,7 @@ public fun do_update_package_version<Outcome: store, IW: drop>(
 
     let cap = account::borrow_managed_asset<String, PackageAdminCap>(
         account,
-        b"protocol:package_admin_cap".to_string(),
+        registry, b"protocol:package_admin_cap".to_string(),
         version_witness
     );
 
@@ -249,7 +250,7 @@ public fun do_update_package_metadata<Outcome: store, IW: drop>(
 
     let cap = account::borrow_managed_asset<String, PackageAdminCap>(
         account,
-        b"protocol:package_admin_cap".to_string(),
+        registry, b"protocol:package_admin_cap".to_string(),
         version_witness
     );
 

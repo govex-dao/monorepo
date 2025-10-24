@@ -9,6 +9,7 @@ use account_protocol::account::Account;
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
+use account_protocol::package_registry::PackageRegistry;
 use futarchy_actions::config_actions;
 use futarchy_core::dao_config;
 use futarchy_core::futarchy_config::FutarchyConfig;
@@ -42,6 +43,7 @@ public fun witness(): ConfigIntent {
 /// Create intent to enable/disable proposals
 public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     enabled: bool,
@@ -49,6 +51,7 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
 ) {
     // Use standard DAO settings for intent params (expiry, etc.)
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_set_proposals_enabled".to_string(),
@@ -70,6 +73,7 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
 /// Create intent to update DAO name
 public fun create_update_name_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     new_name: String,
@@ -77,6 +81,7 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
 ) {
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_name".to_string(),
@@ -100,6 +105,7 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
 /// Create intent to update DAO metadata
 public fun create_update_metadata_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     name: AsciiString,
@@ -108,6 +114,7 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_metadata".to_string(),
@@ -133,6 +140,7 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
 /// Create intent to update trading parameters
 public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     review_period_ms: u64,
@@ -142,6 +150,7 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_trading_params".to_string(),
@@ -169,6 +178,7 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
 /// Create intent to update TWAP configuration
 public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     start_delay: u64,
@@ -178,6 +188,7 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_twap".to_string(),
@@ -204,6 +215,7 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
 /// Create intent to update governance settings
 public fun create_update_governance_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     max_outcomes: u64,
@@ -212,6 +224,7 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_governance".to_string(),
@@ -241,6 +254,7 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
 /// Create a flexible intent to update governance settings with optional parameters
 public fun create_update_governance_flexible_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     max_outcomes: Option<u64>,
@@ -253,6 +267,7 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_governance_flexible".to_string(),
@@ -279,11 +294,10 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
     );
 }
 
-// REMOVED: create_update_slash_distribution_intent - legacy code, not used
-
 /// Create intent to update queue parameters
 public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     max_proposer_funded: u64,
@@ -292,6 +306,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_queue_params".to_string(),
@@ -318,6 +333,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
 /// Create intent to update conditional metadata configuration
 public fun create_update_conditional_metadata_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     use_outcome_index: Option<bool>,
@@ -326,6 +342,7 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
 ) {
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_conditional_metadata".to_string(),
@@ -350,6 +367,7 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
 /// Create intent to update sponsorship configuration
 public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     enabled: Option<bool>,
@@ -360,6 +378,7 @@ public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>
 ) {
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_sponsorship".to_string(),
@@ -386,6 +405,7 @@ public fun create_update_sponsorship_config_intent<Outcome: store + drop + copy>
 /// Create intent to update early resolve configuration
 public fun create_update_early_resolve_config_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     min_proposal_duration_ms: u64,
@@ -400,6 +420,7 @@ public fun create_update_early_resolve_config_intent<Outcome: store + drop + cop
 ) {
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"config_update_early_resolve".to_string(),
@@ -432,6 +453,7 @@ public fun create_update_early_resolve_config_intent<Outcome: store + drop + cop
 /// Alias for TWAP params intent (backward compatibility)
 public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     twap_start_delay: u64,
@@ -442,6 +464,7 @@ public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
 ) {
     create_update_twap_config_intent(
         account,
+        registry,
         params,
         outcome,
         twap_start_delay,
@@ -455,6 +478,7 @@ public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
 /// Alias for fee params intent (backward compatibility)
 public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     max_proposer_funded: u64,
@@ -463,6 +487,7 @@ public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
 ) {
     create_update_queue_params_intent(
         account,
+        registry,
         params,
         outcome,
         max_proposer_funded,

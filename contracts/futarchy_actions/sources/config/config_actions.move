@@ -25,6 +25,7 @@ use account_protocol::{
     intents::{Self, Expired, Intent},
     version_witness::VersionWitness,
     bcs_validation,
+    package_registry::PackageRegistry,
 };
 use account_protocol::action_validation;
 use futarchy_core::{
@@ -225,8 +226,6 @@ public struct MetadataTableUpdateAction has store, drop, copy {
     keys_to_remove: vector<String>,
 }
 
-// REMOVED: SlashDistributionUpdateAction - legacy code, not used
-
 /// Queue parameters update action
 public struct QueueParamsUpdateAction has store, drop, copy {
     max_proposer_funded: Option<u64>,
@@ -281,6 +280,7 @@ public struct ConfigAction has store, drop, copy {
 public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -308,7 +308,7 @@ public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Get mutable config using internal function
-    let config = futarchy_config::internal_config_mut(account, version);
+    let config = futarchy_config::internal_config_mut(account, registry, version);
 
     // Apply the state change on the FutarchyConfig
     // For now, skip state modification since it requires Account access
@@ -329,6 +329,7 @@ public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
 /// Internal version that works directly with action struct for init actions
 public fun do_set_proposals_enabled_internal(
     account: &mut Account,
+    registry: &PackageRegistry,
     action: SetProposalsEnabledAction,  // Take by value to consume
     version: VersionWitness,
     clock: &Clock,
@@ -337,7 +338,7 @@ public fun do_set_proposals_enabled_internal(
     let SetProposalsEnabledAction { enabled } = action;  // Destructure to consume
 
     // Get mutable config using internal function
-    let config = futarchy_config::internal_config_mut(account, version);
+    let config = futarchy_config::internal_config_mut(account, registry, version);
     
     // Apply the state change on the FutarchyConfig
     // For now, skip state modification since it requires Account access
@@ -357,6 +358,7 @@ public fun do_set_proposals_enabled_internal(
 public fun do_terminate_dao<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -389,7 +391,7 @@ public fun do_terminate_dao<Outcome: store, IW: drop>(
     assert!(reason.length() > 0, EInvalidRatio);
 
     // Get dao state and verify we're currently active
-    let dao_state = futarchy_config::state_mut_from_account(account);
+    let dao_state = futarchy_config::state_mut_from_account(account, registry);
     assert!(
         futarchy_config::operational_state(dao_state) == futarchy_config::state_active(),
         ENotActive
@@ -422,6 +424,7 @@ public fun do_terminate_dao<Outcome: store, IW: drop>(
 public fun do_update_name<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -452,7 +455,7 @@ public fun do_update_name<Outcome: store, IW: drop>(
     assert!(new_name.length() > 0, EEmptyName);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Update the name - futarchy_config expects a regular String
     futarchy_config::set_dao_name(config, new_name);
@@ -471,6 +474,7 @@ public fun do_update_name<Outcome: store, IW: drop>(
 /// Internal version that works directly with action struct for init actions
 public fun do_update_name_internal(
     account: &mut Account,
+    registry: &PackageRegistry,
     action: UpdateNameAction,  // Already takes by value
     version: VersionWitness,
     clock: &Clock,
@@ -483,7 +487,7 @@ public fun do_update_name_internal(
     assert!(new_name.length() > 0, EEmptyName);
     
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
     
     // Update the name directly (set_dao_name handles conversion internally)
     futarchy_config::set_dao_name(config, new_name);
@@ -502,6 +506,7 @@ public fun do_update_name_internal(
 public fun do_update_trading_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -545,7 +550,7 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
     validate_trading_params_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     if (action.min_asset_amount.is_some()) {
@@ -580,6 +585,7 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
 public fun do_update_metadata<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -631,7 +637,7 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
     validate_metadata_update(&action);
     
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
     
     // Apply updates if provided - convert types as needed
     if (action.dao_name.is_some()) {
@@ -662,6 +668,7 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
 public fun do_update_twap_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -707,7 +714,7 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     validate_twap_config_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     if (action.start_delay.is_some()) {
@@ -737,6 +744,7 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
 public fun do_update_governance<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -784,7 +792,7 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     validate_governance_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     if (action.max_outcomes.is_some()) {
@@ -825,6 +833,7 @@ public fun do_update_governance<Outcome: store, IW: drop>(
 public fun do_update_metadata_table<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -891,7 +900,7 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
     assert!(action.keys.length() == action.values.length(), EMismatchedKeyValueLength);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Metadata table operations would be implemented here when available in futarchy_config
     // Currently, futarchy_config doesn't have a metadata table, so we validate the action
@@ -913,6 +922,7 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
 public fun do_update_queue_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -952,7 +962,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     validate_queue_params_update(&action);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Apply updates if provided
     // Note: set_fee_escalation_basis_points doesn't exist yet in futarchy_config
@@ -977,6 +987,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
 public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -1016,7 +1027,7 @@ public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
     let account_id = object::id(account);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Apply updates using futarchy_config setters (standard pattern)
     if (use_outcome_index_opt.is_some()) {
@@ -1049,6 +1060,7 @@ public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
 public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -1083,7 +1095,7 @@ public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
 
     // Create new early resolve config
     let early_resolve_config = futarchy_config::new_early_resolve_config(
@@ -1114,6 +1126,7 @@ public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
 public fun do_update_sponsorship_config<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -1151,7 +1164,7 @@ public fun do_update_sponsorship_config<Outcome: store, IW: drop>(
     let account_id = object::id(account);
 
     // Get mutable config through Account protocol with witness
-    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, version, ConfigActionsWitness {});
+    let config = account::config_mut<FutarchyConfig, ConfigActionsWitness>(account, registry, version, ConfigActionsWitness {});
     let dao_cfg = futarchy_config::dao_config_mut(config);
     let sponsorship_cfg = dao_config::sponsorship_config_mut(dao_cfg);
 
@@ -1302,8 +1315,6 @@ public fun destroy_metadata_table_update(action: MetadataTableUpdateAction) {
     } = action;
 }
 
-// REMOVED: destroy_slash_distribution_update - legacy code, not used
-
 /// Destroy a QueueParamsUpdateAction
 public fun destroy_queue_params_update(action: QueueParamsUpdateAction) {
     let QueueParamsUpdateAction {
@@ -1451,8 +1462,6 @@ public fun delete_metadata_table_update<Config>(expired: &mut Expired) {
     let _ = reader.into_remainder_bytes();
 }
 
-// REMOVED: delete_slash_distribution_update - legacy code, not used
-
 /// Delete a queue params update action from an expired intent
 public fun delete_queue_params_update<Config>(expired: &mut Expired) {
     let action_spec = intents::remove_action_spec(expired);
@@ -1516,8 +1525,6 @@ public fun new_update_name_action(new_name: String): UpdateNameAction {
     assert!(new_name.length() > 0, EEmptyName);
     UpdateNameAction { new_name }
 }
-
-// REMOVED: new_slash_distribution_update_action - legacy code, not used
 
 /// Create a trading params update action
 public fun new_trading_params_update_action(
@@ -1836,8 +1843,6 @@ public fun new_metadata_table_update<Outcome, IW: drop>(
     destroy_metadata_table_update(action);
 }
 
-// REMOVED: new_slash_distribution_update - legacy code, not used
-
 /// Add a QueueParamsUpdate action to an intent
 public fun new_queue_params_update<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
@@ -1979,9 +1984,6 @@ public fun get_metadata_table_fields(update: &MetadataTableUpdateAction): (
         &update.keys_to_remove
     )
 }
-
-/// Get slash distribution update fields
-// REMOVED: get_slash_distribution_fields - legacy code, not used
 
 /// Get queue params update fields
 public fun get_queue_params_fields(update: &QueueParamsUpdateAction): (
@@ -2150,24 +2152,26 @@ fun validate_queue_params_update(action: &QueueParamsUpdateAction) {
 public fun do_update_twap_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     iw: IW,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    do_update_twap_config<Outcome, IW>(executable, account, version, iw, clock, ctx);
+    do_update_twap_config<Outcome, IW>(executable, account, registry, version, iw, clock, ctx);
 }
 
 /// Alias for queue params update (was called fee params)
 public fun do_update_fee_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
     iw: IW,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    do_update_queue_params<Outcome, IW>(executable, account, version, iw, clock, ctx);
+    do_update_queue_params<Outcome, IW>(executable, account, registry, version, iw, clock, ctx);
 }
 
 // === Deserialization Constructors ===
@@ -2297,8 +2301,6 @@ public(package) fun queue_params_update_action_from_bytes(bytes: vector<u8>): Qu
         fee_escalation_basis_points: bcs.peel_option_u64(),
     }
 }
-
-// REMOVED: slash_distribution_update_action_from_bytes - legacy code, not used
 
 /// Deserialize EarlyResolveConfigUpdateAction from bytes
 public(package) fun early_resolve_config_update_action_from_bytes(bytes: vector<u8>): EarlyResolveConfigUpdateAction {

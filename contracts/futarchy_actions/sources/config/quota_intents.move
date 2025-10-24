@@ -8,6 +8,7 @@ use account_protocol::account::Account;
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
+use account_protocol::package_registry::PackageRegistry;
 use futarchy_actions::quota_actions;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
@@ -29,6 +30,7 @@ public struct QuotaIntent has copy, drop {}
 /// quota_amount = 0 removes quotas
 public fun create_set_quotas_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     users: vector<address>,
@@ -39,6 +41,7 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
     ctx: &mut TxContext,
 ) {
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"quota_set_quotas".to_string(),
@@ -66,6 +69,7 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
 /// Create intent to remove quotas (convenience wrapper)
 public fun create_remove_quotas_intent<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     users: vector<address>,
@@ -73,6 +77,7 @@ public fun create_remove_quotas_intent<Outcome: store + drop + copy>(
 ) {
     create_set_quotas_intent(
         account,
+        registry,
         params,
         outcome,
         users,

@@ -371,7 +371,6 @@ public fun new_apply_pending_coin_fees(
 public fun do_set_factory_paused<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -395,7 +394,7 @@ public fun do_set_factory_paused<Outcome: store, IW: drop>(
     
     let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
-        registry, b"protocol:factory_owner_cap".to_string(),
+        b"protocol:factory_owner_cap".to_string(),
         version
     );
     
@@ -410,7 +409,6 @@ public fun do_set_factory_paused<Outcome: store, IW: drop>(
 public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -432,7 +430,7 @@ public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
 
     let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
-        registry, b"protocol:factory_owner_cap".to_string(),
+        b"protocol:factory_owner_cap".to_string(),
         version
     );
 
@@ -444,7 +442,6 @@ public fun do_disable_factory_permanently<Outcome: store, IW: drop>(
 public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -465,7 +462,7 @@ public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
     
     let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
-        registry, b"protocol:factory_owner_cap".to_string(),
+        b"protocol:factory_owner_cap".to_string(),
         version
     );
     
@@ -476,7 +473,6 @@ public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
 public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     factory: &mut Factory,
@@ -497,7 +493,7 @@ public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
     
     let cap = account::borrow_managed_asset<String, FactoryOwnerCap>(
         account,
-        registry, b"protocol:factory_owner_cap".to_string(),
+        b"protocol:factory_owner_cap".to_string(),
         version
     );
     
@@ -508,7 +504,6 @@ public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
 public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -531,7 +526,7 @@ public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -542,7 +537,6 @@ public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
 public fun do_update_proposal_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -565,7 +559,7 @@ public fun do_update_proposal_fee<Outcome: store, IW: drop>(
 
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
 
@@ -582,7 +576,6 @@ public fun do_update_proposal_fee<Outcome: store, IW: drop>(
 public fun do_update_verification_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -606,7 +599,7 @@ public fun do_update_verification_fee<Outcome: store, IW: drop>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -624,7 +617,6 @@ public fun do_update_verification_fee<Outcome: store, IW: drop>(
 public fun do_add_verification_level<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -648,7 +640,7 @@ public fun do_add_verification_level<Outcome: store, IW: drop>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -659,7 +651,6 @@ public fun do_add_verification_level<Outcome: store, IW: drop>(
 public fun do_remove_verification_level<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -682,7 +673,7 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -696,7 +687,6 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
 public fun do_request_verification<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -754,7 +744,6 @@ public fun do_request_verification<Outcome: store, IW: drop>(
 public fun do_approve_verification<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     target_dao: &mut Account,
@@ -781,7 +770,7 @@ public fun do_approve_verification<Outcome: store, IW: drop>(
     // Verify we have the validator capability
     let cap = account::borrow_managed_asset<String, ValidatorAdminCap>(
         account,
-        registry, b"protocol:validator_admin_cap".to_string(),
+        b"protocol:validator_admin_cap".to_string(),
         version
     );
 
@@ -811,7 +800,6 @@ public fun do_approve_verification<Outcome: store, IW: drop>(
 public fun do_reject_verification<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     target_dao: &mut Account,
@@ -837,7 +825,7 @@ public fun do_reject_verification<Outcome: store, IW: drop>(
     // Verify we have the validator capability
     let cap = account::borrow_managed_asset<String, ValidatorAdminCap>(
         account,
-        registry, b"protocol:validator_admin_cap".to_string(),
+        b"protocol:validator_admin_cap".to_string(),
         version
     );
 
@@ -864,7 +852,6 @@ public fun do_reject_verification<Outcome: store, IW: drop>(
 public fun do_update_recovery_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -887,7 +874,7 @@ public fun do_update_recovery_fee<Outcome: store, IW: drop>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -898,7 +885,6 @@ public fun do_update_recovery_fee<Outcome: store, IW: drop>(
 public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -921,7 +907,7 @@ public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -938,7 +924,6 @@ public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
 public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -970,7 +955,7 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
 
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
 
@@ -991,7 +976,6 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
 public fun do_update_coin_creation_fee<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -1014,7 +998,7 @@ public fun do_update_coin_creation_fee<Outcome: store, IW: drop, StableType>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -1032,7 +1016,6 @@ public fun do_update_coin_creation_fee<Outcome: store, IW: drop, StableType>(
 public fun do_update_coin_proposal_fee<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -1055,7 +1038,7 @@ public fun do_update_coin_proposal_fee<Outcome: store, IW: drop, StableType>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -1073,7 +1056,6 @@ public fun do_update_coin_proposal_fee<Outcome: store, IW: drop, StableType>(
 public fun do_update_coin_recovery_fee<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -1096,7 +1078,7 @@ public fun do_update_coin_recovery_fee<Outcome: store, IW: drop, StableType>(
     
     let cap = account::borrow_managed_asset<String, FeeAdminCap>(
         account,
-        registry, b"protocol:fee_admin_cap".to_string(),
+        b"protocol:fee_admin_cap".to_string(),
         version
     );
     
@@ -1119,7 +1101,6 @@ public struct ApplyPendingCoinFeesAction has store, drop {
 public fun do_apply_pending_coin_fees<Outcome: store, IW: drop, StableType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     fee_manager: &mut FeeManager,
@@ -1155,7 +1136,6 @@ public fun do_apply_pending_coin_fees<Outcome: store, IW: drop, StableType>(
 public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, StableCoin>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
-    registry: &PackageRegistry,
     version: VersionWitness,
     witness: IW,
     raise: &mut Raise<RaiseToken, StableCoin>,
@@ -1183,7 +1163,7 @@ public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, St
     // Verify we have the validator capability
     let cap = account::borrow_managed_asset<String, ValidatorAdminCap>(
         account,
-        registry, b"protocol:validator_admin_cap".to_string(),
+        b"protocol:validator_admin_cap".to_string(),
         version
     );
 

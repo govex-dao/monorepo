@@ -28,6 +28,7 @@ use account_protocol::{
     intents,
     version_witness::VersionWitness,
     action_validation,
+    package_registry::PackageRegistry,
 };
 use account_actions::currency;
 use futarchy_core::resource_requests;
@@ -218,6 +219,7 @@ public fun new_recipient_mint(recipient: address, amount: u64): RecipientMint {
 /// @param expiry_years: Maximum time to claim (0 = no expiry)
 public fun create_grant<AssetType, StableType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     tiers: vector<PriceTier>,
     launchpad_multiplier: u64,
     earliest_execution_offset_ms: u64,
@@ -310,8 +312,8 @@ public fun create_grant<AssetType, StableType>(
     transfer::share_object(grant);
 
     // Ensure grant storage exists and register grant
-    ensure_grant_storage(account, version, ctx);
-    register_grant(account, grant_id_inner, cancelable, version);
+    ensure_grant_storage(account, registry, version, ctx);
+    register_grant(account, registry, grant_id_inner, cancelable, version);
 
     grant_id_inner
 }
@@ -390,31 +392,19 @@ public struct ClaimGrantAction has store, drop {
     dao_address: address,
 }
 
-// === Claim Functions ===
+// === Claim Helper Functions ===
 
-/// Claim tokens from a specific tier (STEP 1: Validation)
-///
-/// Checks:
-/// - Time bounds (earliest + latest)
-/// - Price condition (tier-specific)
-/// - Launchpad enforcement (global minimum)
-/// - Tier not executed
-/// - Recipient is in tier's recipient list
-///
-/// Returns ResourceRequest that must be fulfilled in same PTB
-public fun claim_grant<AssetType, StableType>(
+/// Validate claim eligibility (DAO state, grant state, timing, cap ownership)
+fun validate_claim_eligibility<AssetType, StableType>(
     account: &Account,
+    registry: &PackageRegistry,
     version: VersionWitness,
-    grant: &mut PriceBasedMintGrant<AssetType, StableType>,
-    tier_index: u64,
+    grant: &PriceBasedMintGrant<AssetType, StableType>,
     claim_cap: &GrantClaimCap,
-    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
-    conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
-    ctx: &mut TxContext,
-): resource_requests::ResourceRequest<ClaimGrantAction> {
+) {
     // Check DAO is not dissolving
-    assert_not_dissolving(account, version);
+    assert_not_dissolving(account, registry, version);
 
     // Verify claim cap matches grant
     assert!(claim_cap.grant_id == object::id(grant), EWrongAccount);
@@ -435,12 +425,34 @@ public fun claim_grant<AssetType, StableType>(
         let latest = grant.latest_execution.borrow();
         assert!(now <= *latest, EGrantExpired);
     };
+}
 
-    // Get tier
-    assert!(tier_index < vector::length(&grant.tiers), EInvalidAmount);
-    let tier = vector::borrow_mut(&mut grant.tiers, tier_index);
-    assert!(!tier.executed, ETierAlreadyExecuted);
+/// Validate price conditions (tier-specific + launchpad global minimum)
+fun validate_price_conditions<AssetType, StableType>(
+    grant: &PriceBasedMintGrant<AssetType, StableType>,
+    tier: &PriceTier,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
+    conditional_pools: &vector<LiquidityPool>,
+    clock: &Clock,
+) {
+    validate_price_conditions_with_enforcement(
+        grant.launchpad_enforcement,
+        tier,
+        spot_pool,
+        conditional_pools,
+        clock
+    );
+}
 
+/// Validate price conditions with pre-extracted launchpad enforcement
+/// This avoids borrow conflicts when tier is already mutably borrowed
+fun validate_price_conditions_with_enforcement<AssetType, StableType>(
+    launchpad_enforcement: LaunchpadEnforcement,
+    tier: &PriceTier,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
+    conditional_pools: &vector<LiquidityPool>,
+    clock: &Clock,
+) {
     // Read oracle price
     let current_price = pass_through_oracle::get_geometric_governance_twap(
         spot_pool,
@@ -458,15 +470,17 @@ public fun claim_grant<AssetType, StableType>(
     };
 
     // Check launchpad enforcement (global minimum)
-    if (grant.launchpad_enforcement.enabled) {
-        let min_price = (grant.launchpad_enforcement.launchpad_price *
-                         (grant.launchpad_enforcement.minimum_multiplier as u128)) /
+    if (launchpad_enforcement.enabled) {
+        let min_price = (launchpad_enforcement.launchpad_price *
+                         (launchpad_enforcement.minimum_multiplier as u128)) /
                          (PRICE_MULTIPLIER_SCALE as u128);
         assert!(current_price >= min_price, EPriceBelowLaunchpad);
     };
+}
 
-    // Find recipient in tier
-    let recipient = tx_context::sender(ctx);
+/// Find recipient's allocation in the tier
+/// Returns claimable amount for the recipient
+fun find_recipient_allocation(tier: &PriceTier, recipient: address): u64 {
     let mut claimable_amount = 0u64;
     let mut found = false;
     let mut i = 0;
@@ -483,17 +497,24 @@ public fun claim_grant<AssetType, StableType>(
     };
 
     assert!(found, ENotRecipient);
+    assert!(claimable_amount > 0, EInsufficientVested);
 
+    claimable_amount
+}
+
+/// Update claim tracking for recipient and mark tier as executed
+fun update_claim_tracking<AssetType, StableType>(
+    grant: &mut PriceBasedMintGrant<AssetType, StableType>,
+    tier: &mut PriceTier,
+    recipient: address,
+    claimable_amount: u64,
+) {
     // Check if already claimed
     let already_claimed = if (table::contains(&grant.recipient_claims, recipient)) {
         *table::borrow(&grant.recipient_claims, recipient)
     } else {
         0u64
     };
-
-    // For tier-based claims, each recipient can only claim once per tier
-    // We track total claimed across all tiers for this recipient
-    assert!(claimable_amount > 0, EInsufficientVested);
 
     // Update recipient tracking
     let new_claimed = already_claimed + claimable_amount;
@@ -505,12 +526,79 @@ public fun claim_grant<AssetType, StableType>(
         table::add(&mut grant.recipient_claims, recipient, new_claimed);
     };
 
-    // Mark tier as executed for this recipient (we track per-recipient execution separately)
-    // For now, mark tier executed when anyone claims - can enhance to track per-recipient later
+    // Mark tier as executed
+    // Note: Currently marks tier executed when anyone claims
+    // Future enhancement: track per-recipient execution separately
     tier.executed = true;
+}
 
+// === Claim Functions ===
+
+/// Claim tokens from a specific tier (STEP 1: Validation)
+///
+/// Refactored into helper functions for:
+/// - Eligibility validation (DAO state, grant state, timing, cap)
+/// - Price condition checks (tier + launchpad)
+/// - Recipient lookup and allocation
+/// - Claim tracking and tier execution
+///
+/// Returns ResourceRequest that must be fulfilled in same PTB
+public fun claim_grant<AssetType, StableType>(
+    account: &Account,
+    registry: &PackageRegistry,
+    version: VersionWitness,
+    grant: &mut PriceBasedMintGrant<AssetType, StableType>,
+    tier_index: u64,
+    claim_cap: &GrantClaimCap,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
+    conditional_pools: &vector<LiquidityPool>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): resource_requests::ResourceRequest<ClaimGrantAction> {
+    // Phase 1: Validate claim eligibility
+    validate_claim_eligibility(account, registry, version, grant, claim_cap, clock);
+
+    // Phase 2: Extract launchpad enforcement before mutable borrow
+    let launchpad_enforcement = grant.launchpad_enforcement;
+
+    // Phase 3-5: Work with tier (in its own scope to control borrowing)
+    let (recipient, claimable_amount) = {
+        assert!(tier_index < vector::length(&grant.tiers), EInvalidAmount);
+        let tier = vector::borrow_mut(&mut grant.tiers, tier_index);
+        assert!(!tier.executed, ETierAlreadyExecuted);
+
+        // Validate price conditions
+        validate_price_conditions_with_enforcement(launchpad_enforcement, tier, spot_pool, conditional_pools, clock);
+
+        // Find recipient allocation
+        let recipient = tx_context::sender(ctx);
+        let claimable_amount = find_recipient_allocation(tier, recipient);
+
+        // Mark tier as executed before dropping the borrow
+        tier.executed = true;
+
+        (recipient, claimable_amount)
+    }; // tier borrow ends here
+
+    // Phase 6: Update recipient claim tracking (after dropping tier borrow)
+    // We need to drop the tier borrow before accessing grant.recipient_claims
+    let already_claimed = if (table::contains(&grant.recipient_claims, recipient)) {
+        *table::borrow(&grant.recipient_claims, recipient)
+    } else {
+        0u64
+    };
+
+    let new_claimed = already_claimed + claimable_amount;
+    assert!(new_claimed >= already_claimed, ETimeCalculationOverflow);
+
+    if (table::contains(&mut grant.recipient_claims, recipient)) {
+        *table::borrow_mut(&mut grant.recipient_claims, recipient) = new_claimed;
+    } else {
+        table::add(&mut grant.recipient_claims, recipient, new_claimed);
+    };
+
+    // Phase 7: Create resource request
     let dao_address = object::id_to_address(&grant.dao_id);
-
     let action = ClaimGrantAction {
         grant_id: object::id(grant),
         tier_index,
@@ -527,6 +615,7 @@ public fun claim_grant<AssetType, StableType>(
 public fun fulfill_claim_grant_from_account<AssetType, StableType, Config>(
     request: resource_requests::ResourceRequest<ClaimGrantAction>,
     account: &mut Account,
+    registry: &PackageRegistry,
     clock: &Clock,
     ctx: &mut tx_context::TxContext,
 ) {
@@ -537,7 +626,7 @@ public fun fulfill_claim_grant_from_account<AssetType, StableType, Config>(
     assert!(account_addr == action.dao_address, EWrongAccount);
 
     // Borrow TreasuryCap from Account
-    let treasury_cap = currency::borrow_treasury_cap_mut<AssetType>(account);
+    let treasury_cap = currency::borrow_treasury_cap_mut<AssetType>(account, registry);
 
     // Mint tokens
     let minted_coin = coin::mint<AssetType>(treasury_cap, action.claimable_amount, ctx);
@@ -566,12 +655,13 @@ fun check_price_condition(condition: &PriceCondition, current_price: u128): bool
 
 // === Grant Registry Management ===
 
-fun ensure_grant_storage(account: &mut Account, version_witness: VersionWitness, ctx: &mut TxContext) {
+fun ensure_grant_storage(account: &mut Account, registry: &PackageRegistry, version_witness: VersionWitness, ctx: &mut TxContext) {
     use account_protocol::account;
 
     if (!account::has_managed_data(account, GrantStorageKey {})) {
         account::add_managed_data(
             account,
+            registry,
             GrantStorageKey {},
             GrantStorage {
                 grants: sui::table::new(ctx),
@@ -585,6 +675,7 @@ fun ensure_grant_storage(account: &mut Account, version_witness: VersionWitness,
 
 fun register_grant(
     account: &mut Account,
+    registry: &PackageRegistry,
     grant_id: ID,
     cancelable: bool,
     version_witness: VersionWitness,
@@ -593,6 +684,7 @@ fun register_grant(
 
     let storage: &mut GrantStorage = account::borrow_managed_data_mut(
         account,
+        registry,
         GrantStorageKey {},
         version_witness
     );
@@ -607,12 +699,13 @@ fun register_grant(
     storage.total_grants = storage.total_grants + 1;
 }
 
-fun assert_not_dissolving(account: &Account, version_witness: VersionWitness) {
+fun assert_not_dissolving(account: &Account, registry: &PackageRegistry, version_witness: VersionWitness) {
     use account_protocol::account;
     use futarchy_core::futarchy_config;
 
     let dao_state: &futarchy_config::DaoState = account::borrow_managed_data(
         account,
+        registry,
         futarchy_config::new_dao_state_key(),
         version_witness
     );
@@ -623,7 +716,7 @@ fun assert_not_dissolving(account: &Account, version_witness: VersionWitness) {
     );
 }
 
-public fun get_all_grant_ids(account: &Account, version_witness: VersionWitness): vector<ID> {
+public fun get_all_grant_ids(account: &Account, registry: &PackageRegistry, version_witness: VersionWitness): vector<ID> {
     use account_protocol::account;
 
     if (!account::has_managed_data(account, GrantStorageKey {})) {
@@ -632,6 +725,7 @@ public fun get_all_grant_ids(account: &Account, version_witness: VersionWitness)
 
     let storage: &GrantStorage = account::borrow_managed_data(
         account,
+        registry,
         GrantStorageKey {},
         version_witness
     );
@@ -715,46 +809,22 @@ public fun new_emergency_unfreeze_grant(grant_id: ID): EmergencyUnfreezeGrantAct
     EmergencyUnfreezeGrantAction { grant_id }
 }
 
-// === Execution Functions ===
+// === Helper Functions for BCS Deserialization ===
 
-public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account,
-    version: VersionWitness,
-    _witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    assert_not_dissolving(account, version);
-    ensure_grant_storage(account, version, ctx);
-
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<CreateOracleGrant>(spec);
-
-    let action_data = intents::action_spec_data(spec);
-    let mut reader = bcs::new(*action_data);
-
-    // Deserialize tier specs
-    let tier_spec_count = bcs::peel_vec_length(&mut reader);
+/// Deserialize tier specifications from BCS reader
+fun deserialize_tier_specs(reader: &mut bcs::BCS): vector<TierSpec> {
+    let tier_spec_count = bcs::peel_vec_length(reader);
     let mut tier_specs = vector::empty<TierSpec>();
     let mut i = 0;
+
     while (i < tier_spec_count) {
-        let price_threshold = bcs::peel_u128(&mut reader);
-        let is_above = bcs::peel_bool(&mut reader);
+        let price_threshold = bcs::peel_u128(reader);
+        let is_above = bcs::peel_bool(reader);
 
         // Deserialize recipients for this tier
-        let recipient_count = bcs::peel_vec_length(&mut reader);
-        let mut recipients = vector::empty<RecipientMint>();
-        let mut j = 0;
-        while (j < recipient_count) {
-            let recipient = bcs::peel_address(&mut reader);
-            let amount = bcs::peel_u64(&mut reader);
-            vector::push_back(&mut recipients, RecipientMint { recipient, amount });
-            j = j + 1;
-        };
+        let recipients = deserialize_recipients(reader);
 
-        let tier_description_bytes = bcs::peel_vec_u8(&mut reader);
+        let tier_description_bytes = bcs::peel_vec_u8(reader);
         let tier_description = std::string::utf8(tier_description_bytes);
 
         vector::push_back(&mut tier_specs, TierSpec {
@@ -766,22 +836,32 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
         i = i + 1;
     };
 
-    let launchpad_multiplier = bcs::peel_u64(&mut reader);
-    let earliest_execution_offset_ms = bcs::peel_u64(&mut reader);
-    let expiry_years = bcs::peel_u64(&mut reader);
-    let cancelable = bcs::peel_bool(&mut reader);
-    let description_bytes = bcs::peel_vec_u8(&mut reader);
+    tier_specs
+}
 
-    bcs_validation::validate_all_bytes_consumed(reader);
+/// Deserialize recipient mints from BCS reader
+fun deserialize_recipients(reader: &mut bcs::BCS): vector<RecipientMint> {
+    let recipient_count = bcs::peel_vec_length(reader);
+    let mut recipients = vector::empty<RecipientMint>();
+    let mut j = 0;
 
-    let description = std::string::utf8(description_bytes);
-    let dao_id = object::id(account);
+    while (j < recipient_count) {
+        let recipient = bcs::peel_address(reader);
+        let amount = bcs::peel_u64(reader);
+        vector::push_back(&mut recipients, RecipientMint { recipient, amount });
+        j = j + 1;
+    };
 
-    // Convert TierSpecs to PriceTiers
+    recipients
+}
+
+/// Convert TierSpecs to PriceTiers for grant creation
+fun convert_tier_specs_to_price_tiers(tier_specs: &vector<TierSpec>): vector<PriceTier> {
     let mut tiers = vector::empty<PriceTier>();
     let mut k = 0;
-    while (k < vector::length(&tier_specs)) {
-        let spec = vector::borrow(&tier_specs, k);
+
+    while (k < vector::length(tier_specs)) {
+        let spec = vector::borrow(tier_specs, k);
         let tier = PriceTier {
             price_condition: std::option::some(PriceCondition {
                 threshold: spec.price_threshold,
@@ -795,8 +875,74 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
         k = k + 1;
     };
 
+    tiers
+}
+
+/// Create and distribute claim caps to all recipients across all tiers
+fun distribute_claim_caps(tier_specs: &vector<TierSpec>, grant_id: ID, ctx: &mut TxContext) {
+    let mut m = 0;
+
+    while (m < vector::length(tier_specs)) {
+        let spec = vector::borrow(tier_specs, m);
+        let mut n = 0;
+
+        while (n < vector::length(&spec.recipients)) {
+            let recipient_mint = vector::borrow(&spec.recipients, n);
+            let claim_cap = GrantClaimCap {
+                id: object::new(ctx),
+                grant_id,
+            };
+            transfer::transfer(claim_cap, recipient_mint.recipient);
+            n = n + 1;
+        };
+        m = m + 1;
+    };
+}
+
+// === Execution Functions ===
+
+/// Execute create oracle grant action from proposal
+/// Refactored into smaller helper functions for clarity
+public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account,
+    registry: &PackageRegistry,
+    version: VersionWitness,
+    _witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validate DAO state and ensure storage exists
+    assert_not_dissolving(account, registry, version);
+    ensure_grant_storage(account, registry, version, ctx);
+
+    // Extract and validate action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<CreateOracleGrant>(spec);
+
+    // Deserialize action data from BCS
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+
+    let tier_specs = deserialize_tier_specs(&mut reader);
+    let launchpad_multiplier = bcs::peel_u64(&mut reader);
+    let earliest_execution_offset_ms = bcs::peel_u64(&mut reader);
+    let expiry_years = bcs::peel_u64(&mut reader);
+    let cancelable = bcs::peel_bool(&mut reader);
+    let description_bytes = bcs::peel_vec_u8(&mut reader);
+
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Convert deserialized data to runtime structures
+    let description = std::string::utf8(description_bytes);
+    let dao_id = object::id(account);
+    let tiers = convert_tier_specs_to_price_tiers(&tier_specs);
+
+    // Create the grant
     let grant_id = create_grant<AssetType, StableType>(
         account,
+        registry,
         tiers,
         launchpad_multiplier,
         earliest_execution_offset_ms,
@@ -809,22 +955,8 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
         ctx,
     );
 
-    // Create claim caps for all recipients
-    let mut m = 0;
-    while (m < vector::length(&tier_specs)) {
-        let spec = vector::borrow(&tier_specs, m);
-        let mut n = 0;
-        while (n < vector::length(&spec.recipients)) {
-            let recipient_mint = vector::borrow(&spec.recipients, n);
-            let claim_cap = GrantClaimCap {
-                id: object::new(ctx),
-                grant_id,
-            };
-            transfer::transfer(claim_cap, recipient_mint.recipient);
-            n = n + 1;
-        };
-        m = m + 1;
-    };
+    // Distribute claim caps to all recipients
+    distribute_claim_caps(&tier_specs, grant_id, ctx);
 
     executable::increment_action_idx(executable);
 }

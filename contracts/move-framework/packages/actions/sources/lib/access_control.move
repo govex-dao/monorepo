@@ -32,6 +32,7 @@ use account_protocol::{
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
     version_witness::VersionWitness,
+    package_registry::PackageRegistry,
 };
 use account_actions::version;
 
@@ -73,19 +74,21 @@ public struct ReturnAction<phantom Cap> has drop, store {}
 public fun lock_cap<Config: store, Cap: key + store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: Cap,
 ) {
     account.verify(auth);
-    account.add_managed_asset(CapKey<Cap>(), cap, version::current());
+    account.add_managed_asset(registry, CapKey<Cap>(), cap, version::current());
 }
 
 /// Lock capability during initialization - works on unshared Accounts
 /// Store any capability in the Account during creation
 public(package) fun do_lock_cap_unshared< Cap: key + store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: Cap,
 ) {
-    account.add_managed_asset(CapKey<Cap>(), cap, version::current());
+    account.add_managed_asset(registry, CapKey<Cap>(), cap, version::current());
 }
 
 /// Checks if there is a Cap locked for a given type.
@@ -135,6 +138,7 @@ public fun new_borrow<Outcome, Cap, IW: drop>(
 public fun do_borrow<Config: store, Outcome: store, Cap: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ): Cap {
@@ -179,7 +183,7 @@ public fun do_borrow<Config: store, Outcome: store, Cap: key + store, IW: drop>(
     // Just increment the action index
     executable::increment_action_idx(executable);
 
-    account.remove_managed_asset(CapKey<Cap>(), version_witness)
+    account.remove_managed_asset(registry, CapKey<Cap>(), version_witness)
 }
 
 /// Deletes a BorrowAction from an expired intent.
@@ -214,6 +218,7 @@ public fun new_return<Outcome, Cap, IW: drop>(
 public fun do_return<Config: store, Outcome: store, Cap: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: Cap,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -239,7 +244,7 @@ public fun do_return<Config: store, Outcome: store, Cap: key + store, IW: drop>(
     // Increment the action index
     executable::increment_action_idx(executable);
 
-    account.add_managed_asset(CapKey<Cap>(), cap, version_witness);
+    account.add_managed_asset(registry, CapKey<Cap>(), cap, version_witness);
 }
 
 /// Deletes a ReturnAction from an expired intent.

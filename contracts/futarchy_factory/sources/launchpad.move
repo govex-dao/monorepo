@@ -256,7 +256,7 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
     assert!(raise.dao_id.is_none(), EInvalidStateForAction);
 
-    let (account, queue, spot_pool) = factory::create_dao_unshared<RaiseToken, StableCoin>(
+    let (account, spot_pool) = factory::create_dao_unshared<RaiseToken, StableCoin>(
         factory,
         registry,
         fee_manager,
@@ -270,13 +270,13 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     raise.dao_id = option::some(object::id(&account));
 
     df::add(&mut raise.id, DaoAccountKey {}, account);
-    df::add(&mut raise.id, DaoQueueKey {}, queue);
     df::add(&mut raise.id, DaoPoolKey {}, spot_pool);
 }
 
 /// Stage initialization actions
 public fun stage_launchpad_init_intent<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    registry: &PackageRegistry,
     creator_cap: &CreatorCap,
     spec: InitActionSpecs,
     clock: &Clock,
@@ -306,7 +306,7 @@ public fun stage_launchpad_init_intent<RaiseToken, StableCoin>(
 
     {
         let account_ref: &mut Account = df::borrow_mut(&mut raise.id, DaoAccountKey {});
-        launchpad_init_actions::stage_init_intent(account_ref, &raise_id, staged_index, &spec, clock, ctx);
+        launchpad_init_actions::stage_init_intent(account_ref, registry, &raise_id, staged_index, &spec, clock, ctx);
     };
 
     vector::push_back(&mut raise.staged_init_specs, spec);
@@ -574,6 +574,7 @@ public entry fun end_raise_early<RT, SC>(
 public entry fun complete_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
+    registry: &PackageRegistry,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<sui::sui::SUI>,
     clock: &Clock,
@@ -584,12 +585,13 @@ public entry fun complete_raise<RaiseToken: drop + store, StableCoin: drop + sto
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(raise.settlement_done, EInvalidStateForAction);
 
-    complete_raise_internal(raise, fee_manager, payment, clock, ctx);
+    complete_raise_internal(raise, registry, fee_manager, payment, clock, ctx);
 }
 
 /// Permissionless completion after delay
 public entry fun complete_raise_permissionless<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    registry: &PackageRegistry,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<sui::sui::SUI>,
     clock: &Clock,
@@ -602,11 +604,12 @@ public entry fun complete_raise_permissionless<RaiseToken: drop + store, StableC
     let permissionless_open = raise.deadline_ms + PERMISSIONLESS_COMPLETION_DELAY_MS;
     assert!(clock.timestamp_ms() >= permissionless_open, EInvalidStateForAction);
 
-    complete_raise_internal(raise, fee_manager, payment, clock, ctx);
+    complete_raise_internal(raise, registry, fee_manager, payment, clock, ctx);
 }
 
 fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    registry: &PackageRegistry,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<sui::sui::SUI>,
     clock: &Clock,
@@ -627,13 +630,14 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
 
     // Deposit treasury cap
     let treasury_cap = raise.treasury_cap.extract();
-    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, treasury_cap);
+    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, registry, treasury_cap);
 
     // Deposit metadata if exists
     if (df::exists_(&raise.id, CoinMetadataKey {})) {
         let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
         init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
             &mut account,
+            registry,
             DaoMetadataKey {},
             metadata,
         );
@@ -650,7 +654,7 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     );
 
     futarchy_config::set_launchpad_initial_price(
-        futarchy_config::internal_config_mut(&mut account, version::current()),
+        futarchy_config::internal_config_mut(&mut account, registry, version::current()),
         raise_price,
     );
 
@@ -658,6 +662,7 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
     init_actions::init_vault_deposit<FutarchyConfig, StableCoin>(
         &mut account,
+        registry,
         string::utf8(b"treasury"),
         raised_funds,
         ctx,
@@ -1063,6 +1068,7 @@ public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     dao_account: &mut Account,
+    registry: &PackageRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -1087,6 +1093,7 @@ public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
         let dust_stable = coin::from_balance(raise.stable_coin_vault.split(remaining_stable_balance), ctx);
         init_actions::init_vault_deposit<FutarchyConfig, StableCoin>(
             dao_account,
+            registry,
             string::utf8(b"treasury"),
             dust_stable,
             ctx,
@@ -1319,6 +1326,7 @@ public fun set_admin_trust_score<RT, SC>(
 public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
+    registry: &PackageRegistry,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<sui::sui::SUI>,
     clock: &Clock,
@@ -1343,13 +1351,14 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
 
     // Deposit treasury cap
     let treasury_cap = raise.treasury_cap.extract();
-    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, treasury_cap);
+    init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(&mut account, registry, treasury_cap);
 
     // Deposit metadata if exists
     if (df::exists_(&raise.id, CoinMetadataKey {})) {
         let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
         init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
             &mut account,
+            registry,
             DaoMetadataKey {},
             metadata,
         );
@@ -1366,7 +1375,7 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
     );
 
     futarchy_config::set_launchpad_initial_price(
-        futarchy_config::internal_config_mut(&mut account, version::current()),
+        futarchy_config::internal_config_mut(&mut account, registry, version::current()),
         raise_price,
     );
 
@@ -1374,6 +1383,7 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
     let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
     init_actions::init_vault_deposit<FutarchyConfig, StableCoin>(
         &mut account,
+        registry,
         string::utf8(b"treasury"),
         raised_funds,
         ctx,
@@ -1384,7 +1394,6 @@ public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + stor
     // In test environment, transfer objects to sender instead of sharing
     // This avoids the test framework limitation with share_object
     sui_transfer::public_transfer(account, ctx.sender());
-    sui_transfer::public_transfer(queue, ctx.sender());
     sui_transfer::public_transfer(spot_pool, ctx.sender());
 
     event::emit(RaiseSuccessful {

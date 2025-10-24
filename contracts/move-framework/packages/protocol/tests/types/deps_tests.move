@@ -40,7 +40,7 @@ fun test_deps_new_and_getters() {
     assert!(!deps.unverified_allowed());
 
     let witness = version_witness::new_for_testing(@account_protocol);
-    deps.check(witness);
+    deps.check(witness, &extensions);
 
     destroy(cap);
     destroy(pkg_cap);
@@ -77,7 +77,7 @@ fun test_deps_new_latest_extensions() {
     assert!(!deps.unverified_allowed());
 
     let witness = version_witness::new_for_testing(@account_protocol);
-    deps.check(witness);
+    deps.check(witness, &extensions);
 
     destroy(cap);
     destroy(pkg_cap);
@@ -210,11 +210,6 @@ fun test_error_deps_missing_account_protocol_first_element() {
     ts::end(scenario);
 }
 
-// REMOVED: test_error_deps_missing_account_config_second_element
-// This test checked for negative assertion (names[1] != "AccountActions") which was
-// intentionally removed in favor of type-safe validation via Move's type system.
-// See deps.move:91-109 for detailed rationale.
-
 #[test, expected_failure(abort_code = deps::ENotExtension)]
 fun test_error_deps_add_not_extension_unverified_not_allowed() {
     let mut scenario = ts::begin(@0xCAFE);
@@ -313,7 +308,7 @@ fun test_error_assert_is_dep() {
         vector[1, 1],
     );
     let witness = version_witness::new_for_testing(@0xDEAD);
-    deps.check(witness, &extensions, object::id(&extensions));
+    deps.check(witness, &extensions);
 
     destroy(cap);
     destroy(pkg_cap);
@@ -423,7 +418,7 @@ fun test_error_new_inner_not_same_length() {
     package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
-    let deps = deps::new_for_testing();
+    let deps = deps::new_for_testing(&extensions);
     let _deps = deps::new_inner(
         &extensions,
         &deps,
@@ -448,7 +443,7 @@ fun test_error_new_inner_not_same_length_bis() {
     package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
-    let deps = deps::new_for_testing();
+    let deps = deps::new_for_testing(&extensions);
     let _deps = deps::new_inner(
         &extensions,
         &deps,
@@ -473,7 +468,7 @@ fun test_error_new_inner_missing_account_protocol() {
     package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
-    let deps = deps::new_for_testing();
+    let deps = deps::new_for_testing(&extensions);
     let _deps = deps::new_inner(
         &extensions,
         &deps,
@@ -498,7 +493,7 @@ fun test_error_new_inner_missing_account_protocol_first_element() {
     package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
-    let deps = deps::new_for_testing();
+    let deps = deps::new_for_testing(&extensions);
     let _deps = deps::new_inner(
         &extensions,
         &deps,
@@ -523,7 +518,7 @@ fun test_error_new_inner_missing_account_config() {
     package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
-    let deps = deps::new_for_testing();
+    let deps = deps::new_for_testing(&extensions);
     let _deps = deps::new_inner(
         &extensions,
         &deps,
@@ -537,14 +532,6 @@ fun test_error_new_inner_missing_account_config() {
     destroy(extensions);
     ts::end(scenario);
 }
-
-// REMOVED: test_error_new_inner_missing_account_config_second_element
-// This test checked for negative assertion (names[1] != "AccountActions") which was
-// intentionally removed in favor of type-safe validation via Move's type system.
-// See deps.move:176-179 and deps.move:91-109 for detailed rationale.
-
-// REMOVED: test_error_new_inner_missing_account_config_unverified_disallowed_and_
-// Test name is incomplete and test logic doesn't match the name - appears to be broken/unfinished
 
 #[test, expected_failure(abort_code = deps::ENotExtension)]
 fun test_error_new_inner_add_not_extension_unverified_not_allowed() {
@@ -587,7 +574,7 @@ fun test_error_new_inner_add_name_already_exists() {
     package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
-    let deps = deps::new_for_testing();
+    let deps = deps::new_for_testing(&extensions);
     let _deps = deps::new_inner(
         &extensions,
         &deps,
@@ -616,7 +603,7 @@ fun test_error_new_inner_add_addr_already_exists() {
     package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
-    let deps = deps::new_for_testing();
+    let deps = deps::new_for_testing(&extensions);
     let _deps = deps::new_inner(
         &extensions,
         &deps,

@@ -12,6 +12,7 @@ use account_protocol::account::{Account, Auth};
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::Params;
+use account_protocol::package_registry::PackageRegistry;
 use std::string::String;
 use std::type_name;
 
@@ -37,6 +38,7 @@ public struct BorrowCapIntent() has copy, drop;
 public fun request_borrow_cap<Config: store, Outcome: store, Cap>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     ctx: &mut TxContext,
@@ -45,6 +47,7 @@ public fun request_borrow_cap<Config: store, Outcome: store, Cap>(
     assert!(ac::has_lock<Config, Cap>(account), ENoLock);
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         type_name_to_string<Cap>(),
@@ -62,12 +65,14 @@ public fun request_borrow_cap<Config: store, Outcome: store, Cap>(
 public fun execute_borrow_cap<Config: store, Outcome: store, Cap: key + store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
 ): Cap {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         BorrowCapIntent(),
-        |executable, iw| ac::do_borrow<Config, Outcome, Cap, _>(executable, account, version::current(), iw),
+        |executable, iw| ac::do_borrow<Config, Outcome, Cap, _>(executable, account, registry, version::current(), iw),
     )
 }
 
@@ -75,13 +80,15 @@ public fun execute_borrow_cap<Config: store, Outcome: store, Cap: key + store>(
 public fun execute_return_cap<Config: store, Outcome: store, Cap: key + store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: Cap,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         BorrowCapIntent(),
-        |executable, iw| ac::do_return<Config, Outcome, Cap, _>(executable, account, cap, version::current(), iw),
+        |executable, iw| ac::do_return<Config, Outcome, Cap, _>(executable, account, registry, cap, version::current(), iw),
     )
 }
 

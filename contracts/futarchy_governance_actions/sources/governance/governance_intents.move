@@ -19,6 +19,7 @@ use account_protocol::{
     executable::{Self, Executable},
     intents::{Self, Intent, Params},
     intent_interface,
+    package_registry::PackageRegistry,
 };
 use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use futarchy_core::version;
@@ -49,6 +50,7 @@ public fun witness(): GovernanceWitness {
 /// Returns both the executable and the intent key for cleanup
 public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
     _market: &MarketState,
     outcome_index: u64,
@@ -67,6 +69,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
     // Create and store Intent temporarily, then immediately create Executable
     let intent_key = create_and_store_intent_from_spec(
         account,
+        registry,
         intent_spec,
         outcome,
         clock,
@@ -76,6 +79,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
     // Now create the executable from the stored intent
     let (_outcome, executable) = account::create_executable<FutarchyConfig, Outcome, GovernanceWitness>(
         account,
+        registry,
         intent_key,
         clock,
         version::current(),
@@ -92,6 +96,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
 /// Returns the intent key for immediate execution
 public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
     account: &mut Account,
+    registry: &PackageRegistry,
     spec: InitActionSpecs,
     outcome: Outcome,
     clock: &Clock,
@@ -114,6 +119,7 @@ public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
     // Create the intent using the account module
     let mut intent = account::create_intent(
         account,
+        registry,
         params,
         outcome,
         b"ProposalExecution".to_string(),
@@ -141,10 +147,10 @@ public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
     // Store the intent in the account
     let key_copy = intent_key;
     let expiration_time = clock.timestamp_ms() + 3_600_000; // Same as above
-    account::insert_intent(account, intent, version::current(), witness());
+    account::insert_intent(account, registry, intent, version::current(), witness());
 
     // Register the intent with the janitor for tracking and cleanup
-    intent_janitor::register_intent(account, intent_key, expiration_time, ctx);
+    intent_janitor::register_intent(account, registry, intent_key, expiration_time, ctx);
 
     key_copy
 }

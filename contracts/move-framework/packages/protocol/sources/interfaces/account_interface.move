@@ -84,15 +84,17 @@ public macro fun create_account<$Config: store, $CW: drop>(
 /// Returns an Auth if the conditions passed are met (used to create intents and more).
 public macro fun create_auth<$Config: store, $CW: drop>(
     $account: &Account,
+    $registry: &account_protocol::package_registry::PackageRegistry,
     $version_witness: VersionWitness,
     $config_witness: $CW,
     $grant_permission: ||, // condition to grant permission, must throw if not met
 ): Auth {
     let account = $account;
+    let registry = $registry;
 
     $grant_permission();
 
-    account.new_auth<$Config, $CW>($version_witness, $config_witness)
+    account.new_auth<$Config, $CW>(registry, $version_witness, $config_witness)
 }
 
 /// Example implementation:

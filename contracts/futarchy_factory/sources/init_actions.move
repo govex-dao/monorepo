@@ -14,6 +14,7 @@ module futarchy_factory::init_actions;
 
 use account_protocol::account::{Self, Account};
 use account_protocol::intents::{Self, Intent};
+use account_protocol::package_registry::PackageRegistry;
 use futarchy_actions::config_intents;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::version;
@@ -67,6 +68,7 @@ fun add_actions_to_intent(
 /// After raise completes, frontend reads these specs and constructs PTB.
 public fun stage_init_intent(
     account: &mut Account,
+    registry: &PackageRegistry,
     owner_id: &ID,
     staged_index: u64,
     spec: &InitActionSpecs,
@@ -92,6 +94,7 @@ public fun stage_init_intent(
 
     let mut intent = account::create_intent(
         account,
+        registry,
         params,
         outcome,
         b"InitIntent".to_string(),
@@ -102,7 +105,7 @@ public fun stage_init_intent(
 
     add_actions_to_intent(&mut intent, spec);
 
-    account::insert_intent(account, intent, version::current(), witness);
+    account::insert_intent(account, registry, intent, version::current(), witness);
 }
 
 // === Cleanup Functions ===

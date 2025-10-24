@@ -81,11 +81,10 @@ public struct Account has key, store {
     metadata: Metadata,
     // ids and versions of the packages this account is using
     // idx 0: account_protocol, idx 1: account_actions optionally
+    // Note: registry_id is now stored within Deps
     deps: Deps,
     // open intents, key should be a unique descriptive name
     intents: Intents,
-    // Reference to the global PackageRegistry for whitelist checking
-    registry_id: ID,
     // config: Config,  ← MOVED TO DYNAMIC FIELD (see ConfigKey below)
 }
 
@@ -407,7 +406,7 @@ public fun create_intent<Outcome: store, IW: drop>(
     ctx: &mut TxContext,
 ): Intent<Outcome> {
     // ensures the package address is a dependency for this account OR in the global whitelist
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
 
     params.new_intent(
         outcome,
@@ -427,7 +426,7 @@ public fun insert_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     // ensures the package address is a dependency for this account
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     // ensures the right account is passed
     intent.assert_is_account(account.addr());
     // ensures the intent is created by the same package that creates the action
@@ -450,7 +449,7 @@ public fun add_managed_data<Key: copy + drop + store, Data: store>(
     version_witness: VersionWitness,
 ) {
     assert!(!has_managed_data(account, key), EManagedDataAlreadyExists);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     df::add(&mut account.id, key, data);
 }
 
@@ -470,7 +469,7 @@ public fun borrow_managed_data<Key: copy + drop + store, Data: store>(
     version_witness: VersionWitness,
 ): &Data {
     assert!(has_managed_data(account, key), EManagedDataDoesntExist);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     df::borrow(&account.id, key)
 }
 
@@ -482,7 +481,7 @@ public fun borrow_managed_data_mut<Key: copy + drop + store, Data: store>(
     version_witness: VersionWitness,
 ): &mut Data {
     assert!(has_managed_data(account, key), EManagedDataDoesntExist);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     df::borrow_mut(&mut account.id, key)
 }
 
@@ -494,7 +493,7 @@ public fun remove_managed_data<Key: copy + drop + store, A: store>(
     version_witness: VersionWitness,
 ): A {
     assert!(has_managed_data(account, key), EManagedDataDoesntExist);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     df::remove(&mut account.id, key)
 }
 
@@ -507,7 +506,7 @@ public fun add_managed_asset<Key: copy + drop + store, Asset: key + store>(
     version_witness: VersionWitness,
 ) {
     assert!(!has_managed_asset(account, key), EManagedAssetAlreadyExists);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     dof::add(&mut account.id, key, asset);
 }
 
@@ -527,7 +526,7 @@ public fun borrow_managed_asset<Key: copy + drop + store, Asset: key + store>(
     version_witness: VersionWitness,
 ): &Asset {
     assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     dof::borrow(&account.id, key)
 }
 
@@ -539,7 +538,7 @@ public fun borrow_managed_asset_mut<Key: copy + drop + store, Asset: key + store
     version_witness: VersionWitness,
 ): &mut Asset {
     assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     dof::borrow_mut(&mut account.id, key)
 }
 
@@ -551,7 +550,7 @@ public fun remove_managed_asset<Key: copy + drop + store, Asset: key + store>(
     version_witness: VersionWitness,
 ): Asset {
     assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     dof::remove(&mut account.id, key)
 }
 
@@ -576,17 +575,14 @@ public fun new<Config: store, CW: drop>(
     // Validate witness matches config module at compile time
     assert_is_config_module_static<Config, CW>();
 
-    let registry_id = object::id(registry);
-
     let mut account = Account {
         id: object::new(ctx),
         metadata: metadata::empty(),
         deps,
         intents: intents::empty(ctx),
-        registry_id,
     };
 
-    account.deps().check(version_witness, registry, registry_id);
+    account.deps().check(version_witness, registry);
 
     // Store config and its type as dynamic fields
     df::add(&mut account.id, ConfigKey {}, config);
@@ -602,7 +598,7 @@ public fun new_auth<Config: store, CW: drop>(
     version_witness: VersionWitness,
     config_witness: CW,
 ): Auth {
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     assert_is_config_module<Config, CW>(account, config_witness);
 
     Auth { account_addr: account.addr() }
@@ -618,7 +614,7 @@ public fun create_executable<Config: store, Outcome: store + copy, CW: drop>(
     config_witness: CW,
     ctx: &mut TxContext, // Kept for API compatibility
 ): (Outcome, Executable<Outcome>) {
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     assert_is_config_module<Config, CW>(account, config_witness);
 
     let mut intent = account.intents.remove_intent<Outcome>(key);
@@ -638,7 +634,7 @@ public fun intents_mut<Config: store, CW: drop>(
     version_witness: VersionWitness,
     config_witness: CW,
 ): &mut Intents {
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     assert_is_config_module<Config, CW>(account, config_witness);
 
     &mut account.intents
@@ -651,7 +647,7 @@ public fun config_mut<Config: store, CW: drop>(
     version_witness: VersionWitness,
     config_witness: CW,
 ): &mut Config {
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     assert_is_config_module<Config, CW>(account, config_witness);
 
     df::borrow_mut<ConfigKey, Config>(&mut account.id, ConfigKey {})
@@ -691,7 +687,7 @@ public(package) fun migrate_config<OldConfig: store, NewConfig: store>(
     version_witness: VersionWitness,
 ): OldConfig {
     // Ensure caller is authorized via deps
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
 
     // Validate that OldConfig matches what's currently stored
     let stored_type = df::borrow<ConfigTypeKey, TypeName>(&account.id, ConfigTypeKey {});
@@ -729,11 +725,6 @@ public fun metadata(account: &Account): &Metadata {
 /// Returns the dependencies of the account.
 public fun deps(account: &Account): &Deps {
     &account.deps
-}
-
-/// Returns the PackageRegistry ID stored in the account.
-public fun registry_id(account: &Account): ID {
-    account.registry_id
 }
 
 /// Returns the intents of the account.
@@ -882,7 +873,7 @@ public(package) fun metadata_mut(
     version_witness: VersionWitness,
 ): &mut Metadata {
     // ensures the package address is a dependency for this account
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     &mut account.metadata
 }
 
@@ -893,7 +884,7 @@ public(package) fun deps_mut(
     version_witness: VersionWitness,
 ): &mut Deps {
     // ensures the package address is a dependency for this account
-    account.deps().check(version_witness, registry, account.registry_id);
+    account.deps().check(version_witness, registry);
     &mut account.deps
 }
 
@@ -986,8 +977,8 @@ public struct TestAsset has key, store {
 #[test]
 fun test_addr() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let account_addr = addr(&account);
@@ -1000,8 +991,8 @@ fun test_addr() {
 #[test]
 fun test_verify_auth() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let auth = Auth { account_addr: account.addr() };
@@ -1015,8 +1006,8 @@ fun test_verify_auth() {
 #[test, expected_failure(abort_code = EWrongAccount)]
 fun test_verify_auth_wrong_account() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let auth = Auth { account_addr: @0xBAD };
@@ -1029,27 +1020,27 @@ fun test_verify_auth_wrong_account() {
 #[test]
 fun test_managed_data_flow() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
     let data = TestData { value: 42 };
 
     // Test add
-    add_managed_data(&mut account, key, data, version::current());
+    add_managed_data(&mut account, &registry, key, data, version::current());
     assert!(has_managed_data(&account, key));
 
     // Test borrow
-    let borrowed_data = borrow_managed_data(&account, key, version::current());
+    let borrowed_data = borrow_managed_data(&account, &registry, key, version::current());
     assert_eq(*borrowed_data, data);
 
     // Test borrow_mut
-    let borrowed_mut_data = borrow_managed_data_mut(&mut account, key, version::current());
+    let borrowed_mut_data = borrow_managed_data_mut(&mut account, &registry, key, version::current());
     assert_eq(*borrowed_mut_data, data);
 
     // Test remove
-    let removed_data = remove_managed_data(&mut account, key, version::current());
+    let removed_data = remove_managed_data(&mut account, &registry, key, version::current());
     assert_eq(removed_data, data);
     assert!(!has_managed_data(&account, key));
     destroy(account);
@@ -1059,16 +1050,16 @@ fun test_managed_data_flow() {
 #[test, expected_failure(abort_code = EManagedDataAlreadyExists)]
 fun test_add_managed_data_already_exists() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
     let data1 = TestData { value: 42 };
     let data2 = TestData { value: 100 };
 
-    add_managed_data(&mut account, key, data1, version::current());
-    add_managed_data(&mut account, key, data2, version::current());
+    add_managed_data(&mut account, &registry, key, data1, version::current());
+    add_managed_data(&mut account, &registry, key, data2, version::current());
     destroy(account);
     destroy(registry);
 }
@@ -1076,13 +1067,13 @@ fun test_add_managed_data_already_exists() {
 #[test, expected_failure(abort_code = EManagedDataDoesntExist)]
 fun test_borrow_managed_data_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_data<TestKey, TestData>(&account, key, version::current());
+    borrow_managed_data<TestKey, TestData>(&account, &registry, key, version::current());
     destroy(account);
     destroy(registry);
 }
@@ -1090,13 +1081,13 @@ fun test_borrow_managed_data_doesnt_exist() {
 #[test, expected_failure(abort_code = EManagedDataDoesntExist)]
 fun test_borrow_managed_data_mut_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_data_mut<TestKey, TestData>(&mut account, key, version::current());
+    borrow_managed_data_mut<TestKey, TestData>(&mut account, &registry, key, version::current());
     destroy(account);
     destroy(registry);
 }
@@ -1104,13 +1095,13 @@ fun test_borrow_managed_data_mut_doesnt_exist() {
 #[test, expected_failure(abort_code = EManagedDataDoesntExist)]
 fun test_remove_managed_data_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    remove_managed_data<TestKey, TestData>(&mut account, key, version::current());
+    remove_managed_data<TestKey, TestData>(&mut account, &registry, key, version::current());
     destroy(account);
     destroy(registry);
 }
@@ -1118,8 +1109,8 @@ fun test_remove_managed_data_doesnt_exist() {
 #[test]
 fun test_managed_asset_flow() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
@@ -1127,12 +1118,13 @@ fun test_managed_asset_flow() {
     let asset_id = object::id(&asset);
 
     // Test add
-    add_managed_asset(&mut account, key, asset, version::current());
+    add_managed_asset(&mut account, &registry, key, asset, version::current());
     assert!(has_managed_asset(&account, key), 0);
 
     // Test borrow
     let borrowed_asset = borrow_managed_asset<TestKey, TestAsset>(
         &account,
+        &registry,
         key,
         version::current(),
     );
@@ -1142,6 +1134,7 @@ fun test_managed_asset_flow() {
     // Test remove
     let removed_asset = remove_managed_asset<TestKey, TestAsset>(
         &mut account,
+        &registry,
         key,
         version::current(),
     );
@@ -1149,13 +1142,14 @@ fun test_managed_asset_flow() {
     assert!(!has_managed_asset(&account, key));
     destroy(account);
     destroy(removed_asset);
+    destroy(registry);
 }
 
 #[test]
 fun test_has_managed_data_false() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
@@ -1168,8 +1162,8 @@ fun test_has_managed_data_false() {
 #[test]
 fun test_has_managed_asset_false() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
@@ -1182,16 +1176,16 @@ fun test_has_managed_asset_false() {
 #[test, expected_failure(abort_code = EManagedAssetAlreadyExists)]
 fun test_add_managed_asset_already_exists() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
     let asset1 = TestAsset { id: object::new(ctx) };
     let asset2 = TestAsset { id: object::new(ctx) };
 
-    add_managed_asset(&mut account, key, asset1, version::current());
-    add_managed_asset(&mut account, key, asset2, version::current());
+    add_managed_asset(&mut account, &registry, key, asset1, version::current());
+    add_managed_asset(&mut account, &registry, key, asset2, version::current());
     destroy(account);
     destroy(registry);
 }
@@ -1199,13 +1193,13 @@ fun test_add_managed_asset_already_exists() {
 #[test, expected_failure(abort_code = EManagedAssetDoesntExist)]
 fun test_borrow_managed_asset_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_asset<TestKey, TestAsset>(&account, key, version::current());
+    borrow_managed_asset<TestKey, TestAsset>(&account, &registry, key, version::current());
     destroy(account);
     destroy(registry);
 }
@@ -1213,13 +1207,13 @@ fun test_borrow_managed_asset_doesnt_exist() {
 #[test, expected_failure(abort_code = EManagedAssetDoesntExist)]
 fun test_borrow_managed_asset_mut_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
-    borrow_managed_asset_mut<TestKey, TestAsset>(&mut account, key, version::current());
+    borrow_managed_asset_mut<TestKey, TestAsset>(&mut account, &registry, key, version::current());
     destroy(account);
     destroy(registry);
 }
@@ -1227,14 +1221,15 @@ fun test_borrow_managed_asset_mut_doesnt_exist() {
 #[test, expected_failure(abort_code = EManagedAssetDoesntExist)]
 fun test_remove_managed_asset_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let mut account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let key = TestKey {};
 
     let removed_asset = remove_managed_asset<TestKey, TestAsset>(
         &mut account,
+        &registry,
         key,
         version::current(),
     );
@@ -1246,8 +1241,8 @@ fun test_remove_managed_asset_doesnt_exist() {
 #[test]
 fun test_new_auth() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
     let auth = new_auth<TestConfig, TestWitness>(&account, &registry, version::current(), TestWitness());
@@ -1255,13 +1250,14 @@ fun test_new_auth() {
     assert_eq(auth.account_addr, account.addr());
     destroy(account);
     destroy(auth);
+    destroy(registry);
 }
 
 #[test]
 fun test_metadata_access() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
 
@@ -1274,8 +1270,8 @@ fun test_metadata_access() {
 #[test]
 fun test_config_access() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
 
@@ -1288,8 +1284,8 @@ fun test_config_access() {
 #[test]
 fun test_assert_is_config_module_correct_witness() {
     let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    let registry = package_registry::new_for_testing();
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
 
     let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
 
@@ -1304,14 +1300,16 @@ fun test_assert_is_config_module_correct_witness() {
 
 #[test_only]
 public fun new_for_testing(ctx: &mut TxContext): Account {
-    let deps = deps::new_for_testing();
-    new(TestConfig {}, deps, version::current(), TestWitness(), ctx)
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = deps::new_for_testing(&registry);
+    let account = new(TestConfig {}, deps, &registry, version::current(), TestWitness(), ctx);
+    destroy(registry);
+    account
 }
 
 #[test_only]
 public fun destroy_for_testing<Config: store>(account: Account) {
     destroy(account);
-    destroy(registry);
 }
 
 #[test_only]

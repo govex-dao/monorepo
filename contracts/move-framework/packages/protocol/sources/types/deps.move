@@ -13,7 +13,7 @@
 
 module account_protocol::deps;
 
-use account_protocol::package_registry::PackageRegistry;
+use account_protocol::package_registry::{Self, PackageRegistry};
 use account_protocol::version_witness::{Self, VersionWitness};
 use std::string::String;
 use sui::vec_set::{Self, VecSet};
@@ -39,6 +39,8 @@ public struct Deps has copy, drop, store {
     inner: vector<Dep>,
     // can community extensions be added
     unverified_allowed: bool,
+    // ID of the PackageRegistry to use for whitelist checking
+    registry_id: ID,
 }
 
 /// Child struct storing the name, package and version of a dependency
@@ -61,6 +63,7 @@ public fun new(
     addresses: vector<address>,
     mut versions: vector<u64>,
 ): Deps {
+    let registry_id = sui::object::id(registry);
     assert!(
         names.length() == addresses.length() && addresses.length() == versions.length(),
         EDepsNotSameLength,
@@ -94,7 +97,7 @@ public fun new(
         inner.push_back(Dep { name, addr, version });
     });
 
-    Deps { inner, unverified_allowed }
+    Deps { inner, unverified_allowed, registry_id }
 }
 
 /// Creates a new Deps struct from latest packages for names.
@@ -102,6 +105,7 @@ public fun new(
 public fun new_latest_extensions(registry: &PackageRegistry, names: vector<String>): Deps {
     assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
 
+    let registry_id = sui::object::id(registry);
     let mut inner = vector<Dep>[];
     // Use VecSet for O(log N) duplicate detection
     let mut name_set = vec_set::empty<String>();
@@ -121,7 +125,7 @@ public fun new_latest_extensions(registry: &PackageRegistry, names: vector<Strin
         inner.push_back(Dep { name, addr, version });
     });
 
-    Deps { inner, unverified_allowed: false }
+    Deps { inner, unverified_allowed: false, registry_id }
 }
 
 public fun new_inner(
@@ -160,7 +164,7 @@ public fun new_inner(
         inner.push_back(Dep { name, addr, version });
     });
 
-    Deps { inner, unverified_allowed: deps.unverified_allowed }
+    Deps { inner, unverified_allowed: deps.unverified_allowed, registry_id: deps.registry_id }
 }
 
 /// Safe because deps_mut is only accessible in this package.
@@ -174,11 +178,11 @@ public fun inner_mut(deps: &mut Deps): &mut vector<Dep> {
 /// This allows all whitelisted packages to work automatically for all accounts,
 /// while individual accounts can still add custom packages to their deps.
 ///
-/// Validates that the registry passed matches the registry_id to prevent malicious
+/// Validates that the registry passed matches the stored registry_id to prevent malicious
 /// registries from bypassing the whitelist.
-public fun check(deps: &Deps, version_witness: VersionWitness, registry: &PackageRegistry, registry_id: ID) {
+public fun check(deps: &Deps, version_witness: VersionWitness, registry: &PackageRegistry) {
     // SECURITY: Validate registry matches stored ID to prevent fake registries
-    assert!(registry_id == sui::object::id(registry), ERegistryMismatch);
+    assert!(deps.registry_id == sui::object::id(registry), ERegistryMismatch);
 
     let addr = version_witness.package_addr();
 
@@ -276,7 +280,7 @@ public fun contains_addr(deps: &Deps, addr: address): bool {
 use sui::test_utils::destroy;
 
 #[test_only]
-public fun new_for_testing(): Deps {
+public fun new_for_testing(registry: &PackageRegistry): Deps {
     Deps {
         inner: vector[
             Dep { name: b"AccountProtocol".to_string(), addr: @account_protocol, version: 1 },
@@ -284,6 +288,7 @@ public fun new_for_testing(): Deps {
             Dep { name: b"AccountActions".to_string(), addr: @0x2, version: 1 },
         ],
         unverified_allowed: false,
+        registry_id: sui::object::id(registry),
     }
 }
 
@@ -309,23 +314,22 @@ public fun new_for_testing_with_config(config_name: String, config_addr: address
             Dep { name: b"AccountActions".to_string(), addr: account_actions_addr, version: 1 },
         ],
         unverified_allowed: false,
+        registry_id: sui::object::id_from_address(@0x0), // Dummy ID for testing
     }
 }
 
 // === Tests ===
 
 #[test]
-fun test_new_and_getters() {
+fun test_new_and_getters(ctx: &mut TxContext) {
+    // For test: create a registry first
+    let registry = package_registry::new_for_testing(ctx);
     // Skip registry validation in test - just test the Deps structure
-    let _deps = new_for_testing();
+    let _deps = new_for_testing(&registry);
     // assertions
-    let deps = new_for_testing();
+    let deps = new_for_testing(&registry);
     let witness = version_witness::new_for_testing(@account_protocol);
-    // For test: create a dummy registry - actual validation skipped in test mode
-    let registry = package_registry::new_for_testing();
-    let registry_id = sui::object::id(&registry);
-    deps.check(witness, &registry, registry_id);
-    destroy(registry);
+    deps.check(witness, &registry);
     // deps getters
     assert!(deps.length() == 3);
     assert!(deps.contains_name(b"AccountProtocol".to_string()));
@@ -339,59 +343,71 @@ fun test_new_and_getters() {
     assert!(dep.name() == b"AccountProtocol".to_string());
     assert!(dep.addr() == @account_protocol);
     assert!(dep.version() == 1);
+    destroy(registry);
 }
 
 #[test, expected_failure(abort_code = ENotDep)]
-fun test_error_assert_is_dep() {
-    let deps = new_for_testing();
+fun test_error_assert_is_dep(ctx: &mut TxContext) {
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = new_for_testing(&registry);
     let witness = version_witness::new_for_testing(@0xDEAD);
-    let registry = package_registry::new_for_testing();
-    let registry_id = sui::object::id(&registry);
-    deps.check(witness, &registry, registry_id);
+    deps.check(witness, &registry);
     destroy(registry);
 }
 
 #[test, expected_failure(abort_code = EDepNotFound)]
-fun test_error_name_not_found() {
-    let deps = new_for_testing();
+fun test_error_name_not_found(ctx: &mut TxContext) {
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = new_for_testing(&registry);
     deps.get_by_name(b"Other".to_string());
+    destroy(registry);
 }
 
 #[test, expected_failure(abort_code = EDepNotFound)]
-fun test_error_addr_not_found() {
-    let deps = new_for_testing();
+fun test_error_addr_not_found(ctx: &mut TxContext) {
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = new_for_testing(&registry);
     deps.get_by_addr(@0xA);
+    destroy(registry);
 }
 
 #[test]
-fun test_contains_name() {
-    let deps = new_for_testing();
+fun test_contains_name(ctx: &mut TxContext) {
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = new_for_testing(&registry);
     assert!(deps.contains_name(b"AccountProtocol".to_string()));
     assert!(!deps.contains_name(b"Other".to_string()));
+    destroy(registry);
 }
 
 #[test]
-fun test_contains_addr() {
-    let deps = new_for_testing();
+fun test_contains_addr(ctx: &mut TxContext) {
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = new_for_testing(&registry);
     assert!(deps.contains_addr(@account_protocol));
     assert!(!deps.contains_addr(@0xA));
+    destroy(registry);
 }
 
 #[test]
-fun test_getters_by_idx() {
-    let deps = new_for_testing();
+fun test_getters_by_idx(ctx: &mut TxContext) {
+    let registry = package_registry::new_for_testing(ctx);
+    let deps = new_for_testing(&registry);
     let dep = deps.get_by_idx(0);
     assert!(dep.name() == b"AccountProtocol".to_string());
     assert!(dep.addr() == @account_protocol);
     assert!(dep.version() == 1);
+    destroy(registry);
 }
 
 #[test]
-fun test_toggle_unverified_allowed() {
-    let mut deps = new_for_testing();
+fun test_toggle_unverified_allowed(ctx: &mut TxContext) {
+    let registry = package_registry::new_for_testing(ctx);
+    let mut deps = new_for_testing(&registry);
     assert!(deps.unverified_allowed() == false);
     deps.toggle_unverified_allowed_for_testing();
     assert!(deps.unverified_allowed() == true);
+    destroy(registry);
 }
 
 #[test]
@@ -399,6 +415,7 @@ fun test_contains_name_empty_deps() {
     let deps = Deps {
         inner: vector[],
         unverified_allowed: false,
+        registry_id: sui::object::id_from_address(@0x0),
     };
     assert!(!deps.contains_name(b"AccountProtocol".to_string()));
 }
@@ -408,6 +425,7 @@ fun test_contains_addr_empty_deps() {
     let deps = Deps {
         inner: vector[],
         unverified_allowed: false,
+        registry_id: sui::object::id_from_address(@0x0),
     };
     assert!(!deps.contains_addr(@account_protocol));
 }

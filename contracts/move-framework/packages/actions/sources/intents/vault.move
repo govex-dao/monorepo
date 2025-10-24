@@ -13,6 +13,7 @@ use account_protocol::account::{Account, Auth};
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::Params;
+use account_protocol::package_registry::PackageRegistry;
 use std::string::String;
 
 // === Imports ===
@@ -39,6 +40,7 @@ public struct SpendAndTransferIntent() has copy, drop;
 public fun request_spend_and_transfer<Config: store, Outcome: store, CoinType: drop>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     vault_name: String,
@@ -49,7 +51,7 @@ public fun request_spend_and_transfer<Config: store, Outcome: store, CoinType: d
     account.verify(auth);
     assert!(amounts.length() == recipients.length(), ENotSameLength);
 
-    let vault = vault::borrow_vault(account, vault_name);
+    let vault = vault::borrow_vault(account, registry, vault_name);
     assert!(vault.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
     assert!(
         amounts.fold!(0u64, |sum, amount| sum + amount) <= vault.coin_type_value<CoinType>(),
@@ -57,6 +59,7 @@ public fun request_spend_and_transfer<Config: store, Outcome: store, CoinType: d
     );
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         vault_name,
@@ -74,9 +77,11 @@ public fun request_spend_and_transfer<Config: store, Outcome: store, CoinType: d
 public fun execute_spend_and_transfer<Config: store, Outcome: store, CoinType: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     ctx: &mut TxContext,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         SpendAndTransferIntent(),
@@ -84,6 +89,7 @@ public fun execute_spend_and_transfer<Config: store, Outcome: store, CoinType: d
             let coin = vault::do_spend<Config, Outcome, CoinType, _>(
                 executable,
                 account,
+                registry,
                 version::current(),
                 iw,
                 ctx,
@@ -99,6 +105,7 @@ public fun execute_spend_and_transfer<Config: store, Outcome: store, CoinType: d
 public fun request_cancel_stream<Config: store, Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     vault_name: String,
@@ -108,6 +115,7 @@ public fun request_cancel_stream<Config: store, Outcome: store>(
     account.verify(auth);
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         vault_name,
@@ -126,6 +134,7 @@ public fun request_cancel_stream<Config: store, Outcome: store>(
 public fun execute_cancel_stream<Config: store, Outcome: store, CoinType: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     vault_name: String,
     clock: &sui::clock::Clock,
     ctx: &mut TxContext,
@@ -134,6 +143,7 @@ public fun execute_cancel_stream<Config: store, Outcome: store, CoinType: drop>(
     let mut total_refund = 0u64;
 
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         SpendAndTransferIntent(),
@@ -141,6 +151,7 @@ public fun execute_cancel_stream<Config: store, Outcome: store, CoinType: drop>(
             let (coin, amount) = vault::do_cancel_stream<Config, Outcome, CoinType, _>(
                 executable,
                 account,
+                registry,
                 vault_name,
                 clock,
                 version::current(),

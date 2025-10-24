@@ -48,3 +48,18 @@ V2 contract repo
 dev V2 contract testnet 
 main V2 contract mainnet ( dont have this yet)
 ```
+
+We need a 
+ futarchy hub page
+
+A list of all the futarchy projects where you can click into a profile page with:
+
+* Status
+* Burn rate
+* Revenue 
+* Fees
+* Team addresses
+* Treasury 
+* Live and past markets 
+* Total market volume
+* Buy token

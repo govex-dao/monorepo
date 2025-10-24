@@ -8,6 +8,7 @@ module futarchy_governance_actions::intent_janitor;
 
 use account_protocol::account::{Self, Account};
 use account_protocol::intents::{Self, Expired};
+use account_protocol::package_registry::PackageRegistry;
 use futarchy_actions::config_actions;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_core::version;
@@ -64,6 +65,7 @@ public struct MaintenanceNeeded has copy, drop {
 /// Sui's storage rebate naturally rewards cleaners
 public fun cleanup_expired_futarchy_intents(
     account: &mut Account,
+    registry: &PackageRegistry,
     max_to_clean: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -77,7 +79,7 @@ public fun cleanup_expired_futarchy_intents(
     // Try to clean up to max_to_clean intents
     while (cleaned < max_to_clean) {
         // Find next expired intent
-        let mut intent_key_opt = find_next_expired_intent(account, clock, ctx);
+        let mut intent_key_opt = find_next_expired_intent(account, registry, clock, ctx);
         if (intent_key_opt.is_none()) {
             break // No more expired intents
         };
@@ -85,7 +87,7 @@ public fun cleanup_expired_futarchy_intents(
         let intent_key = intent_key_opt.extract();
 
         // Try to delete it as FutarchyOutcome type
-        if (try_delete_expired_futarchy_intent(account, intent_key, clock, ctx)) {
+        if (try_delete_expired_futarchy_intent(account, registry, intent_key, clock, ctx)) {
             cleaned = cleaned + 1;
         } else {};
     };
@@ -105,12 +107,13 @@ public fun cleanup_expired_futarchy_intents(
 /// Called automatically during proposal finalization and execution
 public fun cleanup_all_expired_intents(
     account: &mut Account,
+    registry: &PackageRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Keep cleaning until no more expired intents are found
     loop {
-        let mut intent_key_opt = find_next_expired_intent(account, clock, ctx);
+        let mut intent_key_opt = find_next_expired_intent(account, registry, clock, ctx);
         if (intent_key_opt.is_none()) {
             break
         };
@@ -119,7 +122,7 @@ public fun cleanup_all_expired_intents(
 
         // Try to delete it - continue even if this specific one fails
         // (might be wrong type or other issue)
-        try_delete_expired_futarchy_intent(account, intent_key, clock, ctx);
+        try_delete_expired_futarchy_intent(account, registry, intent_key, clock, ctx);
     };
 }
 
@@ -127,6 +130,7 @@ public fun cleanup_all_expired_intents(
 /// Called automatically during proposal finalization and execution
 public(package) fun cleanup_expired_intents_automatic(
     account: &mut Account,
+    registry: &PackageRegistry,
     max_to_clean: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -134,22 +138,22 @@ public(package) fun cleanup_expired_intents_automatic(
     let mut cleaned = 0u64;
 
     while (cleaned < max_to_clean) {
-        let mut intent_key_opt = find_next_expired_intent(account, clock, ctx);
+        let mut intent_key_opt = find_next_expired_intent(account, registry, clock, ctx);
         if (intent_key_opt.is_none()) {
             break
         };
 
         let intent_key = intent_key_opt.extract();
 
-        if (try_delete_expired_futarchy_intent(account, intent_key, clock, ctx)) {
+        if (try_delete_expired_futarchy_intent(account, registry, intent_key, clock, ctx)) {
             cleaned = cleaned + 1;
         };
     };
 }
 
 /// Check if maintenance is needed and emit event if so
-public fun check_maintenance_needed(account: &Account, clock: &Clock) {
-    let expired_count = count_expired_intents(account, clock);
+public fun check_maintenance_needed(account: &Account, registry: &PackageRegistry, clock: &Clock) {
+    let expired_count = count_expired_intents(account, registry, clock);
 
     if (expired_count > 10) {
         event::emit(MaintenanceNeeded {
@@ -165,6 +169,7 @@ public fun check_maintenance_needed(account: &Account, clock: &Clock) {
 /// Get or initialize the intent index
 fun get_or_init_intent_index(
     account: &mut Account,
+    registry: &PackageRegistry,
     ctx: &mut TxContext,
 ): &mut IntentIndex {
     // Initialize if doesn't exist
@@ -176,6 +181,7 @@ fun get_or_init_intent_index(
         };
         account::add_managed_data(
             account,
+            registry,
             IntentIndexKey {},
             index,
             version::current(),
@@ -184,6 +190,7 @@ fun get_or_init_intent_index(
 
     account::borrow_managed_data_mut(
         account,
+        registry,
         IntentIndexKey {},
         version::current(),
     )
@@ -192,11 +199,12 @@ fun get_or_init_intent_index(
 /// Add an intent to the index when it's created
 public(package) fun register_intent(
     account: &mut Account,
+    registry: &PackageRegistry,
     key: String,
     expiration_time: u64,
     ctx: &mut TxContext,
 ) {
-    let index = get_or_init_intent_index(account, ctx);
+    let index = get_or_init_intent_index(account, registry, ctx);
     vector::push_back(&mut index.keys, key);
     table::add(&mut index.expiration_times, key, expiration_time);
 }
@@ -204,11 +212,12 @@ public(package) fun register_intent(
 /// Find the next expired intent key
 fun find_next_expired_intent(
     account: &mut Account,
+    registry: &PackageRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Option<String> {
     // Get the index
-    let index = get_or_init_intent_index(account, ctx);
+    let index = get_or_init_intent_index(account, registry, ctx);
 
     let current_time = clock.timestamp_ms();
     let keys = &index.keys;
@@ -250,6 +259,7 @@ fun find_next_expired_intent(
 /// Try to delete an expired FutarchyOutcome intent
 fun try_delete_expired_futarchy_intent(
     account: &mut Account,
+    registry: &PackageRegistry,
     key: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -269,7 +279,7 @@ fun try_delete_expired_futarchy_intent(
     );
     destroy_expired(expired);
 
-    remove_from_index(account, key_for_index, ctx);
+    remove_from_index(account, registry, key_for_index, ctx);
 
     true
 }
@@ -286,7 +296,7 @@ fun destroy_expired(expired: Expired) {
 }
 
 /// Count expired intents
-fun count_expired_intents(account: &Account, clock: &Clock): u64 {
+fun count_expired_intents(account: &Account, registry: &PackageRegistry, clock: &Clock): u64 {
     // Check if index exists
     if (!account::has_managed_data(account, IntentIndexKey {})) {
         return 0
@@ -294,6 +304,7 @@ fun count_expired_intents(account: &Account, clock: &Clock): u64 {
 
     let index: &IntentIndex = account::borrow_managed_data(
         account,
+        registry,
         IntentIndexKey {},
         version::current(),
     );
@@ -321,8 +332,8 @@ fun count_expired_intents(account: &Account, clock: &Clock): u64 {
 }
 
 /// Remove an intent from the index after deletion
-fun remove_from_index(account: &mut Account, key: String, ctx: &mut TxContext) {
-    let index = get_or_init_intent_index(account, ctx);
+fun remove_from_index(account: &mut Account, registry: &PackageRegistry, key: String, ctx: &mut TxContext) {
+    let index = get_or_init_intent_index(account, registry, ctx);
 
     // Remove from expiration times table
     if (table::contains(&index.expiration_times, key)) {

@@ -265,11 +265,13 @@ fun test_sweep_dust_after_claim_period() {
         let creator_cap = ts::take_from_sender<launchpad::CreatorCap>(&scenario);
         let mut raise = ts::take_shared<launchpad::Raise<DUST_TOKEN, DUST_STABLE>>(&scenario);
         let mut dao_account = ts::take_from_sender<Account>(&scenario);
+        let registry = ts::take_shared<PackageRegistry>(&scenario);
 
-        launchpad::sweep_dust(&mut raise, &creator_cap, &mut dao_account, &clock, ts::ctx(&mut scenario));
+        launchpad::sweep_dust(&mut raise, &creator_cap, &mut dao_account, &registry, &clock, ts::ctx(&mut scenario));
 
         ts::return_to_sender(&scenario, creator_cap);
         ts::return_to_sender(&scenario, dao_account);
+        ts::return_shared(registry);
         ts::return_shared(raise);
     };
 
@@ -401,12 +403,14 @@ fun test_sweep_dust_fails_before_claim_period() {
         let creator_cap = ts::take_from_sender<launchpad::CreatorCap>(&scenario);
         let mut raise = ts::take_shared<launchpad::Raise<DUST_TOKEN, DUST_STABLE>>(&scenario);
         let mut dao_account = ts::take_from_sender<Account>(&scenario);
+        let registry = ts::take_shared<PackageRegistry>(&scenario);
 
-        launchpad::sweep_dust(&mut raise, &creator_cap, &mut dao_account, &clock, ts::ctx(&mut scenario));
+        launchpad::sweep_dust(&mut raise, &creator_cap, &mut dao_account, &registry, &clock, ts::ctx(&mut scenario));
 
         clock::destroy_for_testing(clock);
         ts::return_to_sender(&scenario, creator_cap);
         ts::return_to_sender(&scenario, dao_account);
+        ts::return_shared(registry);
         ts::return_shared(raise);
     };
 

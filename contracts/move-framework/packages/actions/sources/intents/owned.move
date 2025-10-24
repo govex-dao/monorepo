@@ -14,6 +14,7 @@ use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::Params;
 use account_protocol::owned;
+use account_protocol::package_registry::PackageRegistry;
 use std::string::String;
 use std::type_name;
 use sui::clock::Clock;
@@ -47,6 +48,7 @@ public struct WithdrawCoinsAndTransferIntent() has copy, drop;
 public fun request_withdraw_and_transfer_to_vault<Outcome: store, CoinType>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     coin_amount: u64,
@@ -59,6 +61,7 @@ public fun request_withdraw_and_transfer_to_vault<Outcome: store, CoinType>(
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         b"".to_string(),
@@ -82,9 +85,11 @@ public fun request_withdraw_and_transfer_to_vault<Outcome: store, CoinType>(
 public fun execute_withdraw_and_transfer_to_vault<Config: store, Outcome: store, CoinType: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<Coin<CoinType>>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         WithdrawAndTransferToVaultIntent(),
@@ -93,6 +98,7 @@ public fun execute_withdraw_and_transfer_to_vault<Config: store, Outcome: store,
             vault::do_deposit<Config, Outcome, CoinType, _>(
                 executable,
                 account,
+                registry,
                 object,
                 version::current(),
                 iw,
@@ -105,6 +111,7 @@ public fun execute_withdraw_and_transfer_to_vault<Config: store, Outcome: store,
 public fun request_withdraw_objects_and_transfer<Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     object_ids: vector<ID>,
@@ -117,6 +124,7 @@ public fun request_withdraw_objects_and_transfer<Outcome: store>(
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         b"".to_string(),
@@ -134,9 +142,11 @@ public fun request_withdraw_objects_and_transfer<Outcome: store>(
 public fun execute_withdraw_object_and_transfer<Outcome: store, T: key + store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<T>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         WithdrawObjectsAndTransferIntent(),
@@ -151,6 +161,7 @@ public fun execute_withdraw_object_and_transfer<Outcome: store, T: key + store>(
 public fun request_withdraw_coins_and_transfer<Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     coin_types: vector<String>,
@@ -167,6 +178,7 @@ public fun request_withdraw_coins_and_transfer<Outcome: store>(
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         b"".to_string(),
@@ -185,9 +197,11 @@ public fun request_withdraw_coins_and_transfer<Outcome: store>(
 public fun execute_withdraw_coin_and_transfer<Outcome: store, CoinType>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<Coin<CoinType>>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         WithdrawCoinsAndTransferIntent(),

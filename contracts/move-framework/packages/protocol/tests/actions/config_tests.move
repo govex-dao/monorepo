@@ -109,7 +109,7 @@ fun test_update_extensions_to_latest() {
 
 //     account.deps_mut(version::current()).toggle_unverified_allowed_for_testing();
 //     // Need to use proper config actions to add unverified deps
-//     let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+//     let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
 //     config::update_extensions_to_latest(
 //         auth,
 //         &mut account,
@@ -127,7 +127,7 @@ fun test_request_execute_config_deps() {
     let (mut scenario, extensions, mut account, clock, cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     let params = intents::new_params(
         key,
         b"".to_string(),
@@ -154,6 +154,7 @@ fun test_request_execute_config_deps() {
     assert!(!account.deps().contains_name(b"External".to_string()));
 
     let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -180,7 +181,7 @@ fun test_config_deps_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     let params = intents::new_params(
         key,
         b"".to_string(),
@@ -213,7 +214,7 @@ fun test_request_execute_toggle_unverified_allowed() {
     let (mut scenario, extensions, mut account, clock, cap) = start();
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     let params = intents::new_params(
         key,
         b"".to_string(),
@@ -225,19 +226,21 @@ fun test_request_execute_toggle_unverified_allowed() {
     config::request_toggle_unverified_allowed<Config, Outcome>(
         auth,
         &mut account,
+        &extensions,
         params,
         Outcome {},
         scenario.ctx(),
     );
 
     let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        &extensions,
         key,
         &clock,
         version::current(),
         Witness(),
         scenario.ctx(),
     );
-    config::execute_toggle_unverified_allowed<Config, Outcome>(&mut executable, &mut account, version::current());
+    config::execute_toggle_unverified_allowed<Config, Outcome>(&mut executable, &mut account, &extensions, version::current());
     account.confirm_execution(executable);
 
     let mut expired = account.destroy_empty_intent<Outcome>(key, scenario.ctx());
@@ -255,7 +258,7 @@ fun test_toggle_unverified_allowed_expired() {
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     let params = intents::new_params(
         key,
         b"".to_string(),
@@ -267,6 +270,7 @@ fun test_toggle_unverified_allowed_expired() {
     config::request_toggle_unverified_allowed<Config, Outcome>(
         auth,
         &mut account,
+        &extensions,
         params,
         Outcome {},
         scenario.ctx(),

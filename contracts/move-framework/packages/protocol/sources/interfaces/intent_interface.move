@@ -117,7 +117,7 @@ public macro fun process_intent<$Config: store, $Outcome: store, $IW: drop>(
     // let version_witness = $version_witness;
     // let intent_witness = $intent_witness;
     // ensures the package address is a dependency for this account
-    account.deps().check($version_witness, registry, account.registry_id());
+    account.deps().check($version_witness, registry);
     // ensures the right account is passed
     executable.intent().assert_is_account(account.addr());
     // ensures the intent is created by the same package that creates the action

@@ -12,6 +12,7 @@ use account_protocol::account::{Account, Auth};
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::Params;
+use account_protocol::package_registry::PackageRegistry;
 use std::string::String;
 use sui::clock::Clock;
 use sui::package::{Self, UpgradeTicket, UpgradeReceipt};
@@ -45,6 +46,7 @@ public struct CreateCommitCapIntent() has copy, drop;
 public fun request_upgrade_package<Config: store, Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     package_name: String,
@@ -56,11 +58,12 @@ public fun request_upgrade_package<Config: store, Outcome: store>(
 
     assert!(package_upgrade::has_cap(account, package_name), ENoLock);
     assert!(
-        params.execution_times()[0] >= params.creation_time() + package_upgrade::get_time_delay(account, package_name),
+        params.execution_times()[0] >= params.creation_time() + package_upgrade::get_time_delay(account, registry, package_name),
         ETimeDelay,
     );
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         package_name,
@@ -78,15 +81,18 @@ public fun request_upgrade_package<Config: store, Outcome: store>(
 public fun execute_upgrade_package<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     clock: &Clock,
 ): UpgradeTicket {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         UpgradePackageIntent(),
         |executable, iw| package_upgrade::do_upgrade(
             executable,
             account,
+            registry,
             clock,
             version::current(),
             iw,
@@ -100,16 +106,19 @@ public fun execute_upgrade_package<Config: store, Outcome: store>(
 public fun execute_commit_upgrade_dao_only<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receipt: UpgradeReceipt,
     clock: &Clock,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         UpgradePackageIntent(),
         |executable, iw| package_upgrade::do_commit_dao_only(
             executable,
             account,
+            registry,
             receipt,
             clock,
             version::current(),
@@ -123,16 +132,19 @@ public fun execute_commit_upgrade_dao_only<Config: store, Outcome: store>(
 public fun execute_commit_upgrade_with_cap<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receipt: UpgradeReceipt,
     commit_cap: &package_upgrade::UpgradeCommitCap,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         UpgradePackageIntent(),
         |executable, iw| package_upgrade::do_commit_with_cap(
             executable,
             account,
+            registry,
             receipt,
             commit_cap,
             version::current(),
@@ -145,6 +157,7 @@ public fun execute_commit_upgrade_with_cap<Config: store, Outcome: store>(
 public fun request_restrict_policy<Config: store, Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     package_name: String,
@@ -154,7 +167,7 @@ public fun request_restrict_policy<Config: store, Outcome: store>(
     account.verify(auth);
     params.assert_single_execution();
 
-    let current_policy = package_upgrade::get_cap_policy(account, package_name);
+    let current_policy = package_upgrade::get_cap_policy(account, registry, package_name);
     assert!(policy > current_policy, EPolicyShouldRestrict);
     assert!(
         policy == package::additive_policy() ||
@@ -164,6 +177,7 @@ public fun request_restrict_policy<Config: store, Outcome: store>(
     );
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         package_name,
@@ -178,12 +192,14 @@ public fun request_restrict_policy<Config: store, Outcome: store>(
 public fun execute_restrict_policy<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         RestrictPolicyIntent(),
-        |executable, iw| package_upgrade::do_restrict(executable, account, version::current(), iw),
+        |executable, iw| package_upgrade::do_restrict(executable, account, registry, version::current(), iw),
     );
 }
 
@@ -192,6 +208,7 @@ public fun execute_restrict_policy<Config: store, Outcome: store>(
 public fun request_create_commit_cap<Config: store, Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     package_name: String,
@@ -205,6 +222,7 @@ public fun request_create_commit_cap<Config: store, Outcome: store>(
     assert!(package_upgrade::has_cap(account, package_name), ENoLock);
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         package_name,
@@ -219,15 +237,18 @@ public fun request_create_commit_cap<Config: store, Outcome: store>(
 public fun execute_create_commit_cap<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     ctx: &mut TxContext,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         CreateCommitCapIntent(),
         |executable, iw| package_upgrade::do_create_commit_cap(
             executable,
             account,
+            registry,
             ctx,
             version::current(),
             iw,

@@ -9,7 +9,7 @@ use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Intent, Params};
 use account_protocol::owned;
-use account_protocol::package_registry::PackageAdminCap;
+use account_protocol::package_registry::{PackageAdminCap, PackageRegistry};
 use futarchy_core::version;
 use futarchy_governance_actions::package_registry_actions;
 use std::bcs;
@@ -58,9 +58,11 @@ public fun request_accept_package_admin_cap<Outcome: store>(
 public fun execute_accept_package_admin_cap<Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<PackageAdminCap>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         AcceptPackageAdminCapIntent(),
@@ -69,6 +71,7 @@ public fun execute_accept_package_admin_cap<Outcome: store>(
 
             account::add_managed_asset(
                 account,
+                registry,
                 b"protocol:package_admin_cap".to_string(),
                 cap,
                 version::current(),
@@ -82,11 +85,13 @@ public fun execute_accept_package_admin_cap<Outcome: store>(
 /// One-time migration function to transfer PackageAdminCap to the protocol DAO
 entry fun migrate_package_admin_cap_to_dao(
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: PackageAdminCap,
     ctx: &mut TxContext,
 ) {
     account::add_managed_asset(
         account,
+        registry,
         b"protocol:package_admin_cap".to_string(),
         cap,
         version::current(),

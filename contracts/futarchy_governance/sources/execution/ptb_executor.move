@@ -16,6 +16,7 @@ use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
     intents,
+    package_registry::PackageRegistry,
 };
 use futarchy_governance_actions::intent_janitor;
 use futarchy_core::{
@@ -54,6 +55,7 @@ public struct ProposalIntentExecuted has copy, drop {
 /// Returns the executable hot potato and intent key for cleanup.
 public fun begin_execution<AssetType, StableType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
     fee_manager: &mut ProposalFeeManager<StableType>,
@@ -86,6 +88,7 @@ public fun begin_execution<AssetType, StableType>(
 
     governance_intents::execute_proposal_intent(
         account,
+        registry,
         proposal,
         market,
         winning_outcome,

@@ -11,6 +11,7 @@ use account_protocol::account::{Account, Auth};
 use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::Params;
+use account_protocol::package_registry::PackageRegistry;
 
 // === Imports ===
 
@@ -30,6 +31,7 @@ public struct EmptyIntent() has copy, drop;
 public fun request_empty<Config: store, Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     ctx: &mut TxContext,
@@ -37,6 +39,7 @@ public fun request_empty<Config: store, Outcome: store>(
     account.verify(auth);
 
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"".to_string(),
@@ -51,6 +54,7 @@ public fun request_empty<Config: store, Outcome: store>(
 public fun execute_empty<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
 ) {
-    account.process_intent!(executable, version::current(), EmptyIntent(), |_executable, _iw| {})
+    account.process_intent!(registry, executable, version::current(), EmptyIntent(), |_executable, _iw| {})
 }

@@ -201,11 +201,12 @@ public fun configure_deposits<Config: store>(
 public fun edit_metadata<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     keys: vector<String>,
     values: vector<String>,
 ) {
     account.verify(auth);
-    *account::metadata_mut(account, version::current()) = metadata::from_keys_values(keys, values);
+    *account::metadata_mut(account, registry, version::current()) = metadata::from_keys_values(keys, values);
 }
 
 /// Authorized addresses can update the existing dependencies of the account to the latest versions
@@ -237,7 +238,7 @@ public fun update_extensions_to_latest<Config: store>(
         i = i + 1;
     };
 
-    *account::deps_mut(account, version::current()) = 
+    *account::deps_mut(account, registry, version::current()) =
         deps::new_inner(registry, account.deps(), new_names, new_addrs, new_versions);
 }
 
@@ -260,11 +261,12 @@ public fun request_config_deps<Config: store, Outcome: store>(
     let deps_inner = *deps.inner_mut();
 
     account.build_intent!(
+        registry,
         params,
-        outcome, 
+        outcome,
         b"".to_string(),
         version::current(),
-        ConfigDepsIntent(),   
+        ConfigDepsIntent(),
         ctx,
         |intent, iw| {
             // Create the action struct
@@ -294,6 +296,7 @@ public fun execute_config_deps<Config: store, Outcome: store>(
     version_witness: VersionWitness,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version_witness,
         ConfigDepsIntent(),
@@ -316,7 +319,7 @@ public fun execute_config_deps<Config: store, Outcome: store>(
             account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
 
             // Apply the action - reconstruct deps using the public constructor
-            *account::deps_mut(account, version_witness) =
+            *account::deps_mut(account, registry, version_witness) =
                 deps::new_inner(registry, account.deps(), names, addrs, versions);
             account_protocol::executable::increment_action_idx(executable);
         }
@@ -340,15 +343,17 @@ public fun delete_config_deps(expired: &mut Expired) {
 /// Creates an intent to toggle the unverified_allowed flag of the account
 public fun request_toggle_unverified_allowed<Config: store, Outcome: store>(
     auth: Auth,
-    account: &mut Account, 
+    account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     ctx: &mut TxContext
 ) {
     account.verify(auth);
     params.assert_single_execution();
-    
+
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"".to_string(),
@@ -379,9 +384,11 @@ public fun request_toggle_unverified_allowed<Config: store, Outcome: store>(
 public fun execute_toggle_unverified_allowed<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version_witness,
         ToggleUnverifiedAllowedIntent(),
@@ -394,7 +401,7 @@ public fun execute_toggle_unverified_allowed<Config: store, Outcome: store>(
 
             // ToggleUnverifiedAllowedAction is an empty struct, no deserialization needed
             // Just increment the action index
-            account::deps_mut(account, version_witness).toggle_unverified_allowed();
+            account::deps_mut(account, registry, version_witness).toggle_unverified_allowed();
             account_protocol::executable::increment_action_idx(executable);
         },
     );
@@ -411,6 +418,7 @@ public fun delete_toggle_unverified_allowed(expired: &mut Expired) {
 public fun request_configure_deposits<Config: store, Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     outcome: Outcome,
     params: Params,
     enable: bool,
@@ -420,6 +428,7 @@ public fun request_configure_deposits<Config: store, Outcome: store>(
 ) {
     account.verify(auth);
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"ConfigureDepositsIntent".to_string(),
@@ -450,9 +459,11 @@ public fun request_configure_deposits<Config: store, Outcome: store>(
 public fun execute_configure_deposits<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version_witness,
         ConfigureDepositsIntent(),
@@ -501,6 +512,7 @@ public fun delete_configure_deposits(expired: &mut Expired) {
 public fun request_manage_whitelist<Config: store, Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     outcome: Outcome,
     params: Params,
     add_types: vector<String>,
@@ -509,6 +521,7 @@ public fun request_manage_whitelist<Config: store, Outcome: store>(
 ) {
     account.verify(auth);
     account.build_intent!(
+        registry,
         params,
         outcome,
         b"ManageWhitelistIntent".to_string(),
@@ -539,9 +552,11 @@ public fun request_manage_whitelist<Config: store, Outcome: store>(
 public fun execute_manage_whitelist<Config: store, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version_witness,
         ManageWhitelistIntent(),

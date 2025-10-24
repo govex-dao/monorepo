@@ -87,7 +87,7 @@ public fun request_update_deps(
 
     // Build intent using the intent_interface macro
     intent_interface::build_intent!<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome, UpdateDepsIntent>(
-        account,
+        account,registry,
         params,
         outcome,
         b"Update Account Dependencies".to_string(),
@@ -135,7 +135,7 @@ public fun request_toggle_unverified(
     params.assert_single_execution();
 
     intent_interface::build_intent!<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome, ToggleUnverifiedIntent>(
-        account,
+        account,registry,
         params,
         outcome,
         b"Toggle Unverified Package Allowance".to_string(),

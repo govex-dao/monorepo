@@ -24,6 +24,7 @@ use account_protocol::{
     version_witness::VersionWitness,
     bcs_validation,
     action_validation,
+    package_registry::PackageRegistry,
 };
 use account_actions::vault;
 // === Action Type Markers ===
@@ -283,6 +284,7 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
 public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + drop>(
     request: ResourceRequest<CreatePoolAction<AssetType, StableType>>,
     account: &mut Account,
+    registry: &PackageRegistry,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     clock: &Clock,
@@ -320,6 +322,7 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
     // Deposit LP token to custody (using witness for auth)
     lp_token_custody::deposit_lp_token(
         account,
+        registry,
         pool_id,
         lp_token,
         witness,
@@ -334,6 +337,7 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
 public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     _version: VersionWitness,
     witness: IW,
     ctx: &mut TxContext,
@@ -367,7 +371,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
     
     // Check vault has sufficient balance
     let vault_name = string::utf8(DEFAULT_VAULT_NAME);
-    let vault = vault::borrow_vault(account, vault_name);
+    let vault = vault::borrow_vault(account, registry, vault_name);
     assert!(vault::coin_type_exists<AssetType>(vault), EInsufficientVaultBalance);
     assert!(vault::coin_type_exists<StableType>(vault), EInsufficientVaultBalance);
     assert!(vault::coin_type_value<AssetType>(vault) >= action.asset_amount, EInsufficientVaultBalance);
@@ -388,6 +392,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     request: ResourceRequest<AddLiquidityAction<AssetType, StableType>>,
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     witness: IW,
     ctx: &mut TxContext,
@@ -408,6 +413,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     let asset_coin = vault::do_spend<FutarchyConfig, Outcome, AssetType, IW>(
         executable,
         account,
+        registry,
         version::current(),
         witness,
         ctx
@@ -416,6 +422,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     let stable_coin = vault::do_spend<FutarchyConfig, Outcome, StableType, IW>(
         executable,
         account,
+        registry,
         version::current(),
         witness,
         ctx
@@ -433,6 +440,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     // Deposit LP token to custody (using witness for auth)
     lp_token_custody::deposit_lp_token(
         account,
+        registry,
         pool_id,
         lp_token,
         witness,
@@ -448,6 +456,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
 public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     _version: VersionWitness,
     _witness: IW,
     ctx: &mut TxContext,
@@ -476,7 +485,7 @@ public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: stor
     };
 
     // Ensure the token exists in custody before fulfillment
-    let token_amount = lp_token_custody::get_token_amount(account, token_id);
+    let token_amount = lp_token_custody::get_token_amount(account, registry, token_id);
     assert!(token_amount > 0, EWrongToken);
 
     // Execute and increment
@@ -489,6 +498,7 @@ public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: stor
 public fun fulfill_withdraw_lp_token<AssetType: drop, StableType: drop, W: copy + drop>(
     request: resource_requests::ResourceRequest<WithdrawLpTokenAction<AssetType, StableType>>,
     account: &mut Account,
+    registry: &PackageRegistry,
     witness: W,
     ctx: &mut TxContext,
 ): (LPToken<AssetType, StableType>, resource_requests::ResourceReceipt<WithdrawLpTokenAction<AssetType, StableType>>) {
@@ -496,6 +506,7 @@ public fun fulfill_withdraw_lp_token<AssetType: drop, StableType: drop, W: copy 
 
     let lp_token = lp_token_custody::withdraw_lp_token<AssetType, StableType, W>(
         account,
+        registry,
         action.pool_id,
         action.token_id,
         witness,
@@ -561,6 +572,7 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
 public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy + drop>(
     request: resource_requests::ResourceRequest<RemoveLiquidityAction<AssetType, StableType>>,
     account: &mut Account,
+    registry: &PackageRegistry,
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     lp_token: LPToken<AssetType, StableType>,
     witness: W,
@@ -572,7 +584,7 @@ public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy +
     assert!(action.token_id == object::id(&lp_token), EWrongToken);
 
     // Verify the DAO authorization before burning the LP token
-    let auth = account::new_auth<FutarchyConfig, W>(account, version::current(), witness);
+    let auth = account::new_auth<FutarchyConfig, W>(account, registry, version::current(), witness);
     account::verify(account, auth);
 
     let actual_lp_amount = unified_spot_pool::lp_token_amount(&lp_token);
@@ -580,7 +592,7 @@ public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy +
 
     let (asset_coin, stable_coin) = if (action.bypass_minimum) {
         {
-            let dao_state = futarchy_config::state_mut_from_account(account);
+            let dao_state = futarchy_config::state_mut_from_account(account, registry);
             assert!(
                 futarchy_config::operational_state(dao_state) == futarchy_config::state_terminated(),
                 EBypassNotAllowed
@@ -863,9 +875,10 @@ public fun new_withdraw_lp_token_action<AssetType, StableType>(
 public fun enable_remove_liquidity_bypass<AssetType, StableType>(
     request: &mut resource_requests::ResourceRequest<RemoveLiquidityAction<AssetType, StableType>>,
     account: &mut Account,
+    registry: &PackageRegistry,
 ) {
     {
-        let dao_state = futarchy_config::state_mut_from_account(account);
+        let dao_state = futarchy_config::state_mut_from_account(account, registry);
         assert!(
             futarchy_config::operational_state(dao_state) == futarchy_config::state_terminated(),
             EBypassNotAllowed

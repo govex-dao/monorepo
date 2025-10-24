@@ -7,6 +7,7 @@ module account_actions::package_upgrade_auditable;
 use std::string::String;
 use sui::clock::Clock;
 use account_protocol::account::{Account, Auth};
+use account_protocol::package_registry::PackageRegistry;
 use account_actions::{version, package_upgrade};
 
 // === Structs ===
@@ -74,6 +75,7 @@ public struct VerifierAttestationAdded has copy, drop {
 public fun propose_auditable_upgrade<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     bytecode_digest: vector<u8>,
     audit_metadata: AuditMetadata,
@@ -85,6 +87,7 @@ public fun propose_auditable_upgrade<Config: store>(
     package_upgrade::propose_upgrade_digest(
         auth,
         account,
+        registry,
         package_name,
         bytecode_digest,
         execution_time_ms,
@@ -102,7 +105,7 @@ public fun propose_auditable_upgrade<Config: store>(
         approved: false,
     };
 
-    account.add_managed_data(key, proposal, version::current());
+    account.add_managed_data(registry, key, proposal, version::current());
 
     // Emit detailed event
     sui::event::emit(AuditableUpgradeProposed {
@@ -119,6 +122,7 @@ public fun propose_auditable_upgrade<Config: store>(
 public fun add_verifier_attestation<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     bytecode_digest: vector<u8>,
     signature: vector<u8>,  // Verifier's signature over digest
@@ -129,6 +133,7 @@ public fun add_verifier_attestation<Config: store>(
     account.verify(auth);
 
     let proposal: &mut AuditableUpgradeProposal = account.borrow_managed_data_mut(
+        registry,
         auditable_key(package_name, bytecode_digest),
         version::current()
     );
@@ -147,10 +152,12 @@ public fun add_verifier_attestation<Config: store>(
 /// Get full audit metadata for proposal
 public fun get_audit_metadata<Config: store>(
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String,
     bytecode_digest: vector<u8>,
 ): AuditMetadata {
     let proposal: &AuditableUpgradeProposal = account.borrow_managed_data(
+        registry,
         auditable_key(package_name, bytecode_digest),
         version::current()
     );

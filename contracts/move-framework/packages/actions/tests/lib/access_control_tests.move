@@ -55,7 +55,7 @@ fun start(): (Scenario, PackageRegistry, Account, Clock) {
         &extensions,
         vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
     );
-    let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
+    let account = account::new(Config {}, deps, &extensions, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -82,8 +82,8 @@ fun test_lock_cap_basic() {
     };
 
     // Get auth and lock the capability
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
-    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, &extensions, test_cap);
 
     // Verify the cap is locked
     assert!(access_control::has_lock<Config, TestCap>(&account), 0);
@@ -101,8 +101,8 @@ fun test_borrow_and_return_cap() {
         id: object::new(scenario.ctx()),
         value: 100,
     };
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
-    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, &extensions, test_cap);
 
     // Create an intent with borrow and return actions
     let outcome = Outcome {};
@@ -116,6 +116,7 @@ fun test_borrow_and_return_cap() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -130,6 +131,7 @@ fun test_borrow_and_return_cap() {
 
     // Create executable
     let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -141,6 +143,7 @@ fun test_borrow_and_return_cap() {
     let borrowed_cap = access_control::do_borrow<Config, Outcome, TestCap, _>(
         &mut executable,
         &mut account,
+        &extensions,
         version::current(),
         AccessControlIntent(),
     );
@@ -152,6 +155,7 @@ fun test_borrow_and_return_cap() {
     access_control::do_return<Config, Outcome, TestCap, _>(
         &mut executable,
         &mut account,
+        &extensions,
         borrowed_cap,
         version::current(),
         AccessControlIntent(),
@@ -177,8 +181,8 @@ fun test_borrow_without_return_fails() {
         id: object::new(scenario.ctx()),
         value: 50,
     };
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
-    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, &extensions, test_cap);
 
     // Create an intent with ONLY borrow (no return) - this should fail
     let outcome = Outcome {};
@@ -192,6 +196,7 @@ fun test_borrow_without_return_fails() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -206,6 +211,7 @@ fun test_borrow_without_return_fails() {
 
     // Create executable
     let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -217,6 +223,7 @@ fun test_borrow_without_return_fails() {
     let borrowed_cap = access_control::do_borrow<Config, Outcome, TestCap, _>(
         &mut executable,
         &mut account,
+        &extensions,
         version::current(),
         AccessControlIntent(),
     );
@@ -239,7 +246,7 @@ fun test_lock_cap_unshared() {
     };
 
     // Lock the cap using the unshared function (for init-time locking)
-    access_control::do_lock_cap_unshared(&mut account, test_cap);
+    access_control::do_lock_cap_unshared(&mut account, &extensions, test_cap);
 
     // Verify the cap is locked
     assert!(access_control::has_lock<Config, TestCap>(&account), 0);
@@ -264,6 +271,7 @@ fun test_delete_borrow_action() {
     );
 
     account.build_intent!(
+        &extensions,
         params,
         outcome,
         b"".to_string(),
@@ -281,10 +289,11 @@ fun test_delete_borrow_action() {
         id: object::new(scenario.ctx()),
         value: 77,
     };
-    let auth = account.new_auth<Config, Witness>(version::current(), Witness());
-    access_control::lock_cap<Config, TestCap>(auth, &mut account, test_cap);
+    let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
+    access_control::lock_cap<Config, TestCap>(auth, &mut account, &extensions, test_cap);
 
     let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        &extensions,
         key,
         &clock,
         version::current(),
@@ -295,12 +304,14 @@ fun test_delete_borrow_action() {
     let borrowed = access_control::do_borrow<Config, Outcome, TestCap, _>(
         &mut executable,
         &mut account,
+        &extensions,
         version::current(),
         AccessControlIntent(),
     );
     access_control::do_return<Config, Outcome, TestCap, _>(
         &mut executable,
         &mut account,
+        &extensions,
         borrowed,
         version::current(),
         AccessControlIntent(),

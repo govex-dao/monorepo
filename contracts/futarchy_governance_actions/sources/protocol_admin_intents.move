@@ -8,6 +8,7 @@ use account_protocol::executable::Executable;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
 use account_protocol::owned;
+use account_protocol::package_registry::PackageRegistry;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
 use futarchy_factory::factory::{FactoryOwnerCap, ValidatorAdminCap};
@@ -39,6 +40,7 @@ public struct AcceptValidatorAdminCapIntent() has copy, drop;
 public fun request_accept_factory_owner_cap<Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     cap_id: ID,
@@ -49,6 +51,7 @@ public fun request_accept_factory_owner_cap<Outcome: store>(
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         b"Accept FactoryOwnerCap into protocol DAO custody".to_string(),
@@ -65,6 +68,7 @@ public fun request_accept_factory_owner_cap<Outcome: store>(
 public fun request_accept_fee_admin_cap<Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     cap_id: ID,
@@ -75,6 +79,7 @@ public fun request_accept_fee_admin_cap<Outcome: store>(
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         b"Accept FeeAdminCap into protocol DAO custody".to_string(),
@@ -91,6 +96,7 @@ public fun request_accept_fee_admin_cap<Outcome: store>(
 public fun request_accept_validator_admin_cap<Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     cap_id: ID,
@@ -101,6 +107,7 @@ public fun request_accept_validator_admin_cap<Outcome: store>(
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         b"Accept ValidatorAdminCap into protocol DAO custody".to_string(),
@@ -119,9 +126,11 @@ public fun request_accept_validator_admin_cap<Outcome: store>(
 public fun execute_accept_factory_owner_cap<Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<FactoryOwnerCap>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         AcceptFactoryOwnerCapIntent(),
@@ -131,6 +140,7 @@ public fun execute_accept_factory_owner_cap<Outcome: store>(
             // Store the cap in the account's managed assets
             account::add_managed_asset(
                 account,
+                registry,
                 b"protocol:factory_owner_cap".to_string(),
                 cap,
                 version::current(),
@@ -143,9 +153,11 @@ public fun execute_accept_factory_owner_cap<Outcome: store>(
 public fun execute_accept_fee_admin_cap<Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<FeeAdminCap>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         AcceptFeeAdminCapIntent(),
@@ -155,6 +167,7 @@ public fun execute_accept_fee_admin_cap<Outcome: store>(
             // Store the cap in the account's managed assets
             account::add_managed_asset(
                 account,
+                registry,
                 b"protocol:fee_admin_cap".to_string(),
                 cap,
                 version::current(),
@@ -167,9 +180,11 @@ public fun execute_accept_fee_admin_cap<Outcome: store>(
 public fun execute_accept_validator_admin_cap<Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receiving: Receiving<ValidatorAdminCap>,
 ) {
     account.process_intent!(
+        registry,
         executable,
         version::current(),
         AcceptValidatorAdminCapIntent(),
@@ -179,6 +194,7 @@ public fun execute_accept_validator_admin_cap<Outcome: store>(
             // Store the cap in the account's managed assets
             account::add_managed_asset(
                 account,
+                registry,
                 b"protocol:validator_admin_cap".to_string(),
                 cap,
                 version::current(),
@@ -193,6 +209,7 @@ public fun execute_accept_validator_admin_cap<Outcome: store>(
 /// This should be called by the current admin cap holders to transfer control
 public entry fun migrate_admin_caps_to_dao(
     account: &mut Account,
+    registry: &PackageRegistry,
     factory_cap: FactoryOwnerCap,
     fee_cap: FeeAdminCap,
     validator_cap: ValidatorAdminCap,
@@ -201,6 +218,7 @@ public entry fun migrate_admin_caps_to_dao(
     // Store all caps in the DAO's account
     account::add_managed_asset(
         account,
+        registry,
         b"protocol:factory_owner_cap".to_string(),
         factory_cap,
         version::current(),
@@ -208,6 +226,7 @@ public entry fun migrate_admin_caps_to_dao(
 
     account::add_managed_asset(
         account,
+        registry,
         b"protocol:fee_admin_cap".to_string(),
         fee_cap,
         version::current(),
@@ -215,6 +234,7 @@ public entry fun migrate_admin_caps_to_dao(
 
     account::add_managed_asset(
         account,
+        registry,
         b"protocol:validator_admin_cap".to_string(),
         validator_cap,
         version::current(),
@@ -224,11 +244,13 @@ public entry fun migrate_admin_caps_to_dao(
 /// Transfer a specific admin cap to the protocol DAO (for gradual migration)
 public entry fun migrate_factory_cap_to_dao(
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: FactoryOwnerCap,
     ctx: &mut TxContext,
 ) {
     account::add_managed_asset(
         account,
+        registry,
         b"protocol:factory_owner_cap".to_string(),
         cap,
         version::current(),
@@ -237,11 +259,13 @@ public entry fun migrate_factory_cap_to_dao(
 
 public entry fun migrate_fee_cap_to_dao(
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: FeeAdminCap,
     ctx: &mut TxContext,
 ) {
     account::add_managed_asset(
         account,
+        registry,
         b"protocol:fee_admin_cap".to_string(),
         cap,
         version::current(),
@@ -250,11 +274,13 @@ public entry fun migrate_fee_cap_to_dao(
 
 public entry fun migrate_validator_cap_to_dao(
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: ValidatorAdminCap,
     ctx: &mut TxContext,
 ) {
     account::add_managed_asset(
         account,
+        registry,
         b"protocol:validator_admin_cap".to_string(),
         cap,
         version::current(),

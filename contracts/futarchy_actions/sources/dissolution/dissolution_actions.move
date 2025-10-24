@@ -18,19 +18,26 @@
 /// - Pro-rata calculation prevents draining
 /// - Each redemption is atomic and proportional
 
-module futarchy_actions::dissolution;
+module futarchy_actions::dissolution_actions;
 
 use account_actions::currency;
 use account_actions::vault;
 use account_protocol::account::{Self, Account};
+use account_protocol::bcs_validation;
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents;
+use account_protocol::action_validation;
+use account_protocol::package_registry::PackageRegistry;
+use account_protocol::version_witness::VersionWitness;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::version;
 use std::string::String;
 use std::type_name;
+use sui::bcs;
 use sui::clock::Clock;
 use sui::coin::Coin;
 use sui::event;
-use sui::object::{Self, UID};
+use sui::object::{Self, ID, UID};
 use sui::transfer;
 
 // === Errors ===
@@ -42,6 +49,10 @@ const ECapabilityAlreadyExists: u64 = 3;
 const EInvalidUnlockDelay: u64 = 4;
 const EZeroSupply: u64 = 5;
 const EWrongAssetType: u64 = 6;
+
+// === Action Type Markers ===
+
+public struct CreateDissolutionCapability has drop {}
 
 // === Structs ===
 
@@ -95,11 +106,12 @@ public struct Redemption has copy, drop {
 /// - Can only be called once (prevents multiple capability creation)
 public fun create_capability_if_terminated<AssetType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     ctx: &mut TxContext,
 ) {
     // Extract all data we need and validate
     let (unlock_at_ms, terminated_at_ms) = {
-        let dao_state = futarchy_config::state_mut_from_account(account);
+        let dao_state = futarchy_config::state_mut_from_account(account, registry);
 
         // Verify DAO is terminated
         assert!(
@@ -130,11 +142,11 @@ public fun create_capability_if_terminated<AssetType>(
     // This prevents attackers from creating capabilities with arbitrary token types
     let config = account::config<FutarchyConfig>(account);
     let expected_asset_type = futarchy_config::asset_type(config);
-    let actual_asset_type = type_name::get<AssetType>().into_string().to_string();
+    let actual_asset_type = type_name::with_defining_ids<AssetType>().into_string().to_string();
     assert!(expected_asset_type == &actual_asset_type, EWrongAssetType);
 
     // Get total asset supply from TreasuryCap
-    let total_supply = currency::coin_type_supply<AssetType>(account);
+    let total_supply = currency::coin_type_supply<AssetType>(account, registry);
     assert!(total_supply > 0, EZeroSupply);
 
     // Create capability with parameters from DAO config
@@ -196,6 +208,7 @@ public fun is_unlocked(cap: &DissolutionCapability, clock: &Clock): bool {
 public fun redeem<Config: store, AssetType, RedeemCoinType: drop>(
     capability: &DissolutionCapability,
     account: &mut Account,
+    registry: &PackageRegistry,
     asset_coins: Coin<AssetType>,
     vault_name: String,
     clock: &Clock,
@@ -210,7 +223,7 @@ public fun redeem<Config: store, AssetType, RedeemCoinType: drop>(
     assert!(clock.timestamp_ms() >= capability.unlock_at_ms, ETooEarly);
 
     // 3. Verify DAO is still terminated (can't be reactivated)
-    verify_terminated(account);
+    verify_terminated(account, registry);
 
     // 4. Verify non-zero supply (safety check)
     assert!(capability.total_asset_supply > 0, EZeroSupply);
@@ -220,7 +233,7 @@ public fun redeem<Config: store, AssetType, RedeemCoinType: drop>(
     let asset_amount = asset_coins.value();
 
     // Get current vault balance for this coin type
-    let vault_balance = vault::balance<Config, RedeemCoinType>(account, vault_name);
+    let vault_balance = vault::balance<Config, RedeemCoinType>(account, registry, vault_name);
 
     // Calculate user's proportional share using u128 to prevent overflow
     let share_numerator = (asset_amount as u128);
@@ -232,14 +245,15 @@ public fun redeem<Config: store, AssetType, RedeemCoinType: drop>(
     // === Burn Asset Tokens ===
 
     // Burn user's asset tokens using permissionless public_burn
-    currency::public_burn<Config, AssetType>(account, asset_coins);
+    currency::public_burn<Config, AssetType>(account, registry, asset_coins);
 
     // === Withdraw Pro-Rata Share ===
 
-    // Withdraw from vault using permissionless dissolution withdrawal
+    // Withdraw from vault using permissionless withdrawal (no Auth required)
     // Pass DAO address for verification
-    let redeemed_coin = vault::withdraw_for_dissolution<Config, RedeemCoinType>(
+    let redeemed_coin = vault::withdraw_permissionless<Config, RedeemCoinType>(
         account,
+        registry,
         capability.dao_address,
         vault_name,
         redeem_amount,
@@ -252,7 +266,7 @@ public fun redeem<Config: store, AssetType, RedeemCoinType: drop>(
         capability_id: object::id(capability),
         user: ctx.sender(),
         asset_amount_burned: asset_amount,
-        coin_type_redeemed: std::type_name::get<RedeemCoinType>().into_string().to_string(),
+        coin_type_redeemed: type_name::with_defining_ids<RedeemCoinType>().into_string().to_string(),
         coin_amount_received: redeem_amount,
         vault_name,
     });
@@ -264,13 +278,74 @@ public fun redeem<Config: store, AssetType, RedeemCoinType: drop>(
 
 /// Verify DAO is in TERMINATED state
 /// Aborts if not terminated
-fun verify_terminated(account: &Account) {
+fun verify_terminated(account: &Account, registry: &PackageRegistry) {
     let dao_state = account::borrow_managed_data(
         account,
+        registry,
         futarchy_config::new_dao_state_key(),
         version::current()
     );
     let operational_state = futarchy_config::operational_state(dao_state);
     let terminated_state = futarchy_config::state_terminated();
     assert!(operational_state == terminated_state, ENotTerminated);
+}
+
+// === Action Structs for Proposal System ===
+
+/// Action data for creating a dissolution capability
+/// Note: This is typically called permissionlessly AFTER termination,
+/// but can also be included in the termination proposal itself
+public struct CreateDissolutionCapabilityAction<phantom AssetType> has store, drop, copy {
+    // Empty - all parameters come from DAO config set during termination
+}
+
+// === Action Constructors ===
+
+/// Create action for proposal system
+public fun new_create_dissolution_capability<AssetType>(): CreateDissolutionCapabilityAction<AssetType> {
+    CreateDissolutionCapabilityAction {}
+}
+
+// === Execution Functions (for Proposal System) ===
+
+/// Execute create dissolution capability action from proposal
+/// This allows dissolution capability creation to be bundled with termination proposal
+public fun do_create_dissolution_capability<AssetType, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account,
+    registry: &PackageRegistry,
+    _version: VersionWitness,
+    _witness: IW,
+    ctx: &mut TxContext,
+) {
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<CreateDissolutionCapability>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+
+    // No fields to deserialize - empty action
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Execute capability creation (permissionless function)
+    create_capability_if_terminated<AssetType>(
+        account,
+        registry,
+        ctx,
+    );
+
+    executable::increment_action_idx(executable);
+}
+
+// === Garbage Collection (Delete Functions for Expired Intents) ===
+
+/// Delete create dissolution capability action from expired intent
+public fun delete_create_dissolution_capability<AssetType>(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    let mut reader = bcs::new(action_data);
+
+    // No fields to consume - empty action
+    let _ = reader.into_remainder_bytes();
 }

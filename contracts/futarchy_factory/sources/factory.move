@@ -6,7 +6,7 @@
 module futarchy_factory::factory;
 
 use account_actions::{currency, vault};
-use account_protocol::package_registry::PackageRegistry;
+use account_protocol::package_registry::{Self as package_registry, PackageRegistry};
 use account_protocol::account::{Self, Account};
 use futarchy_core::dao_config::{
     Self,
@@ -438,34 +438,38 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Initialize the default treasury vault using base vault module
     let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
+        registry,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
     );
-    vault::open<FutarchyConfig>(auth, &mut account, std::string::utf8(b"treasury"), ctx);
+    vault::open<FutarchyConfig>(auth, &mut account, registry, std::string::utf8(b"treasury"), ctx);
 
     // Pre-approve common coin types for permissionless deposits
     // This enables anyone to send SUI, AssetType, or StableType to the DAO
     // (enables revenue/donations without governance proposals)
     let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
+        registry,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
     );
-    vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, std::string::utf8(b"treasury"));
+    vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, registry, std::string::utf8(b"treasury"));
 
     let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
+        registry,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
     );
-    vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, std::string::utf8(b"treasury"));
+    vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
 
     let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
         &account,
+        registry,
         version::current(),
         futarchy_config::authenticate(&account, ctx),
     );
-    vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, std::string::utf8(b"treasury"));
+    vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
 
     // If treasury cap provided, lock it using Move framework's currency module
     if (treasury_cap.is_some()) {
@@ -474,12 +478,14 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         // This ensures atomic borrowing and proper permissions management
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
+            registry,
             version::current(),
             futarchy_config::authenticate(&account, ctx),
         );
         currency::lock_cap(
             auth,
             &mut account,
+            registry,
             cap,
             option::none(), // No max supply limit for now
         );
@@ -493,6 +499,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     while (idx < specs_len) {
         init_actions::stage_init_intent(
             &mut account,
+            registry,
             &account_object_id,
             idx,
             vector::borrow(&init_specs, idx),
@@ -535,6 +542,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 /// Internal function to create a DAO for testing without Extensions
 fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
+    registry: &PackageRegistry,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     min_asset_amount: u64,
@@ -658,7 +666,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     );
 
     // Create the account using test function
-    let mut account = futarchy_config::new_account_test(config, ctx);
+    let mut account = futarchy_config::new_account_test(config, registry, ctx);
 
     // Initialize the default treasury vault (test version)
     {
@@ -666,32 +674,36 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         let test_version = version_witness::new_for_testing(@account_protocol);
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
+            registry,
             test_version,
             futarchy_config::authenticate(&account, ctx),
         );
-        vault::open<FutarchyConfig>(auth, &mut account, std::string::utf8(b"treasury"), ctx);
+        vault::open<FutarchyConfig>(auth, &mut account, registry, std::string::utf8(b"treasury"), ctx);
 
         // Pre-approve common coin types for permissionless deposits
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
+            registry,
             test_version,
             futarchy_config::authenticate(&account, ctx),
         );
-        vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, std::string::utf8(b"treasury"));
+        vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, registry, std::string::utf8(b"treasury"));
 
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
+            registry,
             test_version,
             futarchy_config::authenticate(&account, ctx),
         );
-        vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, std::string::utf8(b"treasury"));
+        vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
 
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
+            registry,
             test_version,
             futarchy_config::authenticate(&account, ctx),
         );
-        vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, std::string::utf8(b"treasury"));
+        vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
     };
 
     // If treasury cap provided, lock it using Move framework's currency module
@@ -701,12 +713,14 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         // This ensures atomic borrowing and proper permissions management
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
+            registry,
             version::current(),
             futarchy_config::authenticate(&account, ctx),
         );
         currency::lock_cap(
             auth,
             &mut account,
+            registry,
             cap,
             option::none(), // No max supply limit for now
         );
@@ -720,6 +734,7 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     while (idx < specs_len) {
         init_actions::stage_init_intent(
             &mut account,
+            registry,
             &account_object_id,
             idx,
             vector::borrow(&init_specs, idx),
@@ -847,12 +862,14 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         let cap = treasury_cap.extract();
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
+            registry,
             version::current(),
             futarchy_config::authenticate(&account, ctx),
         );
         currency::lock_cap(
             auth,
             &mut account,
+            registry,
             cap,
             option::none(), // max_supply
         );
@@ -1108,8 +1125,13 @@ public entry fun create_dao_test<AssetType: drop, StableType: drop>(
     // For testing, we bypass the Extensions requirement
     // by directly calling the test internal function
     let twap_threshold = signed::new(twap_threshold_magnitude, twap_threshold_negative);
+
+    // For tests, create a dummy registry
+    let registry = package_registry::new_for_testing(ctx);
+
     create_dao_internal_test<AssetType, StableType>(
         factory,
+        &registry,
         fee_manager,
         payment,
         min_asset_amount,

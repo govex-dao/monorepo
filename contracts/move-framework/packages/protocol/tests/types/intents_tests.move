@@ -227,8 +227,6 @@ fun test_pop_front_execution_time() {
     scenario.end();
 }
 
-// REMOVED: test_lock_unlock_id - no locking in new design
-
 #[test]
 fun test_add_destroy_intent() {
     let mut scenario = ts::begin(OWNER);
@@ -455,6 +453,3 @@ fun test_error_execution_times_not_ascending() {
     destroy(params);
     scenario.end();
 }
-
-// REMOVED: test_error_lock_object_already_locked - no locking in new design
-// REMOVED: test_error_unlock_object_not_locked - no locking in new design

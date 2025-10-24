@@ -489,3 +489,15 @@ e.g for self protocol management
 
 and then larger pools for main dao mangement
 
+
+# AMM instant atomic auto buy back or self fundrase in AMM on proposal creation / market init actions
+I cut this. It requires more code and is possibly and attack vector, as its possibly using dao funds to manipulate TWAP. ( can be made safe though with configs on twap delay and caping max trade size as  % size of existing amm liqudity) 
+
+The whole system uses intents + actions.
+
+This AMM feature required stacking a batch of intents with logic between them in the happy path of proposal creation and finalization, (the other intents are executed at third step: execution). That feels so weird. To ship this I would want to spend a month sorting out the abstractions and patterns. 
+
+My thoughts:
+- Seems like it should be a general multiverse finance intent system (not just for DAO asset and stable, but any coin or object) or
+- Or require pre-approved meta-intents,
+- Or maybe intents should not be something thats just executed but should also aware of current proposal stage or coupled to it?

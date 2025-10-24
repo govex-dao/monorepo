@@ -321,11 +321,13 @@ fun test_permissionless_completion_requires_settlement() {
     ts::next_tx(&mut scenario, random_completer);
     {
         let mut raise = ts::take_shared<launchpad::Raise<TEST_ASSET, TEST_STABLE>>(&scenario);
+        let registry = ts::take_shared<PackageRegistry>(&scenario);
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let dao_payment = create_payment(fee::get_dao_creation_fee(&fee_manager), &mut scenario);
 
         launchpad::complete_raise_permissionless(
             &mut raise,
+            &registry,
             &mut fee_manager,
             dao_payment,
             &clock,
@@ -334,6 +336,7 @@ fun test_permissionless_completion_requires_settlement() {
 
         clock::destroy_for_testing(clock);
         ts::return_shared(raise);
+        ts::return_shared(registry);
         ts::return_shared(fee_manager);
     };
 

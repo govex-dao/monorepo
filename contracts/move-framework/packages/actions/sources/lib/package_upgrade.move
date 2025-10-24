@@ -31,6 +31,7 @@ use account_protocol::{
     executable::{Self, Executable},
     version_witness::VersionWitness,
     bcs_validation,
+    package_registry::PackageRegistry,
 };
 use account_actions::{
     version,
@@ -261,6 +262,7 @@ public struct CreateCommitCapAction has drop, store {
 public fun lock_cap(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: UpgradeCap,
     name: String, // name of the package
     delay_ms: u64, // minimum delay between proposal and execution
@@ -270,13 +272,14 @@ public fun lock_cap(
     assert!(!has_cap(account, name), ELockAlreadyExists);
 
     if (!account.has_managed_data(UpgradeIndexKey()))
-        account.add_managed_data(UpgradeIndexKey(), UpgradeIndex { packages_info: vec_map::empty() }, version::current());
+        account.add_managed_data(registry, UpgradeIndexKey(), UpgradeIndex { packages_info: vec_map::empty() }, version::current());
 
-    let upgrade_index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(UpgradeIndexKey(), version::current());
+    let upgrade_index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(registry, UpgradeIndexKey(), version::current());
     upgrade_index_mut.packages_info.insert(name, cap.package().to_address());
 
-    account.add_managed_asset(UpgradeCapKey(name), cap, version::current());
+    account.add_managed_asset(registry, UpgradeCapKey(name), cap, version::current());
     account.add_managed_data(
+        registry,
         UpgradeRulesKey(name),
         UpgradeRules {
             delay_ms,
@@ -292,6 +295,7 @@ public fun lock_cap(
 /// This function is for use during account creation, before the account is shared.
 public(package) fun do_lock_cap_unshared(
     account: &mut Account,
+    registry: &PackageRegistry,
     cap: UpgradeCap,
     name: String,
     delay_ms: u64,
@@ -300,13 +304,14 @@ public(package) fun do_lock_cap_unshared(
     assert!(!has_cap(account, name), ELockAlreadyExists);
 
     if (!account.has_managed_data(UpgradeIndexKey()))
-        account.add_managed_data(UpgradeIndexKey(), UpgradeIndex { packages_info: vec_map::empty() }, version::current());
+        account.add_managed_data(registry, UpgradeIndexKey(), UpgradeIndex { packages_info: vec_map::empty() }, version::current());
 
-    let upgrade_index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(UpgradeIndexKey(), version::current());
+    let upgrade_index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(registry, UpgradeIndexKey(), version::current());
     upgrade_index_mut.packages_info.insert(name, cap.package().to_address());
 
-    account.add_managed_asset(UpgradeCapKey(name), cap, version::current());
+    account.add_managed_asset(registry, UpgradeCapKey(name), cap, version::current());
     account.add_managed_data(
+        registry,
         UpgradeRulesKey(name),
         UpgradeRules {
             delay_ms,
@@ -325,6 +330,7 @@ public(package) fun do_lock_cap_unshared(
 public fun lock_commit_cap(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     ctx: &mut TxContext,
 ) {
@@ -332,6 +338,7 @@ public fun lock_commit_cap(
 
     // Get current nonce
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -347,6 +354,7 @@ public fun lock_commit_cap(
     };
 
     account.add_managed_asset(
+        registry,
         UpgradeCommitCapKey(package_name),
         commit_cap,
         version::current()
@@ -363,11 +371,13 @@ public fun lock_commit_cap(
 /// Lock commit cap during initialization - works on unshared Accounts
 public(package) fun do_lock_commit_cap_unshared(
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     ctx: &mut TxContext,
 ) {
     // Get current nonce (should be 0 at init)
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -380,6 +390,7 @@ public(package) fun do_lock_commit_cap_unshared(
     };
 
     account.add_managed_asset(
+        registry,
         UpgradeCommitCapKey(package_name),
         commit_cap,
         version::current()
@@ -393,6 +404,7 @@ public(package) fun do_lock_commit_cap_unshared(
 public fun create_and_transfer_commit_cap<Config: store>(
     auth: Auth,
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String,
     recipient: address,
     ctx: &mut TxContext,
@@ -401,6 +413,7 @@ public fun create_and_transfer_commit_cap<Config: store>(
 
     // Get current nonce
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -452,9 +465,11 @@ public fun commit_cap_valid_nonce(cap: &UpgradeCommitCap): u256 {
 /// Existing caps are only valid if their nonce matches this value
 public fun get_current_commit_nonce(
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String,
 ): u256 {
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -471,50 +486,56 @@ public fun has_cap(
 
 /// Returns the address of the package for a given package name.
 public fun get_cap_package(
-    account: &Account, 
+    account: &Account,
+    registry: &PackageRegistry,
     name: String
 ): address {
-    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(UpgradeCapKey(name), version::current()).package().to_address()
+    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(registry, UpgradeCapKey(name), version::current()).package().to_address()
 } 
 
 /// Returns the version of the UpgradeCap for a given package name.
 public fun get_cap_version(
-    account: &Account, 
+    account: &Account,
+    registry: &PackageRegistry,
     name: String
 ): u64 {
-    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(UpgradeCapKey(name), version::current()).version()
+    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(registry, UpgradeCapKey(name), version::current()).version()
 } 
 
 /// Returns the policy of the UpgradeCap for a given package name.
 public fun get_cap_policy(
-    account: &Account, 
+    account: &Account,
+    registry: &PackageRegistry,
     name: String
 ): u8 {
-    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(UpgradeCapKey(name), version::current()).policy()
+    account.borrow_managed_asset<UpgradeCapKey, UpgradeCap>(registry, UpgradeCapKey(name), version::current()).policy()
 } 
 
 /// Returns the timelock of the UpgradeRules for a given package name.
 public fun get_time_delay(
     account: &Account,
+    registry: &PackageRegistry,
     name: String
 ): u64 {
-    account.borrow_managed_data<UpgradeRulesKey, UpgradeRules>(UpgradeRulesKey(name), version::current()).delay_ms
+    account.borrow_managed_data<UpgradeRulesKey, UpgradeRules>(registry, UpgradeRulesKey(name), version::current()).delay_ms
 }
 
 /// Returns the map of package names to package addresses.
 public fun get_packages_info(
-    account: &Account
+    account: &Account,
+    registry: &PackageRegistry
 ): &VecMap<String, address> {
-    &account.borrow_managed_data<UpgradeIndexKey, UpgradeIndex>(UpgradeIndexKey(), version::current()).packages_info
+    &account.borrow_managed_data<UpgradeIndexKey, UpgradeIndex>(registry, UpgradeIndexKey(), version::current()).packages_info
 }
 
 /// Returns true if the package is managed by the account.
 public fun is_package_managed(
     account: &Account,
+    registry: &PackageRegistry,
     package_addr: address
 ): bool {
     if (!account.has_managed_data(UpgradeIndexKey())) return false;
-    let index: &UpgradeIndex = account.borrow_managed_data(UpgradeIndexKey(), version::current());
+    let index: &UpgradeIndex = account.borrow_managed_data(registry, UpgradeIndexKey(), version::current());
 
     let mut i = 0;
     while (i < index.packages_info.length()) {
@@ -529,9 +550,10 @@ public fun is_package_managed(
 /// Returns the address of the package for a given package name.
 public fun get_package_addr(
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String
 ): address {
-    let index: &UpgradeIndex = account.borrow_managed_data(UpgradeIndexKey(), version::current());
+    let index: &UpgradeIndex = account.borrow_managed_data(registry, UpgradeIndexKey(), version::current());
     *index.packages_info.get(&package_name)
 }
 
@@ -539,9 +561,10 @@ public fun get_package_addr(
 #[allow(unused_assignment)] // false positive
 public fun get_package_name(
     account: &Account,
+    registry: &PackageRegistry,
     package_addr: address
 ): String {
-    let index: &UpgradeIndex = account.borrow_managed_data(UpgradeIndexKey(), version::current());
+    let index: &UpgradeIndex = account.borrow_managed_data(registry, UpgradeIndexKey(), version::current());
     let (mut i, mut package_name) = (0, b"".to_string());
     loop {
         let (name, addr) = index.packages_info.get_entry_by_idx(i);
@@ -607,6 +630,7 @@ public fun new_upgrade<Outcome, IW: drop>(
 public fun do_upgrade<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     clock: &Clock,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -635,11 +659,11 @@ public fun do_upgrade<Outcome: store, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     assert!(
-        clock.timestamp_ms() >= executable.intent().creation_time() + get_time_delay(account, name),
+        clock.timestamp_ms() >= executable.intent().creation_time() + get_time_delay(account, registry, name),
         EUpgradeTooEarly
     );
 
-    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
+    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(registry, UpgradeCapKey(name), version_witness);
     let policy = cap.policy();
 
     // Increment action index
@@ -684,6 +708,7 @@ public fun new_commit<Outcome, IW: drop>(
 public fun do_commit_dao_only<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receipt: UpgradeReceipt,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -713,6 +738,7 @@ public fun do_commit_dao_only<Outcome: store, IW: drop>(
 
     // SECURITY: If reclaim request is pending, verify timelock has expired
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(_name),
         version_witness
     );
@@ -727,12 +753,12 @@ public fun do_commit_dao_only<Outcome: store, IW: drop>(
     };
     // If no reclaim request, DAO can commit anytime (pure DAO-only mode)
 
-    let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(_name), version_witness);
+    let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(registry, UpgradeCapKey(_name), version_witness);
     cap_mut.commit_upgrade(receipt);
     let new_package_addr = cap_mut.package().to_address();
 
     // update the index with the new package address
-    let index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(UpgradeIndexKey(), version_witness);
+    let index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(registry, UpgradeIndexKey(), version_witness);
     *index_mut.packages_info.get_mut(&_name) = new_package_addr;
 
     sui::event::emit(UpgradeCommittedDaoOnly {
@@ -751,6 +777,7 @@ public fun do_commit_dao_only<Outcome: store, IW: drop>(
 public fun do_commit_with_cap<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     receipt: UpgradeReceipt,
     commit_cap: &UpgradeCommitCap,
     version_witness: VersionWitness,
@@ -783,17 +810,18 @@ public fun do_commit_with_cap<Outcome: store, IW: drop>(
 
     // SECURITY: Validate that the cap's nonce matches current nonce (not revoked)
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(name),
         version_witness
     );
     assert!(commit_cap.valid_nonce == rules.commit_nonce, ECapRevoked);
 
-    let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
+    let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(registry, UpgradeCapKey(name), version_witness);
     cap_mut.commit_upgrade(receipt);
     let new_package_addr = cap_mut.package().to_address();
 
     // update the index with the new package address
-    let index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(UpgradeIndexKey(), version_witness);
+    let index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(registry, UpgradeIndexKey(), version_witness);
     *index_mut.packages_info.get_mut(&name) = new_package_addr;
 
     sui::event::emit(UpgradeCommittedWithCap {
@@ -840,6 +868,7 @@ public fun new_restrict<Outcome, IW: drop>(
 public fun do_restrict<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     version_witness: VersionWitness,
     _intent_witness: IW,
 ) {
@@ -868,16 +897,16 @@ public fun do_restrict<Outcome: store, IW: drop>(
 
     // Defense-in-depth: explicitly validate known policy values
     if (policy == package::additive_policy()) {
-        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
+        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(registry, UpgradeCapKey(name), version_witness);
         cap_mut.only_additive_upgrades();
     } else if (policy == package::dep_only_policy()) {
-        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
+        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(registry, UpgradeCapKey(name), version_witness);
         cap_mut.only_dep_upgrades();
     } else {
         // Only make immutable for the explicit immutable policy (255)
         // Any other policy value should abort rather than defaulting to immutable
         assert!(policy == 255, EUnsupportedActionVersion); // Reuse error code for invalid policy
-        let cap: UpgradeCap = account.remove_managed_asset(UpgradeCapKey(name), version_witness);
+        let cap: UpgradeCap = account.remove_managed_asset(registry, UpgradeCapKey(name), version_witness);
         package::make_immutable(cap);
     };
 
@@ -920,6 +949,7 @@ public fun new_create_commit_cap<Outcome, IW: drop>(
 public fun do_create_commit_cap<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
     ctx: &mut TxContext,
     version_witness: VersionWitness,
     _intent_witness: IW,
@@ -950,6 +980,7 @@ public fun do_create_commit_cap<Outcome: store, IW: drop>(
 
     // Get current nonce from rules
     let rules_mut: &mut UpgradeRules = account.borrow_managed_data_mut(
+        registry,
         UpgradeRulesKey(name),
         version_witness
     );
@@ -1007,10 +1038,11 @@ public fun delete_create_commit_cap(expired: &mut Expired) {
 /// Borrows the UpgradeCap for a given package address.
 public(package) fun borrow_cap<Config: store>(
     account: &Account,
+    registry: &PackageRegistry,
     package_addr: address
 ): &UpgradeCap {
-    let name = get_package_name(account, package_addr);
-    account.borrow_managed_asset(UpgradeCapKey(name), version::current())
+    let name = get_package_name(account, registry, package_addr);
+    account.borrow_managed_asset(registry, UpgradeCapKey(name), version::current())
 }
 
 // === Commit Cap Borrow/Return Functions ===
@@ -1020,20 +1052,22 @@ public(package) fun borrow_cap<Config: store>(
 /// Must be returned in the same transaction using return_commit_cap
 public fun borrow_commit_cap<Config: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     version_witness: VersionWitness,
 ): UpgradeCommitCap {
-    account.remove_managed_asset(UpgradeCommitCapKey(package_name), version_witness)
+    account.remove_managed_asset(registry, UpgradeCommitCapKey(package_name), version_witness)
 }
 
 /// Return the commit cap to the account after use
 public fun return_commit_cap<Config: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     commit_cap: UpgradeCommitCap,
     version_witness: VersionWitness,
 ) {
     let package_name = commit_cap.package_name;
-    account.add_managed_asset(UpgradeCommitCapKey(package_name), commit_cap, version_witness);
+    account.add_managed_asset(registry, UpgradeCommitCapKey(package_name), commit_cap, version_witness);
 }
 
 /// Create an UpgradeCommitCap for transferring (used in init_actions)
@@ -1062,6 +1096,7 @@ public fun transfer_commit_cap(cap: UpgradeCommitCap, recipient: address) {
 public fun destroy_commit_cap<Config: store>(
     cap: UpgradeCommitCap,
     account: &mut Account,
+    registry: &PackageRegistry,
     ctx: &TxContext,
 ) {
     let UpgradeCommitCap { id, package_name, valid_nonce: _ } = cap;
@@ -1071,6 +1106,7 @@ public fun destroy_commit_cap<Config: store>(
 
     // Reset to DAO-only mode: nonce=0, no reclaim pending
     let rules_mut: &mut UpgradeRules = account.borrow_managed_data_mut(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -1095,6 +1131,7 @@ public fun destroy_commit_cap<Config: store>(
 public fun request_reclaim_commit_cap<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     clock: &Clock,
 ) {
@@ -1103,6 +1140,7 @@ public fun request_reclaim_commit_cap<Config: store>(
     let dao_account = account.addr();
 
     let rules_mut: &mut UpgradeRules = account.borrow_managed_data_mut(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -1133,6 +1171,7 @@ public fun request_reclaim_commit_cap<Config: store>(
 public fun clear_reclaim_request<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     clock: &Clock,
 ) {
@@ -1141,6 +1180,7 @@ public fun clear_reclaim_request<Config: store>(
     let dao_account = account.addr();
 
     let rules_mut: &mut UpgradeRules = account.borrow_managed_data_mut(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -1173,9 +1213,11 @@ public fun clear_reclaim_request<Config: store>(
 /// Check if a reclaim request is pending
 public fun has_reclaim_request(
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String,
 ): bool {
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -1185,9 +1227,11 @@ public fun has_reclaim_request(
 /// Get the timestamp when reclaim will be available (if request exists)
 public fun get_reclaim_available_time(
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String,
 ): Option<u64> {
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -1208,6 +1252,7 @@ public fun get_reclaim_available_time(
 public fun propose_upgrade_digest(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
     execution_time_ms: u64,
@@ -1220,6 +1265,7 @@ public fun propose_upgrade_digest(
 
     // Validate timelock
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version::current()
     );
@@ -1240,6 +1286,7 @@ public fun propose_upgrade_digest(
 
     // Store proposal for voting
     account.add_managed_data(
+        registry,
         proposal_key(package_name, digest),
         proposal,
         version::current()
@@ -1259,6 +1306,7 @@ public fun propose_upgrade_digest(
 public fun approve_upgrade_proposal<Config: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
     clock: &Clock,
@@ -1266,6 +1314,7 @@ public fun approve_upgrade_proposal<Config: store>(
     account.verify(auth);
 
     let proposal: &mut UpgradeProposal = account.borrow_managed_data_mut(
+        registry,
         proposal_key(package_name, digest),
         version::current()
     );
@@ -1285,6 +1334,7 @@ public fun approve_upgrade_proposal<Config: store>(
 /// Returns ticket that caller must immediately consume via sui upgrade command
 public fun execute_approved_upgrade_dao_only<Config: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
     clock: &Clock,
@@ -1292,6 +1342,7 @@ public fun execute_approved_upgrade_dao_only<Config: store>(
 ): UpgradeTicket {
     // 1. Validate proposal exists and is approved
     let proposal: &UpgradeProposal = account.borrow_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
@@ -1303,6 +1354,7 @@ public fun execute_approved_upgrade_dao_only<Config: store>(
 
     // 3. Check reclaim logic (if applicable)
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version_witness
     );
@@ -1316,6 +1368,7 @@ public fun execute_approved_upgrade_dao_only<Config: store>(
 
     // 4. Create upgrade ticket (HOT POTATO STARTS HERE!)
     let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        registry,
         UpgradeCapKey(package_name),
         version_witness
     );
@@ -1337,6 +1390,7 @@ public fun execute_approved_upgrade_dao_only<Config: store>(
 /// This MUST be called in same PTB after sui upgrade command
 public fun complete_approved_upgrade_dao_only<Config: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
     receipt: UpgradeReceipt,
@@ -1344,16 +1398,18 @@ public fun complete_approved_upgrade_dao_only<Config: store>(
 ) {
     // Validate this matches an approved upgrade
     let proposal: &UpgradeProposal = account.borrow_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
     assert!(proposal.approved, EProposalNotApproved);
 
     // Validate digest matches receipt
-    assert!(receipt.package() == get_cap_package(account, package_name).to_id(), EDigestMismatch);
+    assert!(receipt.package() == get_cap_package(account, registry, package_name).to_id(), EDigestMismatch);
 
     // Commit the upgrade
     let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        registry,
         UpgradeCapKey(package_name),
         version_witness
     );
@@ -1362,6 +1418,7 @@ public fun complete_approved_upgrade_dao_only<Config: store>(
     // Update package index
     let new_addr = cap.package().to_address();
     let index: &mut UpgradeIndex = account.borrow_managed_data_mut(
+        registry,
         UpgradeIndexKey(),
         version_witness
     );
@@ -1369,6 +1426,7 @@ public fun complete_approved_upgrade_dao_only<Config: store>(
 
     // Clean up proposal
     let _removed_proposal: UpgradeProposal = account.remove_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
@@ -1387,6 +1445,7 @@ public fun complete_approved_upgrade_dao_only<Config: store>(
 #[test_only]
 public fun complete_approved_upgrade_dao_only_for_testing<Config: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
     receipt: UpgradeReceipt,
@@ -1394,6 +1453,7 @@ public fun complete_approved_upgrade_dao_only_for_testing<Config: store>(
 ) {
     // Validate this matches an approved upgrade
     let proposal: &UpgradeProposal = account.borrow_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
@@ -1403,6 +1463,7 @@ public fun complete_approved_upgrade_dao_only_for_testing<Config: store>(
 
     // Commit the upgrade
     let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        registry,
         UpgradeCapKey(package_name),
         version_witness
     );
@@ -1411,6 +1472,7 @@ public fun complete_approved_upgrade_dao_only_for_testing<Config: store>(
     // Update package index
     let new_addr = cap.package().to_address();
     let index: &mut UpgradeIndex = account.borrow_managed_data_mut(
+        registry,
         UpgradeIndexKey(),
         version_witness
     );
@@ -1418,6 +1480,7 @@ public fun complete_approved_upgrade_dao_only_for_testing<Config: store>(
 
     // Clean up proposal
     let _removed_proposal: UpgradeProposal = account.remove_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
@@ -1435,6 +1498,7 @@ public fun complete_approved_upgrade_dao_only_for_testing<Config: store>(
 /// This requires the commit cap to be provided, validating nonce
 public fun execute_approved_upgrade_with_cap<Config: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
     commit_cap: &UpgradeCommitCap,
@@ -1443,6 +1507,7 @@ public fun execute_approved_upgrade_with_cap<Config: store>(
 ): UpgradeTicket {
     // 1. Validate proposal exists and is approved
     let proposal: &UpgradeProposal = account.borrow_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
@@ -1454,6 +1519,7 @@ public fun execute_approved_upgrade_with_cap<Config: store>(
     // 3. Validate commit cap
     assert!(commit_cap.package_name == package_name, ECommitCapMismatch);
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version_witness
     );
@@ -1461,6 +1527,7 @@ public fun execute_approved_upgrade_with_cap<Config: store>(
 
     // 4. Create upgrade ticket
     let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        registry,
         UpgradeCapKey(package_name),
         version_witness
     );
@@ -1480,6 +1547,7 @@ public fun execute_approved_upgrade_with_cap<Config: store>(
 /// Phase 2b: Complete the upgrade by consuming the receipt (with commit cap)
 public fun complete_approved_upgrade_with_cap<Config: store>(
     account: &mut Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
     receipt: UpgradeReceipt,
@@ -1488,6 +1556,7 @@ public fun complete_approved_upgrade_with_cap<Config: store>(
 ) {
     // Validate proposal
     let proposal: &UpgradeProposal = account.borrow_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
@@ -1496,6 +1565,7 @@ public fun complete_approved_upgrade_with_cap<Config: store>(
     // Validate commit cap again (defense in depth)
     assert!(commit_cap.package_name == package_name, ECommitCapMismatch);
     let rules: &UpgradeRules = account.borrow_managed_data(
+        registry,
         UpgradeRulesKey(package_name),
         version_witness
     );
@@ -1503,6 +1573,7 @@ public fun complete_approved_upgrade_with_cap<Config: store>(
 
     // Commit upgrade
     let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(
+        registry,
         UpgradeCapKey(package_name),
         version_witness
     );
@@ -1511,6 +1582,7 @@ public fun complete_approved_upgrade_with_cap<Config: store>(
     // Update package index
     let new_addr = cap.package().to_address();
     let index: &mut UpgradeIndex = account.borrow_managed_data_mut(
+        registry,
         UpgradeIndexKey(),
         version_witness
     );
@@ -1518,6 +1590,7 @@ public fun complete_approved_upgrade_with_cap<Config: store>(
 
     // Clean up proposal
     let _removed_proposal: UpgradeProposal = account.remove_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version_witness
     );
@@ -1543,6 +1616,7 @@ public fun has_upgrade_proposal(
 /// Check if a specific upgrade digest is approved
 public fun is_upgrade_approved(
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
 ): bool {
@@ -1551,6 +1625,7 @@ public fun is_upgrade_approved(
     };
 
     let proposal: &UpgradeProposal = account.borrow_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version::current()
     );
@@ -1560,10 +1635,12 @@ public fun is_upgrade_approved(
 /// Get upgrade proposal details
 public fun get_upgrade_proposal(
     account: &Account,
+    registry: &PackageRegistry,
     package_name: String,
     digest: vector<u8>,
 ): (vector<u8>, u64, u64, bool) {
     let proposal: &UpgradeProposal = account.borrow_managed_data(
+        registry,
         proposal_key(package_name, digest),
         version::current()
     );
