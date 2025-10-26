@@ -142,7 +142,7 @@ public fun lock_cap<CoinType>(
         can_update_icon: true,
     };
     account.add_managed_data(registry, CurrencyRulesKey<CoinType>(), rules, version::current());
-    account.add_managed_asset(registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+    account::add_managed_asset(account, registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
 }
 
 /// Lock treasury cap during initialization - works on unshared Accounts
@@ -168,7 +168,7 @@ public(package) fun do_lock_cap_unshared< CoinType>(
         can_update_icon: true,
     };
     account.add_managed_data(registry, CurrencyRulesKey<CoinType>(), rules, version::current());
-    account.add_managed_asset(registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+    account::add_managed_asset(account, registry, TreasuryCapKey<CoinType>(), treasury_cap, version::current());
 }
 
 /// Mint coins during initialization - works on unshared Accounts

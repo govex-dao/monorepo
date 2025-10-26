@@ -81,6 +81,17 @@ fun test_basic_dao_creation() {
         // Create payment for DAO creation (10_000 MIST = 0.00001 SUI)
         let payment = create_payment(10_000, &mut scenario);
 
+        // Create test coin caps
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            TEST_ASSET {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
+
         // Create DAO with test parameters
         factory::create_dao_test<TEST_ASSET, TEST_STABLE_REGULAR>(
             &mut factory,
@@ -102,6 +113,8 @@ fun test_basic_dao_creation() {
             3, // max_outcomes
             vector::empty(), // agreement_lines
             vector::empty(), // agreement_difficulties
+            treasury_cap,
+            coin_metadata,
             &clock,
             ts::ctx(&mut scenario)
         );
@@ -207,6 +220,16 @@ fun test_dao_creation_with_unallowed_stable() {
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
         let payment = create_payment(10_000, &mut scenario);
 
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            TEST_ASSET {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
+
         factory::create_dao_test<TEST_ASSET, TEST_STABLE>(
             &mut factory,
             &mut fee_manager,
@@ -222,6 +245,8 @@ fun test_dao_creation_with_unallowed_stable() {
             b"Should fail".to_string(),
             3,
             vector::empty(), vector::empty(),
+            treasury_cap,
+            coin_metadata,
             &clock,
             ts::ctx(&mut scenario)
         );
@@ -272,6 +297,17 @@ fun test_permanent_disable_prevents_dao_creation() {
 
         let payment = create_payment(100_000_000, &mut scenario);
 
+        // Create test coin caps
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            TEST_ASSET_REGULAR {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
+
         factory::create_dao_test<TEST_ASSET_REGULAR, TEST_STABLE_REGULAR>(
             &mut factory,
             &mut fee_manager,
@@ -292,6 +328,8 @@ fun test_permanent_disable_prevents_dao_creation() {
             2,          // max_outcomes
             vector::empty(),
             vector::empty(),
+            treasury_cap,
+            coin_metadata,
             &clock,
             ts::ctx(&mut scenario),
         );

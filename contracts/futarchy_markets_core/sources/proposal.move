@@ -7,7 +7,7 @@ use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::liquidity_initialize;
 use futarchy_markets_primitives::market_state;
-use futarchy_one_shot_utils::coin_validation;
+// Removed: use futarchy_one_shot_utils::coin_validation - module was deleted, validation inlined
 use std::ascii::String as AsciiString;
 use std::string::{Self, String};
 use std::type_name;
@@ -16,7 +16,7 @@ use std::type_name::TypeName;
 use std::vector;
 use sui::balance::{Balance};
 use sui::clock::Clock;
-use sui::coin::{Coin, TreasuryCap, CoinMetadata};
+use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
 use sui::event;
 use sui::bag::{Self, Bag};
 use futarchy_types::init_action_specs::{Self as action_specs, InitActionSpecs};
@@ -45,6 +45,7 @@ const EInvalidConditionalCoinCount: u64 = 15;
 const EConditionalCoinAlreadySet: u64 = 16;
 const ENotLiquidityProvider: u64 = 17;
 const EAlreadySponsored: u64 = 18;
+const ESupplyNotZero: u64 = 19;
 
 // === Constants ===
 
@@ -1768,8 +1769,8 @@ public fun add_conditional_coin<AssetType, StableType, ConditionalCoinType>(
     // Check not already set
     assert!(!bag::contains(&proposal.conditional_treasury_caps, key), EConditionalCoinAlreadySet);
 
-    // Validate coin meets requirements
-    coin_validation::validate_conditional_coin(&treasury_cap, &metadata);
+    // Validate coin meets requirements: supply must be zero
+    assert!(coin::total_supply(&treasury_cap) == 0, ESupplyNotZero);
 
     // Update metadata with DAO naming pattern: c_<outcome>_<ASSET|STABLE>
     update_conditional_coin_metadata(

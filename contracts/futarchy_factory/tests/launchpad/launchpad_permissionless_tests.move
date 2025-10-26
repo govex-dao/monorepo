@@ -138,7 +138,15 @@ fun test_permissionless_completion_after_delay() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<TEST_ASSET>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            TEST_ASSET {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -148,7 +156,7 @@ fun test_permissionless_completion_after_delay() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"permissionless-test".to_string(),
             1_000_000_000_000,
             10_000_000_000,
@@ -246,7 +254,15 @@ fun test_permissionless_completion_requires_settlement() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<TEST_ASSET>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            TEST_ASSET {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -256,7 +272,7 @@ fun test_permissionless_completion_requires_settlement() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"test".to_string(),
             1_000_000_000_000,
             10_000_000_000,

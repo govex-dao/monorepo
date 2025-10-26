@@ -137,7 +137,15 @@ fun test_cleanup_failed_raise_returns_treasury_cap() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<CLEANUP_TOKEN>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            CLEANUP_TOKEN {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -147,7 +155,7 @@ fun test_cleanup_failed_raise_returns_treasury_cap() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"cleanup-test".to_string(),
             1_000_000_000_000, // 1M tokens for sale
             100_000_000_000, // min 100k (very high, will fail)
@@ -234,7 +242,15 @@ fun test_cleanup_failed_raise_cleans_dao_resources() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<CLEANUP_TOKEN>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            CLEANUP_TOKEN {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -244,7 +260,7 @@ fun test_cleanup_failed_raise_cleans_dao_resources() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"dao-cleanup".to_string(),
             1_000_000_000_000,
             50_000_000_000, // min 50k (will fail)
@@ -326,7 +342,15 @@ fun test_cleanup_cannot_run_on_successful_raise() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<CLEANUP_TOKEN>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            CLEANUP_TOKEN {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -336,7 +360,7 @@ fun test_cleanup_cannot_run_on_successful_raise() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"success-test".to_string(),
             1_000_000_000_000,
             10_000_000_000, // min 10k (low, will succeed)

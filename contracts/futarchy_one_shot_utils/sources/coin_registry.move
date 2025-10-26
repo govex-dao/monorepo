@@ -6,7 +6,6 @@
 /// Allows proposal creators to acquire coin pairs without requiring two transactions
 module futarchy_one_shot_utils::coin_registry;
 
-use futarchy_one_shot_utils::coin_validation;
 use sui::clock::Clock;
 use sui::coin::{TreasuryCap, CoinMetadata, Coin};
 use sui::dynamic_field;
@@ -19,6 +18,7 @@ const EInsufficientFee: u64 = 1;
 const ERegistryNotEmpty: u64 = 2;
 const ERegistryFull: u64 = 3;
 const EFeeExceedsMaximum: u64 = 4;
+const ESupplyNotZero: u64 = 5;
 
 // === Constants ===
 const MAX_COIN_SETS: u64 = 100_000;
@@ -67,6 +67,25 @@ public struct CoinSetTaken has copy, drop {
     timestamp: u64,
 }
 
+// === Validation Functions ===
+
+/// Validate that TreasuryCap and CoinMetadata are valid and match
+/// Used by coin_registry, factory, and launchpad to ensure cap validity
+///
+/// Checks:
+/// 1. Supply must be zero (prevents using already-minted coins)
+/// 2. Type parameters of treasury_cap and metadata must match (enforced by generics)
+public fun validate_coin_set<T>(
+    treasury_cap: &TreasuryCap<T>,
+    _metadata: &CoinMetadata<T>,
+) {
+    // Validate coin meets requirements: supply must be zero
+    assert!(treasury_cap.total_supply() == 0, ESupplyNotZero);
+
+    // Type match is enforced by generics - both must be same type T
+    // No additional validation needed since CoinMetadata and TreasuryCap types must align
+}
+
 // === Admin Functions ===
 
 /// Create a new coin registry (admin/one-time setup)
@@ -110,8 +129,8 @@ public fun deposit_coin_set<T>(
     // making them economically unusable and permanently occupying registry slots
     assert!(fee <= MAX_FEE, EFeeExceedsMaximum);
 
-    // Validate coin meets requirements
-    coin_validation::validate_conditional_coin(&treasury_cap, &metadata);
+    // Validate coin set (supply must be zero, types must match)
+    validate_coin_set(&treasury_cap, &metadata);
 
     let cap_id = object::id(&treasury_cap);
     let owner = ctx.sender();

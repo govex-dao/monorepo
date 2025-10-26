@@ -109,6 +109,7 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
 
     staged_init_specs: vector<InitActionSpecs>,
     treasury_cap: Option<TreasuryCap<RaiseToken>>,
+    coin_metadata: Option<CoinMetadata<RaiseToken>>,
 
     allowed_caps: vector<u64>,
     cap_sums: vector<u64>,
@@ -261,8 +262,9 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
         registry,
         fee_manager,
         payment,
-        option::none(),
-        option::none(),
+        option::none(), // optimistic_intent_challenge_enabled
+        option::none(), // treasury_cap - added later via init_actions on raise completion
+        option::none(), // coin_metadata - added later via init_actions on raise completion
         clock,
         ctx,
     );
@@ -356,7 +358,7 @@ public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     factory: &factory::Factory,
     fee_manager: &mut fee::FeeManager,
     treasury_cap: TreasuryCap<RaiseToken>,
-    coin_metadata: Option<CoinMetadata<RaiseToken>>,
+    coin_metadata: CoinMetadata<RaiseToken>,
     affiliate_id: String,
     tokens_for_sale: u64,
     min_raise_amount: u64,
@@ -1150,7 +1152,7 @@ public entry fun sweep_protocol_fees<RaiseToken, StableCoin>(
 
 fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     mut treasury_cap: TreasuryCap<RaiseToken>,
-    coin_metadata: Option<CoinMetadata<RaiseToken>>,
+    coin_metadata: CoinMetadata<RaiseToken>,
     affiliate_id: String,
     tokens_for_sale: u64,
     min_raise_amount: u64,
@@ -1163,7 +1165,8 @@ fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(coin::total_supply(&treasury_cap) == 0, ESupplyNotZero);
+    // Validate coin set (supply must be zero, types must match)
+    futarchy_one_shot_utils::coin_registry::validate_coin_set(&treasury_cap, &coin_metadata);
 
     let minted_tokens = coin::mint(&mut treasury_cap, tokens_for_sale, ctx);
     let deadline = clock.timestamp_ms() + constants::launchpad_duration_ms();
@@ -1183,6 +1186,7 @@ fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
         description,
         staged_init_specs: vector::empty(),
         treasury_cap: option::some(treasury_cap),
+        coin_metadata: option::some(coin_metadata),
         allowed_caps,
         cap_sums: vector::empty(),
         settlement_done: false,
@@ -1201,20 +1205,14 @@ fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
         i = i + 1;
     };
 
-    if (coin_metadata.is_some()) {
-        df::add(&mut raise.id, CoinMetadataKey {}, coin_metadata.destroy_some());
-    } else {
-        coin_metadata.destroy_none();
-    };
-
     let raise_id = object::id(&raise);
 
     event::emit(RaiseCreated {
         raise_id,
         creator: raise.creator,
         affiliate_id: raise.affiliate_id,
-        raise_token_type: string::from_ascii(type_name::get<RaiseToken>().into_string()),
-        stable_coin_type: string::from_ascii(type_name::get<StableCoin>().into_string()),
+        raise_token_type: string::from_ascii(type_name::with_defining_ids<RaiseToken>().into_string()),
+        stable_coin_type: string::from_ascii(type_name::with_defining_ids<StableCoin>().into_string()),
         min_raise_amount,
         tokens_for_sale,
         deadline_ms: raise.deadline_ms,

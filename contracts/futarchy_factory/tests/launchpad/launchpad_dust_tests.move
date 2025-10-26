@@ -139,7 +139,15 @@ fun test_sweep_dust_after_claim_period() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<DUST_TOKEN>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            DUST_TOKEN {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -149,7 +157,7 @@ fun test_sweep_dust_after_claim_period() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"dust-test".to_string(),
             1_000_000_000_000, // 1M tokens for sale
             10_000_000_000,
@@ -234,13 +242,15 @@ fun test_sweep_dust_after_claim_period() {
     {
         let creator_cap = ts::take_from_sender<launchpad::CreatorCap>(&scenario);
         let mut raise = ts::take_shared<launchpad::Raise<DUST_TOKEN, DUST_STABLE>>(&scenario);
+        let registry = ts::take_shared<PackageRegistry>(&scenario);
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let dao_payment = create_payment(fee::get_dao_creation_fee(&fee_manager), &mut scenario);
 
-        launchpad::complete_raise_test(&mut raise, &creator_cap, &mut fee_manager, dao_payment, &clock, ts::ctx(&mut scenario));
+        launchpad::complete_raise_test(&mut raise, &creator_cap, &registry, &mut fee_manager, dao_payment, &clock, ts::ctx(&mut scenario));
 
         ts::return_to_sender(&scenario, creator_cap);
         ts::return_shared(raise);
+        ts::return_shared(registry);
         ts::return_shared(fee_manager);
     };
 
@@ -305,7 +315,15 @@ fun test_sweep_dust_fails_before_claim_period() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<DUST_TOKEN>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            DUST_TOKEN {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -315,7 +333,7 @@ fun test_sweep_dust_fails_before_claim_period() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"early-sweep".to_string(),
             1_000_000_000_000,
             10_000_000_000,
@@ -387,13 +405,15 @@ fun test_sweep_dust_fails_before_claim_period() {
     {
         let creator_cap = ts::take_from_sender<launchpad::CreatorCap>(&scenario);
         let mut raise = ts::take_shared<launchpad::Raise<DUST_TOKEN, DUST_STABLE>>(&scenario);
+        let registry = ts::take_shared<PackageRegistry>(&scenario);
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let dao_payment = create_payment(fee::get_dao_creation_fee(&fee_manager), &mut scenario);
 
-        launchpad::complete_raise_test(&mut raise, &creator_cap, &mut fee_manager, dao_payment, &clock, ts::ctx(&mut scenario));
+        launchpad::complete_raise_test(&mut raise, &creator_cap, &registry, &mut fee_manager, dao_payment, &clock, ts::ctx(&mut scenario));
 
         ts::return_to_sender(&scenario, creator_cap);
         ts::return_shared(raise);
+        ts::return_shared(registry);
         ts::return_shared(fee_manager);
     };
 

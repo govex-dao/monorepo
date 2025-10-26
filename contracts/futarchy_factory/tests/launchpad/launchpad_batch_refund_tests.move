@@ -140,7 +140,15 @@ fun test_batch_refund_for_failed_raise() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<REFUND_TOKEN>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            REFUND_TOKEN {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -150,7 +158,7 @@ fun test_batch_refund_for_failed_raise() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"batch-refund".to_string(),
             1_000_000_000_000,
             100_000_000_000, // min 100k (will fail)
@@ -307,7 +315,15 @@ fun test_batch_refund_skips_already_claimed() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let treasury_cap = coin::create_treasury_cap_for_testing<REFUND_TOKEN>(ts::ctx(&mut scenario));
+        let (treasury_cap, coin_metadata) = coin::create_currency(
+            REFUND_TOKEN {},
+            6, // decimals
+            b"", // empty symbol
+            b"", // empty name
+            b"", // empty description
+            option::none(), // no icon url
+            ts::ctx(&mut scenario),
+        );
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -317,7 +333,7 @@ fun test_batch_refund_skips_already_claimed() {
             &factory,
             &mut fee_manager,
             treasury_cap,
-            option::none(),
+            coin_metadata,
             b"skip-test".to_string(),
             1_000_000_000_000,
             100_000_000_000, // min 100k (will fail)

@@ -23,6 +23,7 @@ use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_factory::init_actions;
 use futarchy_one_shot_utils::constants;
+use futarchy_one_shot_utils::coin_registry;
 use futarchy_types::init_action_specs::InitActionSpecs;
 use futarchy_types::signed::{Self as signed, SignedU128};
 use std::ascii::String as AsciiString;
@@ -31,7 +32,7 @@ use std::string::String as UTF8String;
 use std::type_name::{Self, TypeName};
 use std::vector;
 use sui::clock::Clock;
-use sui::coin::{Self, Coin, TreasuryCap};
+use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
 use sui::event;
 use sui::object::{Self, ID, UID};
 use sui::sui::SUI;
@@ -39,6 +40,11 @@ use sui::transfer;
 use sui::tx_context::TxContext;
 use sui::url;
 use sui::vec_set::{Self, VecSet};
+
+// === Storage Keys ===
+
+/// Key for storing CoinMetadata in Account
+public struct CoinMetadataKey<phantom CoinType> has copy, drop, store {}
 
 // === Errors ===
 const EPaused: u64 = 1;
@@ -195,10 +201,15 @@ public fun create_dao<AssetType: drop, StableType: drop>(
     max_outcomes: u64,
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
+    treasury_cap: TreasuryCap<AssetType>,
+    coin_metadata: CoinMetadata<AssetType>,
     optimistic_intent_challenge_enabled: Option<bool>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Validate caps at entry point
+    coin_registry::validate_coin_set(&treasury_cap, &coin_metadata);
+
     create_dao_internal_with_extensions<AssetType, StableType>(
         factory,
         registry,
@@ -221,7 +232,8 @@ public fun create_dao<AssetType: drop, StableType: drop>(
         _agreement_lines,
         _agreement_difficulties,
         optimistic_intent_challenge_enabled,
-        option::none(),
+        treasury_cap,
+        coin_metadata,
         vector::empty<InitActionSpecs>(),
         clock,
         ctx,
@@ -251,11 +263,15 @@ public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
     optimistic_intent_challenge_enabled: Option<bool>,
-    treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: TreasuryCap<AssetType>,
+    coin_metadata: CoinMetadata<AssetType>,
     init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Validate caps at entry point
+    coin_registry::validate_coin_set(&treasury_cap, &coin_metadata);
+
     create_dao_internal_with_extensions<AssetType, StableType>(
         factory,
         registry,
@@ -279,6 +295,7 @@ public fun create_dao_with_init_specs<AssetType: drop, StableType: drop>(
         _agreement_difficulties,
         optimistic_intent_challenge_enabled,
         treasury_cap,
+        coin_metadata,
         init_specs,
         clock,
         ctx,
@@ -313,7 +330,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
     optimistic_intent_challenge_enabled: Option<bool>,
-    mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: TreasuryCap<AssetType>,
+    coin_metadata: CoinMetadata<AssetType>,
     init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -471,27 +489,32 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     );
     vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
 
-    // If treasury cap provided, lock it using Move framework's currency module
-    if (treasury_cap.is_some()) {
-        let cap = treasury_cap.extract();
-        // Use Move framework's currency::lock_cap for proper treasury cap storage
-        // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
-            &account,
-            registry,
-            version::current(),
-            futarchy_config::authenticate(&account, ctx),
-        );
-        currency::lock_cap(
-            auth,
-            &mut account,
-            registry,
-            cap,
-            option::none(), // No max supply limit for now
-        );
-    };
-    // Destroy the empty option
-    treasury_cap.destroy_none();
+    // Lock treasury cap and store coin metadata using Move framework's currency module
+    // TreasuryCap is stored via currency::lock_cap for proper atomic borrowing
+    // CoinMetadata is stored separately for metadata updates via intents
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
+        &account,
+        registry,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+
+    // Store TreasuryCap
+    currency::lock_cap(
+        auth,
+        &mut account,
+        registry,
+        treasury_cap,
+        option::none(), // No max supply limit for now
+    );
+
+    // Store CoinMetadata for DAO governance control over coin metadata
+    account.add_managed_asset(
+        registry,
+        CoinMetadataKey<AssetType> {},
+        coin_metadata,
+        version::current(),
+    );
 
     let account_object_id = object::id(&account);
     let specs_len = vector::length(&init_specs);
@@ -560,7 +583,8 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
     max_outcomes: u64,
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
-    mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: TreasuryCap<AssetType>,
+    coin_metadata: CoinMetadata<AssetType>,
     init_specs: vector<InitActionSpecs>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -706,27 +730,32 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
         vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, registry, std::string::utf8(b"treasury"));
     };
 
-    // If treasury cap provided, lock it using Move framework's currency module
-    if (treasury_cap.is_some()) {
-        let cap = treasury_cap.extract();
-        // Use Move framework's currency::lock_cap for proper treasury cap storage
-        // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
-            &account,
-            registry,
-            version::current(),
-            futarchy_config::authenticate(&account, ctx),
-        );
-        currency::lock_cap(
-            auth,
-            &mut account,
-            registry,
-            cap,
-            option::none(), // No max supply limit for now
-        );
-    };
-    // Destroy the empty option
-    treasury_cap.destroy_none();
+    // Lock treasury cap and store coin metadata using Move framework's currency module
+    // TreasuryCap is stored via currency::lock_cap for proper atomic borrowing
+    // CoinMetadata is stored separately for metadata updates via intents
+    let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
+        &account,
+        registry,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+
+    // Store TreasuryCap
+    currency::lock_cap(
+        auth,
+        &mut account,
+        registry,
+        treasury_cap,
+        option::none(), // No max supply limit for now
+    );
+
+    // Store CoinMetadata for DAO governance control over coin metadata
+    account.add_managed_asset(
+        registry,
+        CoinMetadataKey<AssetType> {},
+        coin_metadata,
+        version::current(),
+    );
 
     let account_object_id = object::id(&account);
     let specs_len = vector::length(&init_specs);
@@ -783,13 +812,16 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
 /// optimistic_intent_challenge_enabled:
 ///   - none(): Use default (true - 10-day challenge period)
 ///   - some(enabled): Apply custom setting atomically during creation
-public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store>(
+///
+/// INTERNAL: Package-only access. For public API with required caps, use create_dao_unshared_with_caps
+public(package) fun create_dao_unshared<AssetType: drop + store, StableType: drop + store>(
     factory: &mut Factory,
     registry: &PackageRegistry,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     optimistic_intent_challenge_enabled: Option<bool>,
-    mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    treasury_cap: Option<TreasuryCap<AssetType>>,
+    coin_metadata: Option<CoinMetadata<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Account, UnifiedSpotPool<AssetType, StableType>) {
@@ -857,9 +889,20 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         ctx,
     );
 
-    // Setup treasury cap if provided
+    // Lock treasury cap and store coin metadata (if provided)
+    // TreasuryCap is stored via currency::lock_cap for proper atomic borrowing
+    // CoinMetadata is stored separately for metadata updates via intents
+    // For launchpad pre-create flow, these will be none and added later via init_actions
+
+    // Validate caps if both are provided
+    if (treasury_cap.is_some() && coin_metadata.is_some()) {
+        coin_registry::validate_coin_set(
+            option::borrow(&treasury_cap),
+            option::borrow(&coin_metadata),
+        );
+    };
+
     if (treasury_cap.is_some()) {
-        let cap = treasury_cap.extract();
         let auth = account::new_auth<FutarchyConfig, futarchy_config::ConfigWitness>(
             &account,
             registry,
@@ -870,12 +913,24 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
             auth,
             &mut account,
             registry,
-            cap,
+            treasury_cap.destroy_some(),
             option::none(), // max_supply
         );
+    } else {
+        treasury_cap.destroy_none();
     };
-    // Destroy the empty option
-    treasury_cap.destroy_none();
+
+    // Store CoinMetadata for DAO governance control over coin metadata
+    if (coin_metadata.is_some()) {
+        account.add_managed_asset(
+            registry,
+            CoinMetadataKey<AssetType> {},
+            coin_metadata.destroy_some(),
+            version::current(),
+        );
+    } else {
+        coin_metadata.destroy_none();
+    };
 
     // Update factory state
     factory.dao_count = factory.dao_count + 1;
@@ -1060,10 +1115,23 @@ public fun permanently_disabled_error(): u64 {
     EPermanentlyDisabled
 }
 
+/// Read CoinMetadata from Account
+/// Fully public function for market creation to access coin metadata
+public fun borrow_coin_metadata<CoinType>(
+    account: &Account,
+    registry: &PackageRegistry,
+): &CoinMetadata<CoinType> {
+    account.borrow_managed_asset<CoinMetadataKey<CoinType>, CoinMetadata<CoinType>>(
+        registry,
+        CoinMetadataKey<CoinType> {},
+        version::current(),
+    )
+}
+
 // === Private Functions ===
 
 fun get_type_string<T>(): UTF8String {
-    let type_name_obj = type_name::get_with_original_ids<T>();
+    let type_name_obj = type_name::with_original_ids<T>();
     let type_str = type_name_obj.into_string().into_bytes();
     type_str.to_string()
 }
@@ -1119,9 +1187,14 @@ public entry fun create_dao_test<AssetType: drop, StableType: drop>(
     max_outcomes: u64,
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
+    treasury_cap: TreasuryCap<AssetType>,
+    coin_metadata: CoinMetadata<AssetType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Validate caps at entry point
+    coin_registry::validate_coin_set(&treasury_cap, &coin_metadata);
+
     // For testing, we bypass the Extensions requirement
     // by directly calling the test internal function
     let twap_threshold = signed::new(twap_threshold_magnitude, twap_threshold_negative);
@@ -1149,7 +1222,8 @@ public entry fun create_dao_test<AssetType: drop, StableType: drop>(
         max_outcomes,
         _agreement_lines,
         _agreement_difficulties,
-        option::none(),
+        treasury_cap,
+        coin_metadata,
         vector::empty(),
         clock,
         ctx,

@@ -91,6 +91,6 @@ fun borrow_bag_mut(executable_uid: &mut UID): &mut Bag {
 fun coin_key<CoinType>(name: String): String {
     let mut key = name;
     key.append(b"::".to_string());
-    key.append(type_name::into_string(type_name::get<CoinType>()).to_string());
+    key.append(type_name::into_string(type_name::with_defining_ids<CoinType>()).to_string());
     key
 }
