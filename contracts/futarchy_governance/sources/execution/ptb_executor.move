@@ -103,6 +103,7 @@ public fun begin_execution<AssetType, StableType>(
 /// Note: Cannot be `entry` because Executable<FutarchyOutcome> is not a valid entry parameter type
 public fun finalize_execution<AssetType, StableType>(
     account: &mut Account,
+    registry: &PackageRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
     executable: Executable<FutarchyOutcome>,
     clock: &Clock,
@@ -112,7 +113,7 @@ public fun finalize_execution<AssetType, StableType>(
 
     account::confirm_execution(account, executable);
 
-    intent_janitor::cleanup_all_expired_intents(account, clock, ctx);
+    intent_janitor::cleanup_all_expired_intents(account, registry, clock, ctx);
 
     event::emit(ProposalIntentExecuted {
         proposal_id: proposal::get_id(proposal),

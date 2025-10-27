@@ -880,15 +880,16 @@ public fun new_with_package_registry(
     )
 }
 
-/// Test version that creates account without PackageRegistry validation
+/// Test version that creates account with PackageRegistry
 #[test_only]
 public fun new_account_test(config: FutarchyConfig, registry: &PackageRegistry, ctx: &mut TxContext): Account {
-    // Create dependencies for testing without PackageRegistry
+    // Create dependencies for testing with the actual registry
     // Must include futarchy_core because version::current() creates a VersionWitness
     // with the @futarchy_core package address
-    let deps = deps::new_for_testing_with_config(
+    let deps = deps::new_for_testing_with_config_and_registry(
         b"FutarchyCore".to_string(),
-        @futarchy_core
+        @futarchy_core,
+        registry
     );
 
     // Create account with FutarchyConfig using the config witness

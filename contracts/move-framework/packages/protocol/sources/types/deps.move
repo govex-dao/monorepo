@@ -318,6 +318,30 @@ public fun new_for_testing_with_config(config_name: String, config_addr: address
     }
 }
 
+#[test_only]
+/// Create deps for testing with a custom config package address and a shared registry
+/// This version uses the actual registry ID instead of a dummy one
+/// Includes @account_protocol, account_actions, and the custom config address as valid dependencies
+public fun new_for_testing_with_config_and_registry(
+    config_name: String,
+    config_addr: address,
+    registry: &PackageRegistry
+): Deps {
+    // Use the named address for account_actions from Move.toml
+    // This ensures the address matches what's used in tests
+    let account_actions_addr = @account_actions;
+
+    Deps {
+        inner: vector[
+            Dep { name: b"AccountProtocol".to_string(), addr: @account_protocol, version: 1 },
+            Dep { name: config_name, addr: config_addr, version: 1 },
+            Dep { name: b"AccountActions".to_string(), addr: account_actions_addr, version: 1 },
+        ],
+        unverified_allowed: false,
+        registry_id: sui::object::id(registry),
+    }
+}
+
 // === Tests ===
 
 #[test]

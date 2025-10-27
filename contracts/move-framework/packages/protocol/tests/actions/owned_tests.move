@@ -41,9 +41,9 @@ fun start(): (Scenario, PackageRegistry, Account, Clock) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &cap, b"AccountMultisig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountMultisig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     // Account generic types are dummy types (bool, bool)
     let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string()]);
     let account = account::new(Config {}, deps, &extensions, version::current(), Witness(), scenario.ctx());

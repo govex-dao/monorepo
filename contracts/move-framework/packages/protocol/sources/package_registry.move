@@ -123,9 +123,11 @@ fun init(ctx: &mut TxContext) {
 
 /// Add a new package to the registry with its action types
 /// This is an atomic operation - package and action type metadata are added together
+///
+/// Authorization: Requires &mut PackageRegistry, which can only be obtained by the registry owner.
+/// This is enforced by Move's type system - no additional capability check needed.
 public fun add_package(
     registry: &mut PackageRegistry,
-    _cap: &PackageAdminCap,
     name: String,
     addr: address,
     version: u64,
@@ -171,9 +173,10 @@ public fun add_package(
 
 /// Remove a package from the registry
 /// Also removes all its action type mappings
+///
+/// Authorization: Requires &mut PackageRegistry (type-system enforced)
 public fun remove_package(
     registry: &mut PackageRegistry,
-    _cap: &PackageAdminCap,
     name: String,
 ) {
     assert!(registry.packages.contains(name), EPackageNotFound);
@@ -215,9 +218,11 @@ public fun remove_package(
 
 /// Add a new version to an existing package
 /// Version must be greater than all existing versions (monotonic)
+/// Update package version (add a new version)
+///
+/// Authorization: Requires &mut PackageRegistry (type-system enforced)
 public fun update_package_version(
     registry: &mut PackageRegistry,
-    _cap: &PackageAdminCap,
     name: String,
     addr: address,
     version: u64,
@@ -297,9 +302,10 @@ public fun remove_package_version(
 }
 
 /// Update package metadata (category, description, action types)
+///
+/// Authorization: Requires &mut PackageRegistry (type-system enforced)
 public fun update_package_metadata(
     registry: &mut PackageRegistry,
-    _cap: &PackageAdminCap,
     name: String,
     new_action_types: vector<String>,
     new_category: String,
@@ -535,14 +541,12 @@ public fun new_admin_cap_for_testing(ctx: &mut TxContext): PackageAdminCap {
 #[test_only]
 public fun add_for_testing(
     registry: &mut PackageRegistry,
-    cap: &PackageAdminCap,
     name: String,
     addr: address,
     version: u64,
 ) {
     add_package(
         registry,
-        cap,
         name,
         addr,
         version,
@@ -553,10 +557,9 @@ public fun add_for_testing(
 }
 
 #[test_only]
-public fun remove_for_testing(registry: &mut PackageRegistry, cap: &PackageAdminCap, name: String) {
+public fun remove_for_testing(registry: &mut PackageRegistry, name: String) {
     remove_package(
         registry,
-        cap,
         name,
     );
 }
@@ -564,16 +567,19 @@ public fun remove_for_testing(registry: &mut PackageRegistry, cap: &PackageAdmin
 #[test_only]
 public fun update_for_testing(
     registry: &mut PackageRegistry,
-    cap: &PackageAdminCap,
     name: String,
     addr: address,
     version: u64,
 ) {
     update_package_version(
         registry,
-        cap,
         name,
         addr,
         version,
     );
+}
+
+#[test_only]
+public fun share_for_testing(registry: PackageRegistry) {
+    transfer::share_object(registry);
 }

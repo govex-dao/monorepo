@@ -419,7 +419,7 @@ fun test_insufficient_fee() {
 }
 
 #[test]
-#[expected_failure(abort_code = 0)] // ENoCoinSetsAvailable
+#[expected_failure(abort_code = 9)] // ENoCoinSetsAvailable
 fun test_take_nonexistent_coin_set() {
     let mut scenario = ts::begin(@0x1);
     let clock = clock::create_for_testing(ts::ctx(&mut scenario));
@@ -636,7 +636,7 @@ fun test_reject_coin_with_all_metadata() {
 // === Coverage Tests for Uncovered Lines ===
 
 #[test]
-#[expected_failure(abort_code = 4)] // EFeeExceedsMaximum  
+#[expected_failure(abort_code = 8)] // EFeeExceedsMaximum
 fun test_deposit_fee_exceeds_maximum() {
     let mut scenario = ts::begin(@0x1);
     

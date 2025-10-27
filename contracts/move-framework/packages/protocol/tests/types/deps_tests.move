@@ -17,9 +17,9 @@ fun test_deps_new_and_getters() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new(
@@ -53,9 +53,9 @@ fun test_deps_new_latest_extensions() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_latest_extensions(
@@ -90,9 +90,9 @@ fun test_deps_add_unverified_allowed() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new(
@@ -119,9 +119,9 @@ fun test_error_deps_not_same_length() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new(
@@ -143,9 +143,9 @@ fun test_error_deps_not_same_length_bis() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new(
@@ -167,9 +167,9 @@ fun test_error_deps_missing_account_protocol() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new(
@@ -191,9 +191,9 @@ fun test_error_deps_missing_account_protocol_first_element() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new(
@@ -215,9 +215,9 @@ fun test_error_deps_add_not_extension_unverified_not_allowed() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new(
@@ -239,9 +239,9 @@ fun test_error_deps_add_name_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new(
@@ -267,9 +267,9 @@ fun test_error_deps_add_addr_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new(
@@ -295,9 +295,9 @@ fun test_error_assert_is_dep() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new(
@@ -321,9 +321,9 @@ fun test_error_name_not_found() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new(
@@ -346,9 +346,9 @@ fun test_error_addr_not_found() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new(
@@ -371,9 +371,9 @@ fun test_error_new_latest_misses_account_protocol() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new_latest_extensions(
@@ -392,9 +392,9 @@ fun test_error_new_latest_adds_account_protocol_twice() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let _deps = deps::new_latest_extensions(
@@ -413,9 +413,9 @@ fun test_error_new_inner_not_same_length() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_for_testing(&extensions);
@@ -438,9 +438,9 @@ fun test_error_new_inner_not_same_length_bis() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_for_testing(&extensions);
@@ -463,9 +463,9 @@ fun test_error_new_inner_missing_account_protocol() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_for_testing(&extensions);
@@ -488,9 +488,9 @@ fun test_error_new_inner_missing_account_protocol_first_element() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_for_testing(&extensions);
@@ -513,9 +513,9 @@ fun test_error_new_inner_missing_account_config() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_for_testing(&extensions);
@@ -538,9 +538,9 @@ fun test_error_new_inner_add_not_extension_unverified_not_allowed() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new(
@@ -569,9 +569,9 @@ fun test_error_new_inner_add_name_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_for_testing(&extensions);
@@ -598,9 +598,9 @@ fun test_error_new_inner_add_addr_already_exists() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
 
     let deps = deps::new_for_testing(&extensions);
@@ -627,9 +627,9 @@ fun test_deps_scalability_many_deps() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     // Simulate adding many dependencies (e.g., DeFi integrations)
     let names = vector[
@@ -671,9 +671,9 @@ fun test_deps_duplicate_detection_vecset() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     // Create deps with unique entries
     let deps = deps::new(
@@ -705,9 +705,9 @@ fun test_deps_duplicate_name_detection() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     // Try to add duplicate name (Package1 twice)
     let _deps = deps::new(
@@ -734,9 +734,9 @@ fun test_deps_duplicate_addr_detection() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     // Try to add duplicate address (@0x10 twice)
     let _deps = deps::new(
@@ -763,9 +763,9 @@ fun test_deps_get_by_index() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     let deps = deps::new(
         &extensions,
@@ -800,9 +800,9 @@ fun test_deps_new_latest_with_vecset() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -831,9 +831,9 @@ fun test_deps_new_inner_many_deps() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     // Create initial deps
     let deps1 = deps::new(
@@ -875,9 +875,9 @@ fun test_deps_new_inner_duplicate_in_middle() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     let deps1 = deps::new(
         &extensions,
@@ -913,9 +913,9 @@ fun test_deps_minimal_required() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     // Minimum valid deps: AccountProtocol + AccountConfig
     let deps = deps::new(
@@ -941,9 +941,9 @@ fun test_deps_toggle_unverified() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     let mut deps = deps::new(
         &extensions,
@@ -974,9 +974,9 @@ fun test_deps_version_upgrade() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut extensions = package_registry::new_for_testing(scenario.ctx());
     let pkg_cap = package_registry::new_admin_cap_for_testing(scenario.ctx());
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::add_for_testing(&mut extensions, &pkg_cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
 
     // Create deps with version 1
     let deps_v1 = deps::new(

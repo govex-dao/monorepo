@@ -7,6 +7,8 @@ module futarchy_factory::launchpad_permissionless_tests;
 use account_protocol::package_registry::{Self as package_registry, PackageRegistry};
 use futarchy_factory::factory;
 use futarchy_factory::launchpad;
+use futarchy_factory::test_asset::{Self as test_asset, TEST_ASSET};
+use futarchy_factory::test_stable::{Self as test_stable, TEST_STABLE};
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
 use std::string::String;
@@ -14,10 +16,6 @@ use sui::clock;
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 use sui::test_scenario::{Self as ts, Scenario};
-
-// === Test Coin Types ===
-public struct TEST_ASSET has drop, store {}
-public struct TEST_STABLE has drop, store {}
 
 // === Helper Functions ===
 
@@ -50,42 +48,36 @@ fun setup_test(sender: address): Scenario {
 
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"AccountProtocol".to_string(),
             @account_protocol,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyCore".to_string(),
             @futarchy_core,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"AccountActions".to_string(),
             @account_actions,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyActions".to_string(),
             @futarchy_actions,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyGovernanceActions".to_string(),
             @0xb1054e9a9b316e105c908be2cddb7f64681a63f0ae80e9e5922bf461589c4bc7,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyOracleActions".to_string(),
             @futarchy_oracle,
             1
@@ -131,6 +123,10 @@ fun test_permissionless_completion_after_delay() {
     let random_completer = @0xC; // Not the creator
     let mut scenario = setup_test(creator);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, creator);
+    test_asset::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise
     ts::next_tx(&mut scenario, creator);
     {
@@ -138,15 +134,8 @@ fun test_permissionless_completion_after_delay() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -247,6 +236,10 @@ fun test_permissionless_completion_requires_settlement() {
     let random_completer = @0xC;
     let mut scenario = setup_test(creator);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, creator);
+    test_asset::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise
     ts::next_tx(&mut scenario, creator);
     {
@@ -254,15 +247,8 @@ fun test_permissionless_completion_requires_settlement() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();

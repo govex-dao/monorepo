@@ -22,6 +22,7 @@ use account_protocol::{
     executable::Executable,
     intents::Params,
     intent_interface,
+    package_registry::PackageRegistry,
 };
 use futarchy_core::{futarchy_config::FutarchyOutcome, version};
 use sui::bcs;
@@ -114,6 +115,7 @@ public fun destroy_migrate_config_action(action: MigrateConfigAction) {
 /// - Single execution only (irreversible)
 public fun request_migrate_config<OldConfig: store, NewConfig: store + drop>(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: FutarchyOutcome,
     new_config: NewConfig,
@@ -130,6 +132,7 @@ public fun request_migrate_config<OldConfig: store, NewConfig: store + drop>(
     // Build intent using the intent_interface macro with generic OldConfig
     intent_interface::build_intent!<OldConfig, FutarchyOutcome, MigrateConfigIntent>(
         account,
+        registry,
         params,
         outcome,
         b"Migrate Account Config Type".to_string(),

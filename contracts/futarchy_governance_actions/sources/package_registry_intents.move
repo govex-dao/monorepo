@@ -30,6 +30,7 @@ public struct AcceptPackageAdminCapIntent() has copy, drop;
 public fun request_accept_package_admin_cap<Outcome: store>(
     auth: Auth,
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: Outcome,
     cap_id: sui::object::ID,
@@ -40,6 +41,7 @@ public fun request_accept_package_admin_cap<Outcome: store>(
 
     intent_interface::build_intent!(
         account,
+        registry,
         params,
         outcome,
         b"Accept PackageAdminCap into protocol DAO custody".to_string(),

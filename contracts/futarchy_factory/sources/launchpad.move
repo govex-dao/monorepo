@@ -243,7 +243,10 @@ fun init(otw: LAUNCHPAD, ctx: &mut TxContext) {
 // === Public Functions ===
 
 /// Pre-create a DAO for a raise but keep it unshared
-public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop + store>(
+///
+/// BREAKING CHANGE: Removed `store` ability requirement from RaiseToken and StableCoin.
+/// This enables One-Time Witness (OTW) compliant coin types to be used in launchpad raises.
+public fun pre_create_dao_for_raise<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     factory: &mut factory::Factory,
@@ -354,7 +357,7 @@ public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
 }
 
 /// Create a pro-rata raise with max cap levels
-public fun create_raise<RaiseToken: drop + store, StableCoin: drop + store>(
+public fun create_raise<RaiseToken: drop, StableCoin: drop>(
     factory: &factory::Factory,
     fee_manager: &mut fee::FeeManager,
     treasury_cap: TreasuryCap<RaiseToken>,
@@ -573,7 +576,7 @@ public entry fun end_raise_early<RT, SC>(
 }
 
 /// Complete the raise and activate DAO
-public entry fun complete_raise<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun complete_raise<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     registry: &PackageRegistry,
@@ -591,7 +594,7 @@ public entry fun complete_raise<RaiseToken: drop + store, StableCoin: drop + sto
 }
 
 /// Permissionless completion after delay
-public entry fun complete_raise_permissionless<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun complete_raise_permissionless<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     registry: &PackageRegistry,
     fee_manager: &mut fee::FeeManager,
@@ -609,7 +612,7 @@ public entry fun complete_raise_permissionless<RaiseToken: drop + store, StableC
     complete_raise_internal(raise, registry, fee_manager, payment, clock, ctx);
 }
 
-fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
+fun complete_raise_internal<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     registry: &PackageRegistry,
     fee_manager: &mut fee::FeeManager,
@@ -683,7 +686,7 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
 }
 
 /// Claim tokens after successful raise
-public entry fun claim_tokens<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun claim_tokens<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -743,7 +746,7 @@ public entry fun claim_tokens<RaiseToken: drop + store, StableCoin: drop + store
 
 /// Batch claim tokens for multiple contributors (cranker earns reward per successful claim)
 /// Gracefully skips already-claimed contributors instead of failing
-public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun batch_claim_tokens_for<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     factory: &factory::Factory,
     contributors: vector<address>,
@@ -865,7 +868,7 @@ public entry fun batch_claim_tokens_for<RaiseToken: drop + store, StableCoin: dr
 }
 
 /// Claim refund for failed raise
-public entry fun claim_refund<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun claim_refund<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -908,7 +911,7 @@ public entry fun claim_refund<RaiseToken: drop + store, StableCoin: drop + store
 
 /// Batch claim refunds for failed raise (cranker earns reward per successful claim)
 /// Gracefully skips already-claimed contributors instead of failing
-public entry fun batch_claim_refund_for<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun batch_claim_refund_for<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     factory: &factory::Factory,
     contributors: vector<address>,
@@ -987,7 +990,7 @@ public entry fun batch_claim_refund_for<RaiseToken: drop + store, StableCoin: dr
 }
 
 /// Cleanup resources for a failed raise
-public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun cleanup_failed_raise<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1066,7 +1069,7 @@ public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop
 }
 
 /// Sweep remaining dust after claim period
-public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
+public entry fun sweep_dust<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     dao_account: &mut Account,
@@ -1150,7 +1153,7 @@ public entry fun sweep_protocol_fees<RaiseToken, StableCoin>(
     });
 }
 
-fun init_raise<RaiseToken: drop + store, StableCoin: drop + store>(
+fun init_raise<RaiseToken: drop, StableCoin: drop>(
     mut treasury_cap: TreasuryCap<RaiseToken>,
     coin_metadata: CoinMetadata<RaiseToken>,
     affiliate_id: String,
@@ -1321,7 +1324,7 @@ public fun set_admin_trust_score<RT, SC>(
 #[test_only]
 /// Test version of complete_raise that doesn't share objects (which fails in test environment)
 /// Instead, it transfers them to the sender for testing
-public fun complete_raise_test<RaiseToken: drop + store, StableCoin: drop + store>(
+public fun complete_raise_test<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     registry: &PackageRegistry,

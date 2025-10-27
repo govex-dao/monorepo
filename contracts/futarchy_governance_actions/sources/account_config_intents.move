@@ -87,7 +87,8 @@ public fun request_update_deps(
 
     // Build intent using the intent_interface macro
     intent_interface::build_intent!<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome, UpdateDepsIntent>(
-        account,registry,
+        account,
+        registry,
         params,
         outcome,
         b"Update Account Dependencies".to_string(),
@@ -119,6 +120,7 @@ public fun request_update_deps(
 ///
 /// # Arguments
 /// * `account` - The futarchy DAO account
+/// * `registry` - The package registry
 /// * `params` - Intent parameters
 /// * `outcome` - FutarchyOutcome for tracking proposal
 ///
@@ -127,6 +129,7 @@ public fun request_update_deps(
 /// This should only be done if the DAO trusts its governance process to vet packages.
 public fun request_toggle_unverified(
     account: &mut Account,
+    registry: &PackageRegistry,
     params: Params,
     outcome: FutarchyOutcome,
     ctx: &mut TxContext,
@@ -135,7 +138,8 @@ public fun request_toggle_unverified(
     params.assert_single_execution();
 
     intent_interface::build_intent!<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome, ToggleUnverifiedIntent>(
-        account,registry,
+        account,
+        registry,
         params,
         outcome,
         b"Toggle Unverified Package Allowance".to_string(),
@@ -195,15 +199,18 @@ public fun execute_update_deps(
 /// # Arguments
 /// * `executable` - The executable hot potato from the resolved proposal
 /// * `account` - The futarchy DAO account
+/// * `registry` - The package registry
 public fun execute_toggle_unverified(
     executable: &mut Executable<FutarchyOutcome>,
     account: &mut Account,
+    registry: &PackageRegistry,
 ) {
     // Delegate to account_protocol::config executor
     // IMPORTANT: Pass futarchy_core::version, not account_protocol::version
     config::execute_toggle_unverified_allowed<futarchy_core::futarchy_config::FutarchyConfig, FutarchyOutcome>(
         executable,
         account,
+        registry,
         version::current(), // futarchy_core::version::current()
     );
 }

@@ -7,6 +7,11 @@ module futarchy_factory::launchpad_tests;
 use account_protocol::package_registry::{Self as package_registry, PackageRegistry};
 use futarchy_factory::factory;
 use futarchy_factory::launchpad;
+use futarchy_factory::test_asset_regular::{Self as test_asset_regular, TEST_ASSET_REGULAR};
+use futarchy_factory::test_asset_regular_2::{Self as test_asset_regular_2, TEST_ASSET_REGULAR_2};
+use futarchy_factory::test_asset_regular_3::{Self as test_asset_regular_3, TEST_ASSET_REGULAR_3};
+use futarchy_factory::test_stable_regular::{Self as test_stable_regular, TEST_STABLE_REGULAR};
+use futarchy_factory::unallowed_stable::{Self as unallowed_stable, UNALLOWED_STABLE};
 use futarchy_markets_core::fee;
 use futarchy_one_shot_utils::constants;
 use std::string::String;
@@ -19,13 +24,6 @@ const SCALE: u64 = 1_000_000;
 const MAX_U64: u64 = 18446744073709551615;
 
 // === Test Coin Types ===
-
-// Launchpad asset types - require `drop + store` which is incompatible with OTW
-public struct TEST_ASSET_REGULAR has drop, store {}
-public struct TEST_ASSET_REGULAR_2 has drop, store {}
-public struct TEST_ASSET_REGULAR_3 has drop, store {}
-public struct TEST_STABLE_REGULAR has drop, store {}
-public struct UNALLOWED_STABLE has drop, store {}
 
 // Test config for init actions test
 public struct TestConfig has copy, drop, store {}
@@ -63,28 +61,24 @@ fun setup_test(sender: address): Scenario {
         // Register all required packages for DAO creation
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"AccountProtocol".to_string(),
             @account_protocol,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyCore".to_string(),
             @futarchy_core,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"AccountActions".to_string(),
             @account_actions,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyActions".to_string(),
             @futarchy_actions,
             1
@@ -92,14 +86,12 @@ fun setup_test(sender: address): Scenario {
         // futarchy_governance_actions creates circular dependency, so using dummy address
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyGovernanceActions".to_string(),
             @0xb1054e9a9b316e105c908be2cddb7f64681a63f0ae80e9e5922bf461589c4bc7,
             1
         );
         package_registry::add_for_testing(
             &mut registry,
-            &admin_cap,
             b"FutarchyOracleActions".to_string(),
             @futarchy_oracle,
             1
@@ -142,6 +134,10 @@ fun test_basic_launchpad_creation() {
     let sender = @0xA;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular::init_for_testing(ts::ctx(&mut scenario));
+
     // Create a launchpad
     ts::next_tx(&mut scenario, sender);
     {
@@ -149,16 +145,8 @@ fun test_basic_launchpad_creation() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        // Create treasury cap and metadata for testing
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR>>(&scenario);
 
         // Create payment for launchpad creation (10 SUI)
         let payment = create_payment(10_000_000_000, &mut scenario);
@@ -211,6 +199,10 @@ fun test_launchpad_with_unallowed_stable() {
     let sender = @0xA;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular_2::init_for_testing(ts::ctx(&mut scenario));
+
     // Try to create a launchpad with unallowed stable type
     ts::next_tx(&mut scenario, sender);
     {
@@ -218,15 +210,8 @@ fun test_launchpad_with_unallowed_stable() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR_2 {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR_2>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR_2>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -266,6 +251,10 @@ fun test_launchpad_contribution() {
     let contributor = @0xB;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular_3::init_for_testing(ts::ctx(&mut scenario));
+
     // Create a launchpad
     ts::next_tx(&mut scenario, sender);
     {
@@ -273,15 +262,8 @@ fun test_launchpad_contribution() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR_3 {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR_3>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR_3>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -358,6 +340,10 @@ fun test_settlement_and_successful_raise() {
     let contributor2 = @0xC;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise
     ts::next_tx(&mut scenario, sender);
     {
@@ -365,15 +351,8 @@ fun test_settlement_and_successful_raise() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -518,6 +497,10 @@ fun test_pro_rata_allocation_logic() {
     let charlie = @0xD;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise with specific caps
     ts::next_tx(&mut scenario, sender);
     {
@@ -525,15 +508,8 @@ fun test_pro_rata_allocation_logic() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         // Caps: 10k, 20k, 30k, unlimited
@@ -679,6 +655,10 @@ fun test_failed_raise_settlement() {
     let contributor = @0xB;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise
     ts::next_tx(&mut scenario, sender);
     {
@@ -686,15 +666,8 @@ fun test_failed_raise_settlement() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -782,6 +755,10 @@ fun test_claim_tokens_successful_raise() {
     let contributor = @0xB;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular_2::init_for_testing(ts::ctx(&mut scenario));
+
     // Create and complete a successful raise
     ts::next_tx(&mut scenario, sender);
     {
@@ -789,15 +766,8 @@ fun test_claim_tokens_successful_raise() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR_2 {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR_2>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR_2>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -920,6 +890,10 @@ fun test_claim_refund_failed_raise() {
     let contributor = @0xB;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular_2::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise
     ts::next_tx(&mut scenario, sender);
     {
@@ -927,15 +901,8 @@ fun test_claim_refund_failed_raise() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR_2 {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR_2>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR_2>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -1040,6 +1007,10 @@ fun test_batch_claim_tokens() {
     let cranker = @0xE;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular_3::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise
     ts::next_tx(&mut scenario, sender);
     {
@@ -1047,15 +1018,8 @@ fun test_batch_claim_tokens() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR_3 {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR_3>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR_3>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -1210,6 +1174,10 @@ fun test_early_raise_completion() {
     let contributor = @0xB;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise with early completion allowed
     ts::next_tx(&mut scenario, sender);
     {
@@ -1217,15 +1185,8 @@ fun test_early_raise_completion() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();
@@ -1325,6 +1286,10 @@ fun test_raised_stables_in_dao_vault() {
     let contributor1 = @0xB;
     let mut scenario = setup_test(sender);
 
+    // Initialize test coin
+    ts::next_tx(&mut scenario, sender);
+    test_asset_regular::init_for_testing(ts::ctx(&mut scenario));
+
     // Create raise with 20k min, 50k max
     ts::next_tx(&mut scenario, sender);
     {
@@ -1332,15 +1297,8 @@ fun test_raised_stables_in_dao_vault() {
         let mut fee_manager = ts::take_shared<fee::FeeManager>(&scenario);
         let clock = clock::create_for_testing(ts::ctx(&mut scenario));
 
-        let (treasury_cap, coin_metadata) = coin::create_currency(
-            TEST_ASSET_REGULAR {},
-            6, // decimals
-            b"", // empty symbol
-            b"", // empty name
-            b"", // empty description
-            option::none(), // no icon url
-            ts::ctx(&mut scenario),
-        );
+        let treasury_cap = ts::take_from_sender<coin::TreasuryCap<TEST_ASSET_REGULAR>>(&scenario);
+        let coin_metadata = ts::take_from_sender<coin::CoinMetadata<TEST_ASSET_REGULAR>>(&scenario);
         let payment = create_payment(10_000_000_000, &mut scenario);
 
         let mut allowed_caps = vector::empty<u64>();

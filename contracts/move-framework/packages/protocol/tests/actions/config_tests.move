@@ -36,12 +36,12 @@ fun start(): (Scenario, PackageRegistry, Account, Clock, PackageAdminCap) {
     let mut extensions = scenario.take_shared<PackageRegistry>();
     let cap = scenario.take_from_sender<PackageAdminCap>();
     // add core deps
-    package_registry::add_for_testing(&mut extensions, &cap, b"AccountProtocol".to_string(), @account_protocol, 1);
-    package_registry::add_for_testing(&mut extensions, &cap, b"AccountConfig".to_string(), @0x1, 1);
-    package_registry::update_for_testing(&mut extensions, &cap, b"AccountConfig".to_string(), @0x11, 2);
-    package_registry::add_for_testing(&mut extensions, &cap, b"AccountActions".to_string(), @0x2, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountProtocol".to_string(), @account_protocol, 1);
+    package_registry::add_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x1, 1);
+    package_registry::update_for_testing(&mut extensions,  b"AccountConfig".to_string(), @0x11, 2);
+    package_registry::add_for_testing(&mut extensions,  b"AccountActions".to_string(), @0x2, 1);
     // add external dep
-    package_registry::add_for_testing(&mut extensions, &cap, b"External".to_string(), @0xABC, 1);
+    package_registry::add_for_testing(&mut extensions,  b"External".to_string(), @0xABC, 1);
 
     let deps = deps::new_latest_extensions(
         &extensions,
@@ -85,7 +85,7 @@ fun test_edit_config_metadata() {
 fun test_update_extensions_to_latest() {
     let (scenario, mut extensions, mut account, clock, cap) = start();
     assert!(account.deps().get_by_name(b"AccountProtocol".to_string()).version() == 1);
-    extensions.update_for_testing(&cap, b"AccountProtocol".to_string(), @0x3, 2);
+    extensions.update_for_testing( b"AccountProtocol".to_string(), @0x3, 2);
 
     let auth = account.new_auth<Config, Witness>(&extensions, version::current(), Witness());
     config::update_extensions_to_latest<Config>(
@@ -105,7 +105,7 @@ fun test_update_extensions_to_latest() {
 // fun test_update_extensions_to_latest_with_unverified() {
 //     let (scenario, mut extensions, mut account, clock, cap) = start();
 //     assert!(account.deps().get_by_name(b"AccountProtocol".to_string()).version() == 1);
-//     extensions.update_for_testing(&cap, b"AccountProtocol".to_string(), @0x3, 2);
+//     extensions.update_for_testing( b"AccountProtocol".to_string(), @0x3, 2);
 
 //     account.deps_mut(version::current()).toggle_unverified_allowed_for_testing();
 //     // Need to use proper config actions to add unverified deps

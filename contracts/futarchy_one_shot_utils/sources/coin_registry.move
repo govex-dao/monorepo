@@ -13,12 +13,16 @@ use sui::event;
 use sui::sui::SUI;
 
 // === Errors ===
-const ENoCoinSetsAvailable: u64 = 0;
+const ESupplyNotZero: u64 = 0;
 const EInsufficientFee: u64 = 1;
 const ERegistryNotEmpty: u64 = 2;
-const ERegistryFull: u64 = 3;
-const EFeeExceedsMaximum: u64 = 4;
-const ESupplyNotZero: u64 = 5;
+const ENameNotEmpty: u64 = 3;
+const EDescriptionNotEmpty: u64 = 4;
+const ESymbolNotEmpty: u64 = 5;
+const EIconUrlNotEmpty: u64 = 6;
+const ERegistryFull: u64 = 7;
+const EFeeExceedsMaximum: u64 = 8;
+const ENoCoinSetsAvailable: u64 = 9;
 
 // === Constants ===
 const MAX_COIN_SETS: u64 = 100_000;
@@ -69,8 +73,9 @@ public struct CoinSetTaken has copy, drop {
 
 // === Validation Functions ===
 
-/// Validate that TreasuryCap and CoinMetadata are valid and match
-/// Used by coin_registry, factory, and launchpad to ensure cap validity
+/// Basic validation of a coin set (supply must be zero, types must match)
+/// Used by factory and launchpad to ensure cap validity
+/// Does NOT enforce empty metadata - use validate_coin_set_for_registry for that
 ///
 /// Checks:
 /// 1. Supply must be zero (prevents using already-minted coins)
@@ -83,7 +88,28 @@ public fun validate_coin_set<T>(
     assert!(treasury_cap.total_supply() == 0, ESupplyNotZero);
 
     // Type match is enforced by generics - both must be same type T
-    // No additional validation needed since CoinMetadata and TreasuryCap types must align
+}
+
+/// Validate a coin set for deposit into registry
+/// Enforces stricter requirements: metadata must be empty for "blank" conditional tokens
+///
+/// Checks:
+/// 1. Supply must be zero (prevents using already-minted coins)
+/// 2. Metadata must be empty (name, symbol, description, icon)
+/// 3. Type parameters of treasury_cap and metadata must match (enforced by generics)
+fun validate_coin_set_for_registry<T>(
+    treasury_cap: &TreasuryCap<T>,
+    metadata: &CoinMetadata<T>,
+) {
+    // First do basic validation
+    validate_coin_set(treasury_cap, metadata);
+
+    // Validate metadata is empty (required for "blank" conditional tokens)
+    // These coins should have no preset names/symbols so they can be customized
+    assert!(metadata.get_name().is_empty(), ENameNotEmpty);
+    assert!(metadata.get_description().is_empty(), EDescriptionNotEmpty);
+    assert!(metadata.get_symbol().is_empty(), ESymbolNotEmpty);
+    assert!(metadata.get_icon_url().is_none(), EIconUrlNotEmpty);
 }
 
 // === Admin Functions ===
@@ -129,8 +155,8 @@ public fun deposit_coin_set<T>(
     // making them economically unusable and permanently occupying registry slots
     assert!(fee <= MAX_FEE, EFeeExceedsMaximum);
 
-    // Validate coin set (supply must be zero, types must match)
-    validate_coin_set(&treasury_cap, &metadata);
+    // Validate coin set for registry (supply must be zero, metadata must be empty)
+    validate_coin_set_for_registry(&treasury_cap, &metadata);
 
     let cap_id = object::id(&treasury_cap);
     let owner = ctx.sender();

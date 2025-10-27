@@ -813,8 +813,12 @@ fun create_dao_internal_test<AssetType: drop, StableType: drop>(
 ///   - none(): Use default (true - 10-day challenge period)
 ///   - some(enabled): Apply custom setting atomically during creation
 ///
+/// BREAKING CHANGE: Removed `store` ability requirement from AssetType and StableType.
+/// This enables One-Time Witness (OTW) compliant coin types, which can only have `drop`.
+/// If you need to store coin types in global storage, wrap them in a struct with `store`.
+///
 /// INTERNAL: Package-only access. For public API with required caps, use create_dao_unshared_with_caps
-public(package) fun create_dao_unshared<AssetType: drop + store, StableType: drop + store>(
+public(package) fun create_dao_unshared<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
     registry: &PackageRegistry,
     fee_manager: &mut FeeManager,
@@ -1169,6 +1173,7 @@ public fun create_factory(ctx: &mut TxContext) {
 /// Create a DAO for testing without Extensions
 public entry fun create_dao_test<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
+    registry: &package_registry::PackageRegistry,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     min_asset_amount: u64,
@@ -1199,12 +1204,9 @@ public entry fun create_dao_test<AssetType: drop, StableType: drop>(
     // by directly calling the test internal function
     let twap_threshold = signed::new(twap_threshold_magnitude, twap_threshold_negative);
 
-    // For tests, create a dummy registry
-    let registry = package_registry::new_for_testing(ctx);
-
     create_dao_internal_test<AssetType, StableType>(
         factory,
-        &registry,
+        registry,
         fee_manager,
         payment,
         min_asset_amount,

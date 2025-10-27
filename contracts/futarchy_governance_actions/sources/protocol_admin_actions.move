@@ -790,7 +790,7 @@ public fun do_approve_verification<Outcome: store, IW: drop>(
 
     // Get the DAO's config and update verification level and attestation URL
     // Get the mutable DaoState from the Account using dynamic fields
-    let dao_state = futarchy_config::state_mut_from_account(target_dao);
+    let dao_state = futarchy_config::state_mut_from_account(target_dao, registry);
     // Set verification status
     futarchy_config::set_verification_pending(dao_state, false);
     futarchy_config::set_attestation_url(dao_state, action.attestation_url);
@@ -846,7 +846,7 @@ public fun do_reject_verification<Outcome: store, IW: drop>(
 
     // Get the DAO's config and ensure verification level stays at 0
     // Get the mutable DaoState from the Account using dynamic fields
-    let dao_state = futarchy_config::state_mut_from_account(target_dao);
+    let dao_state = futarchy_config::state_mut_from_account(target_dao, registry);
     // Reset verification to unverified state
     futarchy_config::set_verification_pending(dao_state, false);
 
